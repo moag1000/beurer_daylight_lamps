@@ -51,10 +51,6 @@ SUPPORTED_EFFECTS: Final[list[str]] = [
     "Summer",        # 10
 ]
 
-# Connection settings
-DEFAULT_SCAN_TIMEOUT: Final = 15.0
-DEFAULT_CONNECT_TIMEOUT: Final = 20.0
-
 # Device name prefixes for discovery (lowercase for case-insensitive matching)
 # Only specific TL model prefixes to avoid conflicts with other Beurer devices
 DEVICE_NAME_PREFIXES: Final[tuple[str, ...]] = (
