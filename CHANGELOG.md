@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.6] - 2025-12-16
+
+### Changed
+- **Enhanced logging**: Much more detailed connection logging to help diagnose BLE issues
+  - Shows device name, address, and RSSI during connection attempts
+  - Logs service/characteristic discovery count
+  - More specific error messages with error types and errno codes
+
 ## [1.6.5] - 2025-12-16
 
 ### Changed

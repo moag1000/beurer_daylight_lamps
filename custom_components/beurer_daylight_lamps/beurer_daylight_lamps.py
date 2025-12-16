@@ -650,23 +650,48 @@ class BeurerInstance:
         """Connect to the device using bleak-retry-connector for reliability."""
         try:
             if self._client and self._client.is_connected:
+                LOGGER.debug("Already connected to %s", self._mac)
                 return True
 
-            LOGGER.debug("Connecting to %s", self._mac)
+            LOGGER.info(
+                "Connecting to %s (device: %s, name: %s)",
+                self._mac,
+                self._ble_device.address if self._ble_device else "None",
+                getattr(self._ble_device, "name", "Unknown") if self._ble_device else "None",
+            )
 
             # Try to get fresh device reference with updated RSSI
             try:
+                LOGGER.debug("Scanning for fresh device reference for %s...", self._mac)
                 fresh_device = await BleakScanner.find_device_by_address(
                     self._mac, timeout=5.0
                 )
                 if fresh_device:
+                    LOGGER.debug(
+                        "Found fresh device: %s (name: %s, rssi: %s)",
+                        fresh_device.address,
+                        fresh_device.name,
+                        getattr(fresh_device, "rssi", "N/A"),
+                    )
                     self._ble_device = fresh_device
                     if hasattr(fresh_device, "rssi") and fresh_device.rssi:
                         self.update_rssi(fresh_device.rssi)
+                else:
+                    LOGGER.warning(
+                        "Device %s not found in scan, using cached reference", self._mac
+                    )
             except (BleakError, TimeoutError, asyncio.TimeoutError, OSError) as err:
-                LOGGER.debug("Could not refresh device info: %s", err)
+                LOGGER.warning(
+                    "Could not refresh device info for %s: %s - using cached reference",
+                    self._mac,
+                    err,
+                )
 
             # Use bleak-retry-connector for reliable connection establishment
+            LOGGER.debug(
+                "Establishing connection to %s with bleak-retry-connector (max 3 attempts)...",
+                self._mac,
+            )
             self._client = await establish_connection(
                 BleakClient,
                 self._ble_device,
@@ -674,20 +699,36 @@ class BeurerInstance:
                 disconnected_callback=self._on_disconnect,
                 max_attempts=3,
             )
-            LOGGER.info("Connected to %s", self._mac)
+            LOGGER.info("Connected to %s successfully", self._mac)
 
             # Find characteristics
             self._write_uuid = None
             self._read_uuid = None
+            service_count = 0
+            char_count = 0
             for service in self._client.services:
+                service_count += 1
                 for char in service.characteristics:
+                    char_count += 1
                     if char.uuid == WRITE_CHARACTERISTIC_UUID:
                         self._write_uuid = char.uuid
                     if char.uuid == READ_CHARACTERISTIC_UUID:
                         self._read_uuid = char.uuid
 
+            LOGGER.debug(
+                "Discovered %d services with %d characteristics on %s",
+                service_count,
+                char_count,
+                self._mac,
+            )
+
             if not self._read_uuid or not self._write_uuid:
-                LOGGER.error("Required characteristics not found on %s", self._mac)
+                LOGGER.error(
+                    "Required characteristics not found on %s (read: %s, write: %s)",
+                    self._mac,
+                    self._read_uuid,
+                    self._write_uuid,
+                )
                 await self.disconnect()
                 return False
 
@@ -706,11 +747,32 @@ class BeurerInstance:
             return True
 
         except BleakError as err:
-            LOGGER.error("BleakError connecting to %s: %s", self._mac, err)
-        except (TimeoutError, asyncio.TimeoutError):
-            LOGGER.error("Timeout connecting to %s", self._mac)
+            LOGGER.error(
+                "BleakError connecting to %s: %s (type: %s)",
+                self._mac,
+                err,
+                type(err).__name__,
+            )
+        except (TimeoutError, asyncio.TimeoutError) as err:
+            LOGGER.error(
+                "Timeout connecting to %s after all retry attempts: %s",
+                self._mac,
+                err,
+            )
         except OSError as err:
-            LOGGER.error("OS error connecting to %s: %s", self._mac, err)
+            LOGGER.error(
+                "OS error connecting to %s: %s (errno: %s)",
+                self._mac,
+                err,
+                getattr(err, "errno", "N/A"),
+            )
+        except Exception as err:
+            LOGGER.error(
+                "Unexpected error connecting to %s: %s (type: %s)",
+                self._mac,
+                err,
+                type(err).__name__,
+            )
 
         await self.disconnect()
         return False
