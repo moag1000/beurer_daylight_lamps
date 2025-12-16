@@ -1,10 +1,11 @@
 # Beurer Daylight Lamps
 
-[![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/moag1000/beurer_daylight_lamps)
-[![Validate HACS + Hassfest](https://github.com/moag1000/beurer_daylight_lamps/actions/workflows/validate-hacs-hassfest.yml/badge.svg)](https://github.com/moag1000/beurer_daylight_lamps/actions/workflows/validate-hacs-hassfest.yml)
+[![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
+[![GitHub Release](https://img.shields.io/github/v/release/moag1000/beurer_daylight_lamps)](https://github.com/moag1000/beurer_daylight_lamps/releases)
+[![Validate](https://github.com/moag1000/beurer_daylight_lamps/actions/workflows/validate-hacs-hassfest.yml/badge.svg)](https://github.com/moag1000/beurer_daylight_lamps/actions/workflows/validate-hacs-hassfest.yml)
 [![Tests](https://github.com/moag1000/beurer_daylight_lamps/actions/workflows/tests.yml/badge.svg)](https://github.com/moag1000/beurer_daylight_lamps/actions/workflows/tests.yml)
 
-Home Assistant integration for BLE-based Beurer daylight therapy lamps.
+Home Assistant custom integration for Beurer daylight therapy lamps via Bluetooth Low Energy (BLE).
 
 ## Supported Devices
 
@@ -18,17 +19,13 @@ Home Assistant integration for BLE-based Beurer daylight therapy lamps.
 
 ## Features
 
-- **Bluetooth Auto-Discovery**: Lamps are automatically discovered when in range
-- **On/Off Control**: Turn lamp on and off
-- **Brightness Control**: Adjust white light brightness (0-100%)
-- **RGB Color Mode**: Full RGB color support
-- **Light Effects**: Rainbow, Pulse, Forest, Wave, and more
-- **Multiple Lamps**: Support for multiple lamps simultaneously
-- **Reauth Flow**: Automatic reconnection handling
-- **Reconfigure Flow**: Change device name after setup
-- **Diagnostics**: Export debug information for troubleshooting
-- **Signal Strength Sensor**: Optional RSSI sensor for monitoring Bluetooth connection quality
-- **Repair Issues**: Connection problems appear in Home Assistant's Repairs section
+- Bluetooth auto-discovery
+- On/off and brightness control
+- RGB color mode
+- Light effects (Rainbow, Pulse, Forest, etc.)
+- Multiple lamp support
+- Diagnostics export
+- Optional RSSI sensor
 
 ## Installation
 
@@ -213,34 +210,13 @@ logger:
     custom_components.beurer_daylight_lamps: debug
 ```
 
-## Credits & Acknowledgments
+## Credits
 
-This integration would not exist without the work of many contributors. Thank you to:
-
-### Original Authors
-
-- **[sysofwan](https://github.com/sysofwan)** - Created the original [ha-triones](https://github.com/sysofwan/ha-triones) integration that served as the foundation for the BLE light control framework.
-
-- **[deadolus](https://github.com/deadolus)** - Forked and adapted the integration for Beurer lamps in [ha-beurer](https://github.com/deadolus/ha-beurer), establishing the Beurer-specific protocol handling.
-
-- **[jmac83](https://github.com/jmac83)** - Further developed the [ha-beurer](https://github.com/jmac83/ha-beurer) integration with improvements and fixes.
-
-- **[Bellamonte](https://github.com/Bellamonte)** - Created [beurer_daylight_lamps](https://github.com/Bellamonte/beurer_daylight_lamps) with TL100 support, discovery improvements, and HACS compatibility.
-
-### Contributors
-
-- **[@pyromaniac2k](https://github.com/pyromaniac2k)** - Contributions to the ha-beurer integration
-- **[@ALandOfDodd](https://github.com/LandOfDodd)** - Contributions to the ha-beurer integration
-
-### Resources & Documentation
-
-This fork was improved using knowledge from:
-
-- **[Home Assistant Developer Documentation](https://developers.home-assistant.io/)** - Config Flow, Bluetooth Discovery, Entity platforms, and Best Practices
-- **[Bleak Library](https://bleak.readthedocs.io/)** - BLE communication patterns
-- **Home Assistant Core Contributors** - Integration patterns from core integrations such as `bluetooth`, `switchbot`, and `led_ble`
-
-Thank you all for your open source contributions!
+Based on work by:
+- [sysofwan/ha-triones](https://github.com/sysofwan/ha-triones)
+- [deadolus/ha-beurer](https://github.com/deadolus/ha-beurer)
+- [jmac83/ha-beurer](https://github.com/jmac83/ha-beurer)
+- [Bellamonte/beurer_daylight_lamps](https://github.com/Bellamonte/beurer_daylight_lamps)
 
 ## License
 
