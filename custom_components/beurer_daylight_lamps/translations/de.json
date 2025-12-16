@@ -95,11 +95,6 @@
         }
     },
     "entity": {
-        "light": {
-            "_": {
-                "name": "Licht"
-            }
-        },
         "sensor": {
             "rssi": {
                 "name": "Signalstärke"
