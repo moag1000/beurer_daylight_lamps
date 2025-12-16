@@ -311,17 +311,17 @@ class TestDiscovery:
             get_device,
         )
 
-        mock_scanner = MagicMock()
-        mock_scanner.start = AsyncMock()
-        mock_scanner.stop = AsyncMock()
+        mock_scanner_instance = MagicMock()
+        mock_scanner_instance.start = AsyncMock()
+        mock_scanner_instance.stop = AsyncMock()
+
+        # Create a mock class that returns our instance and has the class method
+        mock_scanner_class = MagicMock(return_value=mock_scanner_instance)
+        mock_scanner_class.find_device_by_address = AsyncMock(return_value=None)
 
         with patch(
-            "custom_components.beurer_daylight_lamps.beurer_daylight_lamps.BleakScanner.find_device_by_address",
-            new_callable=AsyncMock,
-            return_value=None,
-        ), patch(
             "custom_components.beurer_daylight_lamps.beurer_daylight_lamps.BleakScanner",
-            return_value=mock_scanner,
+            mock_scanner_class,
         ), patch(
             "custom_components.beurer_daylight_lamps.beurer_daylight_lamps.asyncio.sleep",
             new_callable=AsyncMock,

@@ -27,9 +27,8 @@ jobs:
           pip install -r requirements_test.txt
 
       - name: Run tests
-        continue-on-error: true
         run: |
-          pytest tests/ -v --cov=custom_components/beurer_daylight_lamps --cov-report=xml || echo "Some tests failed - see output above"
+          pytest tests/ -v --cov=custom_components/beurer_daylight_lamps --cov-report=xml
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4
