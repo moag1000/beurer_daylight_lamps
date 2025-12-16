@@ -8,6 +8,7 @@ from bleak import BleakError
 from bleak.backends.device import BLEDevice
 import voluptuous as vol
 
+from homeassistant.components import bluetooth
 from homeassistant.components.bluetooth import (
     BluetoothServiceInfoBleak,
     async_discovered_service_info,
@@ -20,7 +21,7 @@ from homeassistant.config_entries import (
 from homeassistant.const import CONF_MAC, CONF_NAME
 from homeassistant.helpers.device_registry import format_mac
 
-from .beurer_daylight_lamps import BeurerInstance, get_device
+from .beurer_daylight_lamps import BeurerInstance
 from .const import DEVICE_NAME_PREFIXES, DOMAIN, LOGGER
 
 MANUAL_MAC = "manual"
@@ -307,15 +308,32 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
                         self._mac,
                         self._rssi,
                     )
-                    self._instance = BeurerInstance(self._ble_device, self._rssi)
+                    self._instance = BeurerInstance(
+                        self._ble_device, self._rssi, self.hass
+                    )
                 else:
-                    # Fall back to scanning for the device
-                    LOGGER.debug("Scanning for device %s...", self._mac)
-                    device, rssi = await get_device(self._mac)
-                    if not device:
-                        LOGGER.error("Device not found: %s", self._mac)
+                    # Use HA Bluetooth stack to find device (includes all proxies)
+                    LOGGER.debug(
+                        "Getting device %s via HA Bluetooth stack...", self._mac
+                    )
+                    ble_device = bluetooth.async_ble_device_from_address(
+                        self.hass, self._mac, connectable=True
+                    )
+                    if not ble_device:
+                        LOGGER.error(
+                            "Device %s not found via any Bluetooth adapter", self._mac
+                        )
                         return False
-                    self._instance = BeurerInstance(device, rssi)
+
+                    # Get RSSI from service info
+                    service_info = bluetooth.async_last_service_info(
+                        self.hass, self._mac, connectable=True
+                    )
+                    rssi = service_info.rssi if service_info else None
+
+                    self._ble_device = ble_device
+                    self._rssi = rssi
+                    self._instance = BeurerInstance(ble_device, rssi, self.hass)
 
             LOGGER.debug("Testing connection to %s", self._mac)
             await self._instance.update()

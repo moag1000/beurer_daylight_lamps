@@ -23,19 +23,20 @@ Notification versions (byte 8 of response):
 from __future__ import annotations
 
 import asyncio
-import logging
 import time
 from collections.abc import Callable
+from typing import TYPE_CHECKING
 
-from bleak import BleakClient, BleakError, BleakScanner
+from bleak import BleakClient, BleakError
 from bleak.backends.device import BLEDevice
 from bleak.backends.characteristic import BleakGATTCharacteristic
 from bleak_retry_connector import establish_connection
 from homeassistant.components.light import ColorMode
-from homeassistant.helpers.device_registry import format_mac
+
+if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
 
 from .const import (
-    DEFAULT_SCAN_TIMEOUT,
     LOGGER,
     MODE_RGB,
     MODE_WHITE,
@@ -59,75 +60,22 @@ from .const import (
 )
 
 
-async def get_device(mac: str) -> tuple[BLEDevice | None, int | None]:
-    """Get BLE device by MAC address.
-
-    Args:
-        mac: MAC address of the device to find
-
-    Returns:
-        Tuple of (device, rssi) or (None, None) if not found.
-    """
-    # Normalize MAC address for consistent comparison
-    normalized_mac = format_mac(mac).upper()
-    rssi = None
-
-    # Try direct lookup first
-    try:
-        device = await BleakScanner.find_device_by_address(
-            mac, timeout=DEFAULT_SCAN_TIMEOUT
-        )
-        if device:
-            LOGGER.debug("Found device by MAC: %s - %s", device.address, device.name)
-            # Try to get RSSI from advertisement data
-            if hasattr(device, "rssi"):
-                rssi = device.rssi
-            return device, rssi
-    except BleakError as err:
-        LOGGER.debug("BleakError finding device %s: %s", mac, err)
-    except (TimeoutError, asyncio.TimeoutError) as err:
-        LOGGER.debug("Timeout finding device %s: %s", mac, err)
-    except OSError as err:
-        LOGGER.debug("OS error finding device %s: %s", mac, err)
-
-    # Fallback to full scan with RSSI
-    LOGGER.debug("Performing full scan for MAC: %s", mac)
-    try:
-        discovered: dict[str, tuple[BLEDevice, int | None]] = {}
-
-        def detection_callback(device: BLEDevice, adv_data) -> None:
-            device_mac = format_mac(device.address).upper()
-            if device_mac == normalized_mac:
-                discovered[device.address] = (
-                    device,
-                    adv_data.rssi if adv_data else None,
-                )
-
-        scanner = BleakScanner(detection_callback=detection_callback)
-        await scanner.start()
-        await asyncio.sleep(DEFAULT_SCAN_TIMEOUT)
-        await scanner.stop()
-
-        # Return first match (should only be one)
-        if discovered:
-            for dev, dev_rssi in discovered.values():
-                return dev, dev_rssi
-
-    except BleakError as err:
-        LOGGER.error("BleakError during device discovery for %s: %s", mac, err)
-    except (TimeoutError, asyncio.TimeoutError) as err:
-        LOGGER.error("Timeout during device discovery for %s: %s", mac, err)
-    except OSError as err:
-        LOGGER.error("OS error during device discovery for %s: %s", mac, err)
-
-    return None, None
-
-
 class BeurerInstance:
     """Representation of a Beurer daylight lamp BLE device."""
 
-    def __init__(self, device: BLEDevice, rssi: int | None = None) -> None:
-        """Initialize the Beurer instance."""
+    def __init__(
+        self,
+        device: BLEDevice,
+        rssi: int | None = None,
+        hass: HomeAssistant | None = None,
+    ) -> None:
+        """Initialize the Beurer instance.
+
+        Args:
+            device: BLE device from Home Assistant's Bluetooth stack
+            rssi: Initial RSSI value (signal strength)
+            hass: Home Assistant instance for accessing Bluetooth APIs
+        """
         if device is None:
             raise ValueError("Cannot initialize BeurerInstance with None device")
         if not hasattr(device, "address"):
@@ -135,6 +83,7 @@ class BeurerInstance:
 
         self._mac: str = device.address
         self._ble_device: BLEDevice = device
+        self._hass: HomeAssistant | None = hass
         self._client: BleakClient = BleakClient(
             device, disconnected_callback=self._on_disconnect
         )
@@ -647,7 +596,11 @@ class BeurerInstance:
             await self._trigger_update()
 
     async def connect(self) -> bool:
-        """Connect to the device using bleak-retry-connector for reliability."""
+        """Connect to the device using Home Assistant's Bluetooth stack.
+
+        Uses async_ble_device_from_address to get the best available adapter
+        (including ESPHome Bluetooth Proxies) for connecting to the device.
+        """
         try:
             if self._client and self._client.is_connected:
                 LOGGER.debug("Already connected to %s", self._mac)
@@ -660,32 +613,39 @@ class BeurerInstance:
                 getattr(self._ble_device, "name", "Unknown") if self._ble_device else "None",
             )
 
-            # Try to get fresh device reference with updated RSSI
-            try:
-                LOGGER.debug("Scanning for fresh device reference for %s...", self._mac)
-                fresh_device = await BleakScanner.find_device_by_address(
-                    self._mac, timeout=5.0
+            # Use Home Assistant's Bluetooth stack to get fresh device reference
+            # This uses all available adapters including ESPHome Bluetooth Proxies
+            if self._hass:
+                from homeassistant.components import bluetooth
+
+                LOGGER.debug(
+                    "Getting fresh device via HA Bluetooth stack for %s...", self._mac
+                )
+                fresh_device = bluetooth.async_ble_device_from_address(
+                    self._hass, self._mac, connectable=True
                 )
                 if fresh_device:
                     LOGGER.debug(
-                        "Found fresh device: %s (name: %s, rssi: %s)",
+                        "Found device via HA Bluetooth: %s (name: %s)",
                         fresh_device.address,
-                        fresh_device.name,
-                        getattr(fresh_device, "rssi", "N/A"),
+                        getattr(fresh_device, "name", "Unknown"),
                     )
                     self._ble_device = fresh_device
-                    if hasattr(fresh_device, "rssi") and fresh_device.rssi:
-                        self.update_rssi(fresh_device.rssi)
+
+                    # Get RSSI from service info
+                    service_info = bluetooth.async_last_service_info(
+                        self._hass, self._mac, connectable=True
+                    )
+                    if service_info and service_info.rssi:
+                        self.update_rssi(service_info.rssi)
+                        LOGGER.debug("Updated RSSI from HA Bluetooth: %d", service_info.rssi)
                 else:
                     LOGGER.warning(
-                        "Device %s not found in scan, using cached reference", self._mac
+                        "Device %s not found via any Bluetooth adapter, using cached reference",
+                        self._mac,
                     )
-            except (BleakError, TimeoutError, asyncio.TimeoutError, OSError) as err:
-                LOGGER.warning(
-                    "Could not refresh device info for %s: %s - using cached reference",
-                    self._mac,
-                    err,
-                )
+            else:
+                LOGGER.debug("No hass reference, using cached device for %s", self._mac)
 
             # Use bleak-retry-connector for reliable connection establishment
             LOGGER.debug(

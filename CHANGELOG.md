@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.8] - 2025-12-16
+
+### Changed
+- **Full HA Bluetooth stack integration**: Now uses Home Assistant's Bluetooth APIs everywhere
+  - Supports ESPHome Bluetooth Proxies for extended range
+  - Uses `async_ble_device_from_address` to find best available adapter
+  - Automatically routes through nearest proxy with best signal
+  - No more direct BleakScanner usage - all through HA's coordinated stack
+- **Removed `get_device()` function**: Replaced by HA Bluetooth APIs
+
+### Fixed
+- Devices should now be reachable via Bluetooth Proxies throughout the house
+
 ## [1.6.7] - 2025-12-16
 
 ### Changed

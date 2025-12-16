@@ -279,54 +279,37 @@ class TestNotificationParsing:
         assert instance._color_on is False
 
 
-class TestDiscovery:
-    """Tests for device discovery functions."""
+class TestBeurerInstanceWithHass:
+    """Tests for BeurerInstance with Home Assistant integration."""
 
-    @pytest.mark.asyncio
-    async def test_get_device_direct_lookup(self):
-        """Test get_device with direct MAC lookup."""
+    @pytest.fixture
+    def mock_device(self):
+        """Create a mock BLE device."""
+        device = MagicMock()
+        device.address = "AA:BB:CC:DD:EE:FF"
+        device.name = "TL100"
+        return device
+
+    def test_init_with_hass(self, mock_device):
+        """Test initialization with hass reference."""
         from custom_components.beurer_daylight_lamps.beurer_daylight_lamps import (
-            get_device,
+            BeurerInstance,
         )
 
-        mock_device = MagicMock()
-        mock_device.address = "AA:BB:CC:DD:EE:FF"
-        mock_device.name = "TL100"
-        mock_device.rssi = -60
+        mock_hass = MagicMock()
+        instance = BeurerInstance(mock_device, rssi=-60, hass=mock_hass)
 
-        with patch(
-            "custom_components.beurer_daylight_lamps.beurer_daylight_lamps.BleakScanner.find_device_by_address",
-            new_callable=AsyncMock,
-            return_value=mock_device,
-        ):
-            device, rssi = await get_device("AA:BB:CC:DD:EE:FF")
+        assert instance.mac == "AA:BB:CC:DD:EE:FF"
+        assert instance.rssi == -60
+        assert instance._hass == mock_hass
 
-        assert device == mock_device
-        assert rssi == -60
-
-    @pytest.mark.asyncio
-    async def test_get_device_not_found(self):
-        """Test get_device when device is not found."""
+    def test_init_without_hass(self, mock_device):
+        """Test initialization without hass (for testing/legacy)."""
         from custom_components.beurer_daylight_lamps.beurer_daylight_lamps import (
-            get_device,
+            BeurerInstance,
         )
 
-        mock_scanner_instance = MagicMock()
-        mock_scanner_instance.start = AsyncMock()
-        mock_scanner_instance.stop = AsyncMock()
+        instance = BeurerInstance(mock_device, rssi=-60)
 
-        # Create a mock class that returns our instance and has the class method
-        mock_scanner_class = MagicMock(return_value=mock_scanner_instance)
-        mock_scanner_class.find_device_by_address = AsyncMock(return_value=None)
-
-        with patch(
-            "custom_components.beurer_daylight_lamps.beurer_daylight_lamps.BleakScanner",
-            mock_scanner_class,
-        ), patch(
-            "custom_components.beurer_daylight_lamps.beurer_daylight_lamps.asyncio.sleep",
-            new_callable=AsyncMock,
-        ):
-            device, rssi = await get_device("AA:BB:CC:DD:EE:FF")
-
-        assert device is None
-        assert rssi is None
+        assert instance.mac == "AA:BB:CC:DD:EE:FF"
+        assert instance._hass is None
