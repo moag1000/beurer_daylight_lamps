@@ -1,0 +1,139 @@
+"""Test the Beurer Daylight Lamps config flow."""
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+from homeassistant import config_entries
+from homeassistant.const import CONF_MAC, CONF_NAME
+from homeassistant.core import HomeAssistant
+from homeassistant.data_entry_flow import FlowResultType
+
+from custom_components.beurer_daylight_lamps.const import DOMAIN
+
+
+async def test_form_no_devices(hass: HomeAssistant) -> None:
+    """Test we show manual form when no devices found."""
+    with patch(
+        "custom_components.beurer_daylight_lamps.config_flow.discover",
+        return_value=[],
+    ):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "manual"
+
+
+async def test_form_with_devices(hass: HomeAssistant) -> None:
+    """Test we show device selection when devices found."""
+    mock_device = MagicMock()
+    mock_device.address = "AA:BB:CC:DD:EE:FF"
+    mock_device.name = "TL100"
+
+    with patch(
+        "custom_components.beurer_daylight_lamps.config_flow.discover",
+        return_value=[mock_device],
+    ):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "user"
+
+
+async def test_manual_invalid_mac(hass: HomeAssistant) -> None:
+    """Test invalid MAC address in manual entry."""
+    with patch(
+        "custom_components.beurer_daylight_lamps.config_flow.discover",
+        return_value=[],
+    ):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {CONF_MAC: "invalid", CONF_NAME: "Test"},
+        )
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["errors"] == {CONF_MAC: "invalid_mac"}
+
+
+async def test_manual_valid_mac(hass: HomeAssistant) -> None:
+    """Test valid MAC address proceeds to validation."""
+    mock_device = MagicMock()
+    mock_device.address = "AA:BB:CC:DD:EE:FF"
+    mock_device.name = "TL100"
+
+    mock_instance = MagicMock()
+    mock_instance.is_on = False
+    mock_instance.update = AsyncMock()
+    mock_instance.turn_on = AsyncMock()
+    mock_instance.turn_off = AsyncMock()
+    mock_instance.disconnect = AsyncMock()
+
+    with (
+        patch(
+            "custom_components.beurer_daylight_lamps.config_flow.discover",
+            return_value=[],
+        ),
+        patch(
+            "custom_components.beurer_daylight_lamps.config_flow.get_device",
+            return_value=mock_device,
+        ),
+        patch(
+            "custom_components.beurer_daylight_lamps.config_flow.BeurerInstance",
+            return_value=mock_instance,
+        ),
+    ):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {CONF_MAC: "AA:BB:CC:DD:EE:FF", CONF_NAME: "Test TL100"},
+        )
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "validate"
+
+
+async def test_bluetooth_discovery(hass: HomeAssistant) -> None:
+    """Test Bluetooth discovery triggers config flow."""
+    from homeassistant.components.bluetooth import BluetoothServiceInfoBleak
+    from bleak.backends.device import BLEDevice
+    from bleak.backends.scanner import AdvertisementData
+
+    service_info = BluetoothServiceInfoBleak(
+        name="TL100",
+        address="AA:BB:CC:DD:EE:FF",
+        rssi=-60,
+        manufacturer_data={},
+        service_data={},
+        service_uuids=[],
+        source="local",
+        device=BLEDevice("AA:BB:CC:DD:EE:FF", "TL100"),
+        advertisement=AdvertisementData(
+            local_name="TL100",
+            manufacturer_data={},
+            service_data={},
+            service_uuids=[],
+            rssi=-60,
+            tx_power=None,
+            platform_data=(),
+        ),
+        time=0,
+        connectable=True,
+    )
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_BLUETOOTH},
+        data=service_info,
+    )
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "bluetooth_confirm"

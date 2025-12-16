@@ -2,6 +2,7 @@
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/moag1000/beurer_daylight_lamps)
 [![Validate HACS + Hassfest](https://github.com/moag1000/beurer_daylight_lamps/actions/workflows/validate-hacs-hassfest.yml/badge.svg)](https://github.com/moag1000/beurer_daylight_lamps/actions/workflows/validate-hacs-hassfest.yml)
+[![Tests](https://github.com/moag1000/beurer_daylight_lamps/actions/workflows/tests.yml/badge.svg)](https://github.com/moag1000/beurer_daylight_lamps/actions/workflows/tests.yml)
 
 Home Assistant integration for BLE-based Beurer daylight therapy lamps.
 
@@ -23,6 +24,8 @@ Home Assistant integration for BLE-based Beurer daylight therapy lamps.
 - **RGB Color Mode**: Full RGB color support
 - **Light Effects**: Rainbow, Pulse, Forest, Wave, and more
 - **Multiple Lamps**: Support for multiple lamps simultaneously
+- **Options Flow**: Configurable settings
+- **Reauth Flow**: Automatic reconnection handling
 
 ## Installation
 
@@ -98,14 +101,26 @@ logger:
     custom_components.beurer_daylight_lamps: debug
 ```
 
-## Credits
+## Credits & Acknowledgments
 
-This integration is based on the work of:
+This integration would not exist without the work of many contributors. Thank you to:
 
-- [Bellamonte/beurer_daylight_lamps](https://github.com/Bellamonte/beurer_daylight_lamps)
-- [jmac83/ha-beurer](https://github.com/jmac83/ha-beurer)
-- [deadolus/ha-beurer](https://github.com/deadolus/ha-beurer)
-- [sysofwan/ha-triones](https://github.com/sysofwan/ha-triones)
+### Original Authors
+
+- **[sysofwan](https://github.com/sysofwan)** - Created the original [ha-triones](https://github.com/sysofwan/ha-triones) integration that served as the foundation for the BLE light control framework.
+
+- **[deadolus](https://github.com/deadolus)** - Forked and adapted the integration for Beurer lamps in [ha-beurer](https://github.com/deadolus/ha-beurer), establishing the Beurer-specific protocol handling.
+
+- **[jmac83](https://github.com/jmac83)** - Further developed the [ha-beurer](https://github.com/jmac83/ha-beurer) integration with improvements and fixes.
+
+- **[Bellamonte](https://github.com/Bellamonte)** - Created [beurer_daylight_lamps](https://github.com/Bellamonte/beurer_daylight_lamps) with TL100 support, discovery improvements, and HACS compatibility.
+
+### Contributors
+
+- **[@pyromaniac2k](https://github.com/pyromaniac2k)** - Contributions to the ha-beurer integration
+- **[@ALandOfDodd](https://github.com/LandOfDodd)** - Contributions to the ha-beurer integration
+
+Thank you all for your open source contributions!
 
 ## License
 

@@ -31,6 +31,10 @@
                     "mac": "MAC address",
                     "name": "Name"
                 }
+            },
+            "reauth_confirm": {
+                "title": "Reconnect to lamp",
+                "description": "The connection to **{name}** was lost. Click submit to reconnect."
             }
         },
         "error": {
@@ -40,7 +44,18 @@
         "abort": {
             "already_configured": "Device is already configured",
             "cannot_validate": "Could not validate connection",
-            "cannot_connect": "Failed to connect to lamp"
+            "cannot_connect": "Failed to connect to lamp",
+            "reauth_successful": "Reconnection successful"
+        }
+    },
+    "options": {
+        "step": {
+            "init": {
+                "title": "Settings",
+                "data": {
+                    "scan_interval": "Status update interval (seconds)"
+                }
+            }
         }
     }
 }

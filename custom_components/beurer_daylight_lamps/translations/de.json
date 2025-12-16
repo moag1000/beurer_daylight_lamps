@@ -31,6 +31,10 @@
                     "mac": "MAC-Adresse",
                     "name": "Name"
                 }
+            },
+            "reauth_confirm": {
+                "title": "Erneut verbinden",
+                "description": "Die Verbindung zu **{name}** wurde unterbrochen. Klicken Sie auf Absenden um erneut zu verbinden."
             }
         },
         "error": {
@@ -40,7 +44,18 @@
         "abort": {
             "already_configured": "Gerät bereits konfiguriert",
             "cannot_validate": "Verbindung konnte nicht validiert werden",
-            "cannot_connect": "Verbindung zur Lampe fehlgeschlagen"
+            "cannot_connect": "Verbindung zur Lampe fehlgeschlagen",
+            "reauth_successful": "Erneute Verbindung erfolgreich"
+        }
+    },
+    "options": {
+        "step": {
+            "init": {
+                "title": "Einstellungen",
+                "data": {
+                    "scan_interval": "Status-Aktualisierungsintervall (Sekunden)"
+                }
+            }
         }
     }
 }
