@@ -1,57 +1,97 @@
-# beurer_daylight_lamps
-[![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/Bellamonte/beurer_daylight_lamps)
-[![Validate HACS + Hassfest](https://github.com/Bellamonte/beurer_daylight_lamps/actions/workflows/validate-hacs-hassfest.yml/badge.svg)](https://github.com/Bellamonte/beurer_daylight_lamps/actions/workflows/validate-hacs-hassfest.yml)
+# Beurer Daylight Lamps
 
-Home Assistant integration for BLE based Beurer daylight lamps
+[![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/moag1000/beurer_daylight_lamps)
+[![Validate HACS + Hassfest](https://github.com/moag1000/beurer_daylight_lamps/actions/workflows/validate-hacs-hassfest.yml/badge.svg)](https://github.com/moag1000/beurer_daylight_lamps/actions/workflows/validate-hacs-hassfest.yml)
 
-Supports controlling BLE based lights controllable through the Beurer LightUp app. Currently tested and directly supported with TL100 only.
+Home Assistant integration for BLE-based Beurer daylight therapy lamps.
+
+## Supported Devices
+
+| Model | Status | Notes |
+|-------|--------|-------|
+| TL100 | Tested | Full support |
+| TL50  | Untested | Should work |
+| TL70  | Untested | Should work |
+| TL80  | Untested | Should work |
+| TL90  | Untested | Should work |
+
+## Features
+
+- **Bluetooth Auto-Discovery**: Lamps are automatically discovered when in range
+- **On/Off Control**: Turn lamp on and off
+- **Brightness Control**: Adjust white light brightness (0-100%)
+- **RGB Color Mode**: Full RGB color support
+- **Light Effects**: Rainbow, Pulse, Forest, Wave, and more
+- **Multiple Lamps**: Support for multiple lamps simultaneously
 
 ## Installation
 
-Note: Restart is always required after installation.
+> **Note:** Restart Home Assistant after installation.
 
-### [HACS](https://hacs.xyz/) (recommended)
-Installation can be done through [HACS custom repository](https://hacs.xyz/docs/faq/custom_repositories).
+### HACS (recommended)
 
-### Manual installation
-You can manually clone this repository and then copy the whole directory `custom_components/beurer_daylight_lamps` into `config/custom_components/`.
+1. Open HACS in Home Assistant
+2. Go to "Integrations"
+3. Click the three dots menu → "Custom repositories"
+4. Add `https://github.com/moag1000/beurer_daylight_lamps` as "Integration"
+5. Search for "Beurer Daylight Lamps" and install
 
-For example:
-```
-git clone https://github.com/Bellamonte/beurer_daylight_lamps beurer_daylight_lamps
-cd beurer_daylight_lamps/custom_components/beurer_daylight_lamps
-mkdir -p ~/homeassistant/config/custom_components/beurer_daylight_lamps
-cp -r * ~/homeassistant/config/custom_components/beurer_daylight_lamps/
+### Manual Installation
+
+```bash
+git clone https://github.com/moag1000/beurer_daylight_lamps
+cd beurer_daylight_lamps
+cp -r custom_components/beurer_daylight_lamps ~/.homeassistant/custom_components/
 ```
 
 ## Setup
-After installation, you should find "Beurer Daylight Lamps" under the Configuration -> Integrations -> Add integration.
 
-The setup step includes discovery which will list out all Beurer daylight lamps discovered. The setup will validate connection by toggling the selected light. Make sure your light is in-sight to validate this.
+### Automatic Discovery (recommended)
 
-The setup needs to be repeated for each lamp.
+1. Turn on your Beurer lamp
+2. Home Assistant will automatically detect the lamp via Bluetooth
+3. A notification will appear - click "Configure"
+4. The lamp will blink to confirm connection
+5. Click "Submit" to complete setup
 
-## Features
-1. Discovery: Automatically discover Beurer daylight lamps without manually hunting for Bluetooth MAC address
-2. On/Off/RGB/Brightness support
-3. Multiple lamp support
-4. Light modes (Rainbow, Pulse, Forest, ..) as found in the app
+### Manual Setup
 
-## Known issues
-1. Light connection may fail a few times after Home Assistant reboot. The integration will usually reconnect and the issue will resolve itself.
-2. The rightmost LED, which signals Bluetooth connection, on the lamp will always be on.
-   This is because HomeAssistant will always be connected to the lamp, use black duct tape if you want the lamp to be completely dark.
+1. Go to **Settings** → **Devices & Services** → **Add Integration**
+2. Search for "Beurer Daylight Lamps"
+3. Select your lamp from the list or enter MAC address manually
+4. The lamp will blink to confirm - click "Yes" if it blinked
 
-## Not supported
-Timers for automatic turn off of the lamp are currently not supported. 
-Use HomeAssistant automations if you need this functionality.
+## Light Effects
+
+The following effects are available (matching the Beurer LightUp app):
+
+- Off
+- Random
+- Rainbow
+- Rainbow Slow
+- Fusion
+- Pulse
+- Wave
+- Chill
+- Action
+- Forest
+- Summer
+
+## Known Issues
+
+1. **Connection after reboot**: Connection may fail a few times after Home Assistant reboots. The integration will auto-reconnect.
+
+2. **Bluetooth LED always on**: The small Bluetooth indicator LED on the lamp stays illuminated while connected to Home Assistant.
+
+## Not Supported
+
+- **Timer**: Built-in timer functionality is not supported. Use Home Assistant automations instead.
 
 ## Debugging
-Add the following to `configuration.yml` to show debugging logs. Please make sure to include debug logs when filing an issue.
 
-See [logger intergration docs](https://www.home-assistant.io/integrations/logger/) for more information to configure logging.
+Add to `configuration.yaml`:
 
-```yml
+```yaml
 logger:
   default: warn
   logs:
@@ -59,8 +99,14 @@ logger:
 ```
 
 ## Credits
-This integration is a fork of [jmac83 ha-beurer integration](https://github.com/jmac83/ha-beurer), which itself is a fork of [deadolus ha-beurer integration](https://github.com/deadolus/ha-beurer), which itself is a fork of [sysofwan ha-triones integration](https://github.com/sysofwan/ha-triones), whose framework I used for this Beurer daylight lamp integration. 
 
-Additional help on [deadolus ha-beurer integration](https://github.com/deadolus/ha-beurer) by: 
-- [@pyromaniac2k](https://github.com/pyromaniac2k)
-- [@ALandOfDodd](https://github.com/LandOfDodd)
+This integration is based on the work of:
+
+- [Bellamonte/beurer_daylight_lamps](https://github.com/Bellamonte/beurer_daylight_lamps)
+- [jmac83/ha-beurer](https://github.com/jmac83/ha-beurer)
+- [deadolus/ha-beurer](https://github.com/deadolus/ha-beurer)
+- [sysofwan/ha-triones](https://github.com/sysofwan/ha-triones)
+
+## License
+
+This project is licensed under the MIT License.

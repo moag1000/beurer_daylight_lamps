@@ -1,13 +1,39 @@
 {
     "domain": "beurer_daylight_lamps",
     "name": "Beurer Daylight Lamps",
-    "codeowners": ["@Bellamonte"],
+    "bluetooth": [
+        {
+            "local_name": "TL100*",
+            "connectable": true
+        },
+        {
+            "local_name": "TL50*",
+            "connectable": true
+        },
+        {
+            "local_name": "TL70*",
+            "connectable": true
+        },
+        {
+            "local_name": "TL80*",
+            "connectable": true
+        },
+        {
+            "local_name": "TL90*",
+            "connectable": true
+        },
+        {
+            "local_name": "Beurer*",
+            "connectable": true
+        }
+    ],
+    "codeowners": ["@moag1000"],
     "config_flow": true,
-    "dependencies": [],
-    "documentation": "https://github.com/Bellamonte/beurer_daylight_lamps",
-    "integration_type": "hub",
-    "iot_class": "local_polling",
-    "issue_tracker": "https://github.com/Bellamonte/beurer_daylight_lamps/issues",
+    "dependencies": ["bluetooth_adapters"],
+    "documentation": "https://github.com/moag1000/beurer_daylight_lamps",
+    "integration_type": "device",
+    "iot_class": "local_push",
+    "issue_tracker": "https://github.com/moag1000/beurer_daylight_lamps/issues",
     "requirements": ["bleak>=0.20.5"],
-    "version": "1.0.0"
+    "version": "1.1.0"
 }

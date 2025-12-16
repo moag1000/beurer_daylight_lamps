@@ -2,32 +2,43 @@
     "config": {
         "step": {
             "user": {
+                "title": "Select a Beurer lamp",
+                "description": "Select a discovered lamp or enter MAC address manually.",
                 "data": {
-                    "mac": "Pick a Bluetooth name or to manually add a Bluetooth MAC address:",
+                    "mac": "Device",
                     "name": "Name"
-                },
-                "title": "Pick a Beurer lamp. Make sure lamp is in sight for validation."
+                }
+            },
+            "bluetooth_confirm": {
+                "title": "Confirm Beurer lamp setup",
+                "description": "A Beurer lamp was discovered: **{name}**\n\nThe lamp will blink to confirm the connection.",
+                "data": {
+                    "name": "Name (optional)"
+                }
             },
             "validate": {
+                "title": "Validate connection",
+                "description": "The lamp should have blinked. Please confirm.",
                 "data": {
-                    "retry": "Retry validate connection?",
+                    "retry": "Retry connection?",
                     "flicker": "Did the lamp blink?"
-                },
-                "title": "Validate connection to Beurer lamp"
+                }
             },
             "manual": {
+                "title": "Manual setup",
+                "description": "Enter the Bluetooth MAC address manually.",
                 "data": {
                     "mac": "Bluetooth MAC address",
                     "name": "Name"
-                },
-                "title": "Enter bluetooth MAC address"
+                }
             }
         },
         "error": {
-            "connect": "Unable to connect to Beurer lamp"
+            "cannot_connect": "Unable to connect to Beurer lamp"
         },
         "abort": {
-            "cannot_validate": "Unable to validate Beurer lamp",
+            "already_configured": "Device is already configured",
+            "cannot_validate": "Could not validate lamp connection",
             "cannot_connect": "Unable to connect to Beurer lamp"
         }
     },

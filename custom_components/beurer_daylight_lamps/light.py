@@ -1,175 +1,204 @@
+"""Light platform for Beurer Daylight Lamps."""
+from __future__ import annotations
+
 import asyncio
-import voluptuous as vol
-from typing import Any, Optional, Tuple
+from typing import Any
 
-from custom_components.beurer_daylight_lamps.beurer_daylight_lamps import BeurerInstance
-from custom_components.beurer_daylight_lamps.const import DOMAIN
+from homeassistant.components.light import (
+    ATTR_BRIGHTNESS,
+    ATTR_EFFECT,
+    ATTR_RGB_COLOR,
+    ColorMode,
+    LightEntity,
+    LightEntityFeature,
+)
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.device_registry import CONNECTION_BLUETOOTH, DeviceInfo
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.util.color import match_max_scale
 
-from homeassistant.const import CONF_MAC
-import homeassistant.helpers.config_validation as cv
-from homeassistant.components.light import (COLOR_MODE_RGB, PLATFORM_SCHEMA,
-                                            LightEntity, ATTR_RGB_COLOR, ATTR_BRIGHTNESS, ATTR_EFFECT, COLOR_MODE_WHITE, ATTR_WHITE, LightEntityFeature)
-from homeassistant.util.color import (match_max_scale)
-from homeassistant.helpers import device_registry
-from custom_components.beurer_daylight_lamps.const import LOGGER
+from .beurer_daylight_lamps import BeurerInstance
+from .const import DOMAIN, LOGGER
 
-PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
-    vol.Required(CONF_MAC): cv.string
-})
+# Model detection based on device name
+MODEL_MAP = {
+    "TL100": "TL100 Daylight Therapy Lamp",
+    "TL50": "TL50 Daylight Therapy Lamp",
+    "TL70": "TL70 Daylight Therapy Lamp",
+    "TL80": "TL80 Daylight Therapy Lamp",
+    "TL90": "TL90 Daylight Therapy Lamp",
+}
 
-async def async_setup_entry(hass, config_entry, async_add_devices):
-    LOGGER.debug(f"Setting up device from lamp")
-    instance = hass.data[DOMAIN][config_entry.entry_id]
-    async_add_devices([BeurerLight(instance, config_entry.data["name"], config_entry.entry_id)])
+
+def _detect_model(name: str | None) -> str:
+    """Detect model from device name."""
+    if not name:
+        return "Daylight Therapy Lamp"
+    name_upper = name.upper()
+    for prefix, model in MODEL_MAP.items():
+        if name_upper.startswith(prefix):
+            return model
+    return "Daylight Therapy Lamp"
+
+
+async def async_setup_entry(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
+    """Set up Beurer Daylight Lamp from a config entry."""
+    LOGGER.debug("Setting up Beurer light entity")
+    instance: BeurerInstance = hass.data[DOMAIN][config_entry.entry_id]
+    name = config_entry.data.get("name", "Beurer Lamp")
+    async_add_entities([BeurerLight(instance, name, config_entry.entry_id)])
+
 
 class BeurerLight(LightEntity):
-    def __init__(self, beurerInstance: BeurerInstance, name: str, entry_id: str) -> None:
-        self._instance = beurerInstance
+    """Representation of a Beurer Daylight Lamp."""
+
+    _attr_has_entity_name = True
+    _attr_name = None
+    _attr_supported_color_modes = {ColorMode.RGB, ColorMode.WHITE}
+    _attr_supported_features = LightEntityFeature.EFFECT
+
+    def __init__(
+        self, beurer_instance: BeurerInstance, name: str, entry_id: str
+    ) -> None:
+        """Initialize the Beurer light."""
+        self._instance = beurer_instance
         self._entry_id = entry_id
-        self._attr_supported_color_modes = {COLOR_MODE_RGB, COLOR_MODE_WHITE}
-        self._color_mode = None
-        self._attr_name = name
+        self._device_name = name
         self._attr_unique_id = self._instance.mac
 
     async def async_added_to_hass(self) -> None:
-        """Add update callback after being added to hass."""
-        self._instance.set_update_callback(self.update_callback)
+        """Handle entity added to hass."""
+        self._instance.set_update_callback(self._handle_update)
         await self._instance.update()
 
-    def update_callback(self) -> None:
-        """Schedule a state update."""
-        #self.async_schedule_update_ha_state(False)
+    def _handle_update(self) -> None:
+        """Handle device state update."""
         self.schedule_update_ha_state(False)
 
     @property
-    def available(self):
-        return self._instance.is_on != None
+    def available(self) -> bool:
+        """Return True if entity is available."""
+        return self._instance.is_on is not None
 
-    #We handle update triggers manually, do not poll
     @property
-    def should_poll(self) -> Optional[bool]:
+    def should_poll(self) -> bool:
+        """No polling needed - updates via notifications."""
         return False
 
     @property
-    def brightness(self):
-        if self._instance.color_mode == COLOR_MODE_WHITE:
+    def brightness(self) -> int | None:
+        """Return the brightness of the light."""
+        if self._instance.color_mode == ColorMode.WHITE:
             return self._instance.white_brightness
-        else:
-            return self._instance.color_brightness
-        return None
+        return self._instance.color_brightness
 
     @property
-    def is_on(self) -> Optional[bool]:
+    def is_on(self) -> bool | None:
+        """Return True if light is on."""
         return self._instance.is_on
 
     @property
-    # RGB color/brightness based on https://github.com/home-assistant/core/issues/51175
-    def rgb_color(self):
+    def rgb_color(self) -> tuple[int, int, int] | None:
+        """Return the RGB color value."""
         if self._instance.rgb_color:
             return match_max_scale((255,), self._instance.rgb_color)
         return None
 
     @property
-    def effect(self):
-        if self._instance.color_mode == COLOR_MODE_WHITE:
+    def effect(self) -> str | None:
+        """Return the current effect."""
+        if self._instance.color_mode == ColorMode.WHITE:
             return "Off"
-        else:
-            return self._instance.effect
+        return self._instance.effect
 
     @property
-    def effect_list(self):
+    def effect_list(self) -> list[str]:
+        """Return the list of supported effects."""
         return self._instance.supported_effects
 
     @property
-    def supported_features(self):
-        return LightEntityFeature.EFFECT
+    def color_mode(self) -> ColorMode:
+        """Return the color mode of the light."""
+        mode = self._instance.color_mode
+        if mode == "rgb":
+            return ColorMode.RGB
+        if mode == "white":
+            return ColorMode.WHITE
+        return ColorMode.WHITE
 
     @property
-    def color_mode(self):
-        return self._instance.color_mode
-
-    @property
-    def device_info(self):
-        return {
-            "identifiers": {
-                (DOMAIN, self._instance.mac)
-            },
-            "name": self.name,
-            "connections": {(device_registry.CONNECTION_NETWORK_MAC, self._instance.mac)}
-        }
-
-    def _transform_color_brightness(self, color: Tuple[int, int, int], set_brightness: int):
-        rgb = match_max_scale((255,), color)
-        res = tuple(int(color_val * set_brightness // 255) for color_val in rgb)
-        return res
+    def device_info(self) -> DeviceInfo:
+        """Return device info for this light."""
+        return DeviceInfo(
+            identifiers={(DOMAIN, self._instance.mac)},
+            name=self._device_name,
+            manufacturer="Beurer",
+            model=_detect_model(self._device_name),
+            connections={(CONNECTION_BLUETOOTH, self._instance.mac)},
+        )
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        LOGGER.debug(f"Turning lamp on with args: {kwargs}")
+        """Turn on the light."""
+        LOGGER.debug("Turning lamp on with args: %s", kwargs)
 
-        # Handle the case where no arguments are provided - just turn on
-        if len(kwargs) == 0:
+        if not kwargs:
             await self._instance.turn_on()
             return
 
-        # HYBRID FIX: Use the existing methods but with smart mode switching
         current_mode = self._instance.color_mode
 
         # Determine target mode based on parameters
         target_mode = None
         if ATTR_RGB_COLOR in kwargs or ATTR_EFFECT in kwargs:
-            target_mode = COLOR_MODE_RGB
-        elif ATTR_BRIGHTNESS in kwargs and ATTR_RGB_COLOR not in kwargs and ATTR_EFFECT not in kwargs:
-            target_mode = COLOR_MODE_WHITE
+            target_mode = ColorMode.RGB
+        elif ATTR_BRIGHTNESS in kwargs and ATTR_RGB_COLOR not in kwargs:
+            target_mode = ColorMode.WHITE
 
-        # Force mode switch by updating internal state if needed
+        # Force mode switch if needed
         if target_mode and target_mode != current_mode:
-            LOGGER.debug(f"Mode switch required: {current_mode} -> {target_mode}")
-            # Update internal mode first
+            LOGGER.debug("Mode switch required: %s -> %s", current_mode, target_mode)
             self._instance._mode = target_mode
-            # Reset relevant state flags
-            if target_mode == COLOR_MODE_WHITE:
-                self._instance._light_on = False
-                self._instance._color_on = False
-            else:
-                self._instance._light_on = False
-                self._instance._color_on = False
+            self._instance._light_on = False
+            self._instance._color_on = False
 
-        # Handle white mode using existing method but with forced mode
-        if target_mode == COLOR_MODE_WHITE:
+        # Handle white mode
+        if target_mode == ColorMode.WHITE:
             brightness = kwargs[ATTR_BRIGHTNESS]
-            LOGGER.debug(f"Setting white mode with brightness {brightness}")
-            # Force the mode and use existing method
-            self._instance._mode = COLOR_MODE_WHITE
+            LOGGER.debug("Setting white mode with brightness %s", brightness)
+            self._instance._mode = ColorMode.WHITE
             await self._instance.set_white(brightness)
             return
 
-        # Handle RGB/effect mode using existing methods
-        if target_mode == COLOR_MODE_RGB:
-            # Force the mode first
-            self._instance._mode = COLOR_MODE_RGB
+        # Handle RGB/effect mode
+        if target_mode == ColorMode.RGB:
+            self._instance._mode = ColorMode.RGB
 
-            # Set color first if provided
             if ATTR_RGB_COLOR in kwargs:
                 color = kwargs[ATTR_RGB_COLOR]
-                LOGGER.debug(f"Setting RGB color {color}")
+                LOGGER.debug("Setting RGB color %s", color)
                 await self._instance.set_color(color)
 
-                # Then handle brightness if provided with color
                 if ATTR_BRIGHTNESS in kwargs:
                     brightness = kwargs[ATTR_BRIGHTNESS]
-                    LOGGER.debug(f"Setting color brightness {brightness}")
-                    await asyncio.sleep(0.2)  # Small delay between operations
+                    LOGGER.debug("Setting color brightness %s", brightness)
+                    await asyncio.sleep(0.2)
                     await self._instance.set_color_brightness(brightness)
 
-            # Handle effect last
             if ATTR_EFFECT in kwargs:
                 effect = kwargs[ATTR_EFFECT]
-                LOGGER.debug(f"Setting effect {effect}")
-                await asyncio.sleep(0.2)  # Small delay before effect
+                LOGGER.debug("Setting effect %s", effect)
+                await asyncio.sleep(0.2)
                 await self._instance.set_effect(effect)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
+        """Turn off the light."""
         await self._instance.turn_off()
 
     async def async_update(self) -> None:
+        """Update the light state."""
         await self._instance.update()
