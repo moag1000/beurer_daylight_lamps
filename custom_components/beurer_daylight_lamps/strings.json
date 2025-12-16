@@ -144,6 +144,20 @@
                     "description": "The preset to apply (daylight_therapy, relax, focus, reading, warm_cozy, cool_bright, sunset, night_light, energize)"
                 }
             }
+        },
+        "send_raw_command": {
+            "name": "Send raw command (Expert)",
+            "description": "Send a raw BLE command to the lamp for reverse engineering and testing",
+            "fields": {
+                "device_id": {
+                    "name": "Device",
+                    "description": "The Beurer lamp device to control"
+                },
+                "command": {
+                    "name": "Command bytes",
+                    "description": "Hex bytes to send (e.g., '33 01 1E'). Known: 30=status, 31=brightness, 32=color, 34=effect, 35=off, 37=mode. Unknown: 33, 36, 38, 39"
+                }
+            }
         }
     }
 }

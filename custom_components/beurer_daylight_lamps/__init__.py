@@ -23,8 +23,10 @@ from .const import DOMAIN, LOGGER
 
 # Service constants
 SERVICE_APPLY_PRESET = "apply_preset"
+SERVICE_SEND_RAW = "send_raw_command"
 ATTR_DEVICE_ID = "device_id"
 ATTR_PRESET = "preset"
+ATTR_COMMAND = "command"
 
 # Preset definitions: {preset_name: (rgb, brightness, color_temp_kelvin, effect)}
 # brightness is 0-255, color_temp is Kelvin, effect is effect name or None
@@ -80,6 +82,13 @@ SERVICE_SCHEMA = vol.Schema(
     {
         vol.Required(ATTR_DEVICE_ID): cv.string,
         vol.Required(ATTR_PRESET): vol.In(list(PRESETS.keys())),
+    }
+)
+
+SERVICE_RAW_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_DEVICE_ID): cv.string,
+        vol.Required(ATTR_COMMAND): cv.string,
     }
 )
 
@@ -304,6 +313,66 @@ async def _async_setup_services(hass: HomeAssistant) -> None:
         schema=SERVICE_SCHEMA,
     )
     LOGGER.debug("Registered service %s.%s", DOMAIN, SERVICE_APPLY_PRESET)
+
+    async def async_send_raw_command(call: ServiceCall) -> None:
+        """Send a raw BLE command to a Beurer lamp (Expert mode)."""
+        device_id = call.data[ATTR_DEVICE_ID]
+        command_str = call.data[ATTR_COMMAND]
+
+        LOGGER.info("Sending raw command '%s' to device %s", command_str, device_id)
+
+        # Find the config entry for this device
+        device_reg = dr.async_get(hass)
+        device = device_reg.async_get(device_id)
+
+        if not device:
+            LOGGER.error("Device %s not found", device_id)
+            return
+
+        # Find config entry for this device
+        config_entry_id = None
+        for entry_id in device.config_entries:
+            entry = hass.config_entries.async_get_entry(entry_id)
+            if entry and entry.domain == DOMAIN:
+                config_entry_id = entry_id
+                break
+
+        if not config_entry_id:
+            LOGGER.error("No Beurer config entry found for device %s", device_id)
+            return
+
+        entry = hass.config_entries.async_get_entry(config_entry_id)
+        if not entry or not hasattr(entry, "runtime_data"):
+            LOGGER.error("Config entry not ready for device %s", device_id)
+            return
+
+        instance: BeurerInstance = entry.runtime_data
+
+        # Parse hex bytes from command string (e.g., "33 01 1E" or "33011E")
+        try:
+            # Remove spaces and parse as hex
+            hex_str = command_str.replace(" ", "").replace("0x", "")
+            payload = [int(hex_str[i:i+2], 16) for i in range(0, len(hex_str), 2)]
+        except ValueError as err:
+            LOGGER.error("Invalid hex command '%s': %s", command_str, err)
+            return
+
+        LOGGER.info("Parsed payload: %s", [f"0x{b:02X}" for b in payload])
+
+        # Send the raw command using the instance's internal method
+        success = await instance._send_packet(payload)
+        if success:
+            LOGGER.info("Raw command sent successfully to %s", instance.mac)
+        else:
+            LOGGER.error("Failed to send raw command to %s", instance.mac)
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SEND_RAW,
+        async_send_raw_command,
+        schema=SERVICE_RAW_SCHEMA,
+    )
+    LOGGER.debug("Registered service %s.%s", DOMAIN, SERVICE_SEND_RAW)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> bool:
