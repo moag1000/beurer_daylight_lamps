@@ -668,6 +668,8 @@ class BeurerInstance:
 
             # Use Home Assistant's Bluetooth stack to get fresh device reference
             # This uses all available adapters including ESPHome Bluetooth Proxies
+            # Don't filter by connectable - some devices alternate between
+            # connectable and non-connectable advertisement packets
             if self._hass:
                 from homeassistant.components import bluetooth
 
@@ -675,7 +677,7 @@ class BeurerInstance:
                     "Getting fresh device via HA Bluetooth stack for %s...", self._mac
                 )
                 fresh_device = bluetooth.async_ble_device_from_address(
-                    self._hass, self._mac, connectable=True
+                    self._hass, self._mac
                 )
                 if fresh_device:
                     LOGGER.debug(
@@ -687,7 +689,7 @@ class BeurerInstance:
 
                     # Get RSSI from service info
                     service_info = bluetooth.async_last_service_info(
-                        self._hass, self._mac, connectable=True
+                        self._hass, self._mac
                     )
                     if service_info and service_info.rssi:
                         self.update_rssi(service_info.rssi)
