@@ -5,6 +5,7 @@ import asyncio
 from typing import Any
 
 from bleak import BleakError
+from bleak.backends.device import BLEDevice
 import voluptuous as vol
 
 from homeassistant.components.bluetooth import (
@@ -36,17 +37,21 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
         self._name: str | None = None
         self._instance: BeurerInstance | None = None
         self._discovery_info: BluetoothServiceInfoBleak | None = None
+        self._ble_device: BLEDevice | None = None
+        self._rssi: int | None = None
         self._reauth_entry: ConfigEntry | None = None
         self._reconfigure_entry: ConfigEntry | None = None
+        self._discovered_devices: dict[str, BluetoothServiceInfoBleak] = {}
 
     async def async_step_bluetooth(
         self, discovery_info: BluetoothServiceInfoBleak
     ) -> ConfigFlowResult:
         """Handle Bluetooth discovery."""
         LOGGER.debug(
-            "Bluetooth discovery: %s (%s)",
+            "Bluetooth discovery: %s (%s) RSSI: %s",
             discovery_info.name,
             discovery_info.address,
+            discovery_info.rssi,
         )
 
         await self.async_set_unique_id(format_mac(discovery_info.address))
@@ -55,6 +60,8 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
         self._discovery_info = discovery_info
         self._mac = discovery_info.address
         self._name = discovery_info.name or f"Beurer {discovery_info.address[-8:]}"
+        self._ble_device = discovery_info.device
+        self._rssi = discovery_info.rssi
 
         self.context["title_placeholders"] = {"name": self._name}
         return await self.async_step_bluetooth_confirm()
@@ -89,6 +96,17 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
             self._mac = user_input[CONF_MAC]
             self._name = user_input[CONF_NAME]
 
+            # Use cached device info if available
+            if self._mac in self._discovered_devices:
+                info = self._discovered_devices[self._mac]
+                self._ble_device = info.device
+                self._rssi = info.rssi
+                LOGGER.debug(
+                    "Using cached device: %s (RSSI: %s)",
+                    self._mac,
+                    self._rssi,
+                )
+
             await self.async_set_unique_id(format_mac(self._mac))
             self._abort_if_unique_id_configured()
 
@@ -99,26 +117,36 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
         configured_macs = self._async_current_ids(include_ignore=False)
         discovered = async_discovered_service_info(self.hass)
 
-        # Filter for Beurer TL devices by name prefix
-        available_devices = [
-            info for info in discovered
-            if info.name
-            and info.name.lower().startswith(DEVICE_NAME_PREFIXES)
-            and format_mac(info.address) not in configured_macs
-        ]
+        # Filter for Beurer TL devices by name prefix and cache them
+        self._discovered_devices = {}
+        for info in discovered:
+            if (
+                info.name
+                and info.name.lower().startswith(DEVICE_NAME_PREFIXES)
+                and format_mac(info.address) not in configured_macs
+            ):
+                self._discovered_devices[info.address] = info
 
-        if not available_devices:
+        if not self._discovered_devices:
             return await self.async_step_manual()
 
-        device_options = {d.address: d.name or d.address for d in available_devices}
+        # Build options with name and RSSI info
+        device_options = {
+            addr: f"{info.name} ({info.rssi} dBm)" if info.rssi else info.name or addr
+            for addr, info in self._discovered_devices.items()
+        }
         device_options[MANUAL_MAC] = "Enter MAC manually"
+
+        # Get first device name as default
+        first_device = next(iter(self._discovered_devices.values()), None)
+        default_name = first_device.name if first_device else ""
 
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema(
                 {
                     vol.Required(CONF_MAC): vol.In(device_options),
-                    vol.Required(CONF_NAME): str,
+                    vol.Required(CONF_NAME, default=default_name): str,
                 }
             ),
             errors=errors,
@@ -272,17 +300,31 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
         """Test connection by toggling the lamp."""
         try:
             if not self._instance:
-                device, rssi = await get_device(self._mac)
-                if not device:
-                    LOGGER.error("Device not found: %s", self._mac)
-                    return False
-                self._instance = BeurerInstance(device, rssi)
+                # Use cached BLE device if available (faster, no scan needed)
+                if self._ble_device:
+                    LOGGER.debug(
+                        "Using cached BLE device for %s (RSSI: %s)",
+                        self._mac,
+                        self._rssi,
+                    )
+                    self._instance = BeurerInstance(self._ble_device, self._rssi)
+                else:
+                    # Fall back to scanning for the device
+                    LOGGER.debug("Scanning for device %s...", self._mac)
+                    device, rssi = await get_device(self._mac)
+                    if not device:
+                        LOGGER.error("Device not found: %s", self._mac)
+                        return False
+                    self._instance = BeurerInstance(device, rssi)
 
             LOGGER.debug("Testing connection to %s", self._mac)
             await self._instance.update()
             await asyncio.sleep(0.5)
 
+            # Toggle lamp to confirm it works
             is_on = bool(self._instance.is_on)
+            LOGGER.debug("Device %s is currently %s", self._mac, "on" if is_on else "off")
+
             if is_on:
                 await self._instance.turn_off()
                 await asyncio.sleep(1.5)
@@ -292,19 +334,20 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
                 await asyncio.sleep(1.5)
                 await self._instance.turn_off()
 
+            LOGGER.info("Connection test successful for %s", self._mac)
             return True
 
         except BleakError as err:
-            LOGGER.error("BLE error during connection test: %s", err)
+            LOGGER.error("BLE error during connection test for %s: %s", self._mac, err)
             return False
         except (TimeoutError, asyncio.TimeoutError) as err:
-            LOGGER.error("Timeout during connection test: %s", err)
+            LOGGER.error("Timeout during connection test for %s: %s", self._mac, err)
             return False
         except OSError as err:
-            LOGGER.error("OS error during connection test: %s", err)
+            LOGGER.error("OS error during connection test for %s: %s", self._mac, err)
             return False
         except ValueError as err:
-            LOGGER.error("Invalid device during connection test: %s", err)
+            LOGGER.error("Invalid device during connection test for %s: %s", self._mac, err)
             return False
 
         finally:

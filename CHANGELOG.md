@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.7] - 2025-12-16
+
+### Changed
+- **Improved config flow**: Faster device setup with better UX
+  - Device list now shows RSSI signal strength (e.g. "TL100 (-60 dBm)")
+  - Device name auto-fills when selecting from list
+  - Uses cached BLE device during validation (no re-scan needed)
+  - RSSI saved from discovery for diagnostics
+
 ## [1.6.6] - 2025-12-16
 
 ### Changed
