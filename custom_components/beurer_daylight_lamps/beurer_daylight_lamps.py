@@ -668,8 +668,7 @@ class BeurerInstance:
 
             # Use Home Assistant's Bluetooth stack to get fresh device reference
             # This uses all available adapters including ESPHome Bluetooth Proxies
-            # Don't filter by connectable - some devices alternate between
-            # connectable and non-connectable advertisement packets
+            # Try both connectable and non-connectable devices
             if self._hass:
                 from homeassistant.components import bluetooth
 
@@ -679,6 +678,15 @@ class BeurerInstance:
                 fresh_device = bluetooth.async_ble_device_from_address(
                     self._hass, self._mac
                 )
+                # If not found, explicitly try non-connectable
+                if not fresh_device:
+                    LOGGER.debug(
+                        "Device not found without filter, trying connectable=False..."
+                    )
+                    fresh_device = bluetooth.async_ble_device_from_address(
+                        self._hass, self._mac, connectable=False
+                    )
+
                 if fresh_device:
                     LOGGER.debug(
                         "Found device via HA Bluetooth: %s (name: %s)",
@@ -687,10 +695,14 @@ class BeurerInstance:
                     )
                     self._ble_device = fresh_device
 
-                    # Get RSSI from service info
+                    # Get RSSI from service info (try both types)
                     service_info = bluetooth.async_last_service_info(
                         self._hass, self._mac
                     )
+                    if not service_info:
+                        service_info = bluetooth.async_last_service_info(
+                            self._hass, self._mac, connectable=False
+                        )
                     if service_info and service_info.rssi:
                         self.update_rssi(service_info.rssi)
                         LOGGER.debug("Updated RSSI from HA Bluetooth: %d", service_info.rssi)

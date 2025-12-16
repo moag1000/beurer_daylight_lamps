@@ -117,16 +117,24 @@ async def async_setup_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> bo
 
     # Use Home Assistant's Bluetooth stack - this automatically uses all adapters
     # including ESPHome Bluetooth Proxies for better range and reliability
-    # Don't filter by connectable - some devices alternate between
-    # connectable and non-connectable advertisement packets
+    # Try both connectable and non-connectable devices
     ble_device = bluetooth.async_ble_device_from_address(
         hass, mac_address
     )
+    # If not found, explicitly try non-connectable
+    if not ble_device:
+        ble_device = bluetooth.async_ble_device_from_address(
+            hass, mac_address, connectable=False
+        )
 
-    # Also get the latest service info for RSSI
+    # Also get the latest service info for RSSI (try both types)
     service_info = bluetooth.async_last_service_info(
         hass, mac_address
     )
+    if not service_info:
+        service_info = bluetooth.async_last_service_info(
+            hass, mac_address, connectable=False
+        )
     rssi = service_info.rssi if service_info else None
 
     device_initially_available = ble_device is not None
@@ -212,11 +220,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> bo
             instance.update_rssi(service_info.rssi)
 
         # Update the BLE device reference to use the best available adapter
-        # Don't filter by connectable - some devices alternate between
-        # connectable and non-connectable advertisement packets
+        # Try both connectable and non-connectable devices
         new_device = bluetooth.async_ble_device_from_address(
             hass, mac_address
         )
+        if not new_device:
+            new_device = bluetooth.async_ble_device_from_address(
+                hass, mac_address, connectable=False
+            )
         if new_device:
             instance.update_ble_device(new_device)
 

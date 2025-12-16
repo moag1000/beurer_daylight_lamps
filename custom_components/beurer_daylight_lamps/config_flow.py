@@ -313,24 +313,39 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
                     )
                 else:
                     # Use HA Bluetooth stack to find device (includes all proxies)
-                    # Don't filter by connectable - some devices alternate between
-                    # connectable and non-connectable advertisement packets
+                    # Try both connectable and non-connectable devices
                     LOGGER.debug(
                         "Getting device %s via HA Bluetooth stack...", self._mac
                     )
+
+                    # Try without filter first (should get both types)
                     ble_device = bluetooth.async_ble_device_from_address(
                         self.hass, self._mac
                     )
+
+                    # If not found, explicitly try non-connectable
+                    if not ble_device:
+                        LOGGER.debug(
+                            "Device not found without filter, trying connectable=False..."
+                        )
+                        ble_device = bluetooth.async_ble_device_from_address(
+                            self.hass, self._mac, connectable=False
+                        )
+
                     if not ble_device:
                         LOGGER.error(
                             "Device %s not found via any Bluetooth adapter", self._mac
                         )
                         return False
 
-                    # Get RSSI from service info
+                    # Get RSSI from service info (try both types)
                     service_info = bluetooth.async_last_service_info(
                         self.hass, self._mac
                     )
+                    if not service_info:
+                        service_info = bluetooth.async_last_service_info(
+                            self.hass, self._mac, connectable=False
+                        )
                     rssi = service_info.rssi if service_info else None
 
                     self._ble_device = ble_device
