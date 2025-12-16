@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.7] - 2025-12-16
+
+### Fixed
+- **ESPHome Bluetooth Proxy Support**: Verbindung über Proxies sollte jetzt funktionieren
+  - `ble_device_callback` hinzugefügt - holt bei jedem Retry frisches Device von HA
+  - `BleakClientWithServiceCache` für schnellere Reconnects
+  - 5 Retry-Versuche statt 3 für Proxy-Verbindungen
+- **Dynamische Device-Referenz**: Bei jedem Verbindungsversuch wird das beste verfügbare Device geholt
+
 ## [1.8.6] - 2025-12-16
 
 ### Fixed

@@ -30,7 +30,7 @@ from typing import TYPE_CHECKING
 from bleak import BleakClient, BleakError
 from bleak.backends.device import BLEDevice
 from bleak.backends.characteristic import BleakGATTCharacteristic
-from bleak_retry_connector import establish_connection
+from bleak_retry_connector import establish_connection, BleakClientWithServiceCache
 from homeassistant.components.light import ColorMode
 
 if TYPE_CHECKING:
@@ -719,16 +719,41 @@ class BeurerInstance:
 
             # Use bleak-retry-connector for reliable connection establishment
             # This handles retries automatically and is the recommended approach
+            # IMPORTANT: Use ble_device_callback to get fresh device reference on each retry
+            # This is critical for ESPHome Bluetooth Proxies where device refs can change
             LOGGER.debug(
                 "Establishing connection to %s with bleak-retry-connector (max 3 attempts)...",
                 self._mac,
             )
+
+            def get_device() -> BLEDevice:
+                """Get fresh device reference from HA Bluetooth stack.
+
+                This is called on each retry attempt and ensures we use the
+                best available adapter (including ESPHome proxies).
+                """
+                if self._hass:
+                    from homeassistant.components import bluetooth
+                    fresh = bluetooth.async_ble_device_from_address(
+                        self._hass, self._mac, connectable=True
+                    )
+                    if fresh:
+                        LOGGER.debug(
+                            "ble_device_callback: Got fresh device for %s from %s",
+                            self._mac,
+                            getattr(fresh, "name", "unknown"),
+                        )
+                        self._ble_device = fresh
+                        return fresh
+                return self._ble_device
+
             self._client = await establish_connection(
-                BleakClient,
+                BleakClientWithServiceCache,  # Cache services for faster reconnects
                 self._ble_device,
                 self._mac,
                 disconnected_callback=self._on_disconnect,
-                max_attempts=3,
+                max_attempts=5,  # More retries for proxy connections
+                ble_device_callback=get_device,  # Critical for proxy support!
             )
             LOGGER.info("Connected to %s successfully", self._mac)
 
