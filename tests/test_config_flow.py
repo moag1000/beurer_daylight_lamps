@@ -14,6 +14,7 @@ async def test_form_no_devices(hass: HomeAssistant) -> None:
     """Test we show manual form when no devices found."""
     with patch(
         "custom_components.beurer_daylight_lamps.config_flow.discover",
+        new_callable=AsyncMock,
         return_value=[],
     ):
         result = await hass.config_entries.flow.async_init(
@@ -32,6 +33,7 @@ async def test_form_with_devices(hass: HomeAssistant) -> None:
 
     with patch(
         "custom_components.beurer_daylight_lamps.config_flow.discover",
+        new_callable=AsyncMock,
         return_value=[mock_device],
     ):
         result = await hass.config_entries.flow.async_init(
@@ -46,6 +48,7 @@ async def test_manual_invalid_mac(hass: HomeAssistant) -> None:
     """Test invalid MAC address in manual entry."""
     with patch(
         "custom_components.beurer_daylight_lamps.config_flow.discover",
+        new_callable=AsyncMock,
         return_value=[],
     ):
         result = await hass.config_entries.flow.async_init(
@@ -77,10 +80,12 @@ async def test_manual_valid_mac(hass: HomeAssistant) -> None:
     with (
         patch(
             "custom_components.beurer_daylight_lamps.config_flow.discover",
+            new_callable=AsyncMock,
             return_value=[],
         ),
         patch(
             "custom_components.beurer_daylight_lamps.config_flow.get_device",
+            new_callable=AsyncMock,
             return_value=(mock_device, -60),  # Returns tuple (device, rssi)
         ),
         patch(
@@ -144,10 +149,12 @@ async def test_connection_test_failure(hass: HomeAssistant) -> None:
     with (
         patch(
             "custom_components.beurer_daylight_lamps.config_flow.discover",
+            new_callable=AsyncMock,
             return_value=[],
         ),
         patch(
             "custom_components.beurer_daylight_lamps.config_flow.get_device",
+            new_callable=AsyncMock,
             return_value=(None, None),  # Device not found
         ),
     ):
@@ -167,10 +174,19 @@ async def test_connection_test_failure(hass: HomeAssistant) -> None:
 
 async def test_abort_already_configured(hass: HomeAssistant) -> None:
     """Test we abort if device already configured."""
-    # First, add a config entry
-    entry = MagicMock()
-    entry.unique_id = "aa:bb:cc:dd:ee:ff"
-    hass.config_entries._entries = {"test": entry}
+    from homeassistant.config_entries import ConfigEntry
+
+    # Create a mock config entry with proper structure
+    entry = ConfigEntry(
+        version=1,
+        minor_version=1,
+        domain=DOMAIN,
+        title="Test TL100",
+        data={CONF_MAC: "AA:BB:CC:DD:EE:FF", CONF_NAME: "Test TL100"},
+        source=config_entries.SOURCE_USER,
+        unique_id="aa:bb:cc:dd:ee:ff",
+    )
+    entry.add_to_hass(hass)
 
     mock_device = MagicMock()
     mock_device.address = "AA:BB:CC:DD:EE:FF"
@@ -178,6 +194,7 @@ async def test_abort_already_configured(hass: HomeAssistant) -> None:
 
     with patch(
         "custom_components.beurer_daylight_lamps.config_flow.discover",
+        new_callable=AsyncMock,
         return_value=[mock_device],
     ):
         result = await hass.config_entries.flow.async_init(

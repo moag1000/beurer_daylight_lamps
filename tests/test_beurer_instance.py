@@ -311,18 +311,21 @@ class TestDiscovery:
             get_device,
         )
 
+        mock_scanner = MagicMock()
+        mock_scanner.start = AsyncMock()
+        mock_scanner.stop = AsyncMock()
+
         with patch(
             "custom_components.beurer_daylight_lamps.beurer_daylight_lamps.BleakScanner.find_device_by_address",
             new_callable=AsyncMock,
             return_value=None,
         ), patch(
             "custom_components.beurer_daylight_lamps.beurer_daylight_lamps.BleakScanner",
-        ) as mock_scanner_class:
-            mock_scanner = MagicMock()
-            mock_scanner.start = AsyncMock()
-            mock_scanner.stop = AsyncMock()
-            mock_scanner_class.return_value = mock_scanner
-
+            return_value=mock_scanner,
+        ), patch(
+            "custom_components.beurer_daylight_lamps.beurer_daylight_lamps.asyncio.sleep",
+            new_callable=AsyncMock,
+        ):
             device, rssi = await get_device("AA:BB:CC:DD:EE:FF")
 
         assert device is None

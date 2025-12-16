@@ -3,3 +3,4 @@ pytest-asyncio>=0.21.0
 pytest-homeassistant-custom-component>=0.13.0
 pytest-cov>=4.0.0
 bleak>=0.20.0
+pyserial>=3.5
