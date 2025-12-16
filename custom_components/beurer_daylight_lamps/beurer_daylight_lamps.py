@@ -668,49 +668,52 @@ class BeurerInstance:
 
             # Use Home Assistant's Bluetooth stack to get fresh device reference
             # This uses all available adapters including ESPHome Bluetooth Proxies
-            # Try both connectable and non-connectable devices
+            # IMPORTANT: We MUST get a connectable device to establish a connection
             if self._hass:
                 from homeassistant.components import bluetooth
 
                 LOGGER.debug(
-                    "Getting fresh device via HA Bluetooth stack for %s...", self._mac
+                    "Getting fresh CONNECTABLE device via HA Bluetooth stack for %s...", self._mac
                 )
+                # First try to get a connectable device (required for connection)
                 fresh_device = bluetooth.async_ble_device_from_address(
-                    self._hass, self._mac
+                    self._hass, self._mac, connectable=True
                 )
-                # If not found, explicitly try non-connectable
-                if not fresh_device:
-                    LOGGER.debug(
-                        "Device not found without filter, trying connectable=False..."
-                    )
-                    fresh_device = bluetooth.async_ble_device_from_address(
-                        self._hass, self._mac, connectable=False
-                    )
 
                 if fresh_device:
                     LOGGER.debug(
-                        "Found device via HA Bluetooth: %s (name: %s)",
+                        "Found connectable device via HA Bluetooth: %s (name: %s)",
                         fresh_device.address,
                         getattr(fresh_device, "name", "Unknown"),
                     )
                     self._ble_device = fresh_device
 
-                    # Get RSSI from service info (try both types)
+                    # Get RSSI from service info
                     service_info = bluetooth.async_last_service_info(
-                        self._hass, self._mac
+                        self._hass, self._mac, connectable=True
                     )
-                    if not service_info:
-                        service_info = bluetooth.async_last_service_info(
-                            self._hass, self._mac, connectable=False
-                        )
                     if service_info and service_info.rssi:
                         self.update_rssi(service_info.rssi)
                         LOGGER.debug("Updated RSSI from HA Bluetooth: %d", service_info.rssi)
                 else:
-                    LOGGER.warning(
-                        "Device %s not found via any Bluetooth adapter, using cached reference",
-                        self._mac,
+                    # Check if device is only visible as non-connectable
+                    non_conn_device = bluetooth.async_ble_device_from_address(
+                        self._hass, self._mac, connectable=False
                     )
+                    if non_conn_device:
+                        LOGGER.warning(
+                            "Device %s is visible but NOT connectable. "
+                            "The device may be in sleep mode or out of range. "
+                            "Try moving closer or waking the device.",
+                            self._mac,
+                        )
+                        # Still use it - connection will fail but with better error
+                        self._ble_device = non_conn_device
+                    else:
+                        LOGGER.warning(
+                            "Device %s not found via any Bluetooth adapter, using cached reference",
+                            self._mac,
+                        )
             else:
                 LOGGER.debug("No hass reference, using cached device for %s", self._mac)
 

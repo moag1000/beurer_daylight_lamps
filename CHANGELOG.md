@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.5] - 2025-12-16
+
+### Fixed
+- **Config Flow hängt nicht mehr**: 30-Sekunden Timeout für Verbindungstest hinzugefügt
+- **Non-connectable Geräte**: Klare Warnung wenn Gerät nicht verbindbar ist
+  - Geräteliste zeigt "⚠️ nicht verbindbar" für solche Geräte
+  - Logs zeigen klare Fehlermeldung mit Hinweis (Sleep-Modus, Entfernung)
+- **Verbesserte Verbindungslogik**: Bevorzugt jetzt explizit connectable Geräte
+  - Verhindert vergebliche Verbindungsversuche zu non-connectable Geräten
+
 ## [1.8.2] - 2025-12-16
 
 ### Fixed

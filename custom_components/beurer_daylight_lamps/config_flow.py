@@ -118,18 +118,21 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
         configured_macs = self._async_current_ids(include_ignore=False)
 
         # Get both connectable and non-connectable devices
-        # Some devices alternate between these states
+        # IMPORTANT: We prefer connectable devices as they can actually be connected
         discovered_connectable = async_discovered_service_info(self.hass, connectable=True)
         discovered_non_connectable = async_discovered_service_info(self.hass, connectable=False)
 
+        # Track which devices are connectable
+        connectable_addresses = {info.address for info in discovered_connectable}
+
         # Combine both lists (use dict to deduplicate by address)
+        # PREFER connectable version if both exist
         all_discovered = {}
         for info in discovered_connectable:
-            all_discovered[info.address] = info
+            all_discovered[info.address] = (info, True)  # (info, is_connectable)
         for info in discovered_non_connectable:
-            # Prefer connectable version if both exist
             if info.address not in all_discovered:
-                all_discovered[info.address] = info
+                all_discovered[info.address] = (info, False)
 
         LOGGER.debug(
             "Found %d connectable and %d non-connectable devices, %d total unique",
@@ -140,7 +143,8 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
 
         # Filter for Beurer TL devices by name prefix and cache them
         self._discovered_devices = {}
-        for info in all_discovered.values():
+        self._device_connectable = {}  # Track if device is connectable
+        for addr, (info, is_connectable) in all_discovered.items():
             if (
                 info.name
                 and info.name.lower().startswith(DEVICE_NAME_PREFIXES)
@@ -151,19 +155,26 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
                     info.name,
                     info.address,
                     info.rssi,
-                    getattr(info, "connectable", "unknown"),
+                    is_connectable,
                 )
                 self._discovered_devices[info.address] = info
+                self._device_connectable[info.address] = is_connectable
 
         if not self._discovered_devices:
             return await self.async_step_manual()
 
-        # Build options with name and RSSI info
-        device_options = {
-            addr: f"{info.name} ({info.rssi} dBm)" if info.rssi else info.name or addr
-            for addr, info in self._discovered_devices.items()
-        }
-        device_options[MANUAL_MAC] = "Enter MAC manually"
+        # Build options with name, RSSI info, and connectable status
+        device_options = {}
+        for addr, info in self._discovered_devices.items():
+            is_conn = self._device_connectable.get(addr, True)
+            name = info.name or addr
+            rssi_str = f" ({info.rssi} dBm)" if info.rssi else ""
+            # Note: Even "non-connectable" devices may work via ESPHome proxy
+            if not is_conn:
+                device_options[addr] = f"{name}{rssi_str} (via Proxy)"
+            else:
+                device_options[addr] = f"{name}{rssi_str}"
+        device_options[MANUAL_MAC] = "MAC manuell eingeben"
 
         # Get first device name as default
         first_device = next(iter(self._discovered_devices.values()), None)
@@ -345,19 +356,24 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
                         "Getting device %s via HA Bluetooth stack...", self._mac
                     )
 
-                    # Try without filter first (should get both types)
+                    # Try to get a CONNECTABLE device first (required for connection)
                     ble_device = bluetooth.async_ble_device_from_address(
-                        self.hass, self._mac
+                        self.hass, self._mac, connectable=True
                     )
 
-                    # If not found, explicitly try non-connectable
+                    # If not found as connectable, check if visible as non-connectable
                     if not ble_device:
-                        LOGGER.debug(
-                            "Device not found without filter, trying connectable=False..."
-                        )
-                        ble_device = bluetooth.async_ble_device_from_address(
+                        non_conn = bluetooth.async_ble_device_from_address(
                             self.hass, self._mac, connectable=False
                         )
+                        if non_conn:
+                            LOGGER.warning(
+                                "Device %s found but NOT connectable - "
+                                "may be in sleep mode or out of range",
+                                self._mac,
+                            )
+                            # Use it anyway, connection will fail with clear error
+                            ble_device = non_conn
 
                     if not ble_device:
                         LOGGER.error(
@@ -380,7 +396,18 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
                     self._instance = BeurerInstance(ble_device, rssi, self.hass)
 
             LOGGER.debug("Testing connection to %s", self._mac)
-            await self._instance.update()
+            # Add timeout - ESPHome proxies can connect even to "non-connectable" devices
+            # but we need a reasonable timeout to prevent hanging forever
+            try:
+                async with asyncio.timeout(45):  # 45 second timeout (proxies may be slow)
+                    await self._instance.update()
+            except asyncio.TimeoutError:
+                LOGGER.error(
+                    "Connection test timed out for %s after 45s. "
+                    "If using ESPHome Bluetooth Proxy, ensure the proxy is online and in range.",
+                    self._mac,
+                )
+                return False
             await asyncio.sleep(0.5)
 
             # Toggle lamp to confirm it works
