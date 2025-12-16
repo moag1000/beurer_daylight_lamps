@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.3] - 2025-12-16
+
+### Changed
+- **Reliable BLE connections**: Now uses `bleak-retry-connector` for more stable Bluetooth connections
+- **Integration name**: Renamed to "Beurer Daylight Therapy Lamps" to distinguish from original fork
+
+### Fixed
+- Removed warning about missing `bleak-retry-connector` in Home Assistant logs
+
 ## [1.6.2] - 2025-12-16
 
 ### Added

@@ -30,6 +30,7 @@ from collections.abc import Callable
 from bleak import BleakClient, BleakError, BleakScanner
 from bleak.backends.device import BLEDevice
 from bleak.backends.characteristic import BleakGATTCharacteristic
+from bleak_retry_connector import establish_connection
 from homeassistant.components.light import ColorMode
 from homeassistant.helpers.device_registry import format_mac
 
@@ -96,7 +97,13 @@ async def discover() -> list[BLEDevice]:
 async def _has_beurer_characteristics(device: BLEDevice) -> bool:
     """Check if device has Beurer BLE characteristics."""
     try:
-        async with BleakClient(device, timeout=10.0) as client:
+        client = await establish_connection(
+            BleakClient,
+            device,
+            device.address,
+            max_attempts=2,
+        )
+        try:
             if not client.is_connected:
                 return False
             has_read = any(
@@ -110,6 +117,8 @@ async def _has_beurer_characteristics(device: BLEDevice) -> bool:
                 for char in service.characteristics
             )
             return has_read and has_write
+        finally:
+            await client.disconnect()
     except (BleakError, TimeoutError, OSError):
         return False
 
@@ -702,9 +711,9 @@ class BeurerInstance:
             await self._trigger_update()
 
     async def connect(self) -> bool:
-        """Connect to the device."""
+        """Connect to the device using bleak-retry-connector for reliability."""
         try:
-            if self._client.is_connected:
+            if self._client and self._client.is_connected:
                 return True
 
             LOGGER.debug("Connecting to %s", self._mac)
@@ -721,12 +730,14 @@ class BeurerInstance:
             except (BleakError, TimeoutError, asyncio.TimeoutError, OSError) as err:
                 LOGGER.debug("Could not refresh device info: %s", err)
 
-            # Recreate client with current device
-            self._client = BleakClient(
-                self._ble_device, disconnected_callback=self._on_disconnect
+            # Use bleak-retry-connector for reliable connection establishment
+            self._client = await establish_connection(
+                BleakClient,
+                self._ble_device,
+                self._mac,
+                disconnected_callback=self._on_disconnect,
+                max_attempts=3,
             )
-
-            await self._client.connect(timeout=DEFAULT_CONNECT_TIMEOUT)
             LOGGER.info("Connected to %s", self._mac)
 
             # Find characteristics
