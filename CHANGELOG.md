@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0] - 2025-12-16
+
+### Added
+- **Passive Bluetooth listening**: Continuously receives advertisements from the lamp
+  - Real-time RSSI updates without connecting
+  - Automatic adapter switching to best available proxy
+  - `async_register_callback` for device presence tracking
+- **Unavailability detection**: Automatic notification when device is no longer seen
+  - `async_track_unavailable` marks device unavailable after ~5 minutes
+  - Proper availability state in Home Assistant
+- **New BeurerInstance methods**:
+  - `update_ble_device()` - Switch to better Bluetooth adapter dynamically
+  - `mark_seen()` / `mark_unavailable()` - Track device presence
+  - `ble_available` property - Check if device is seen by any adapter
+  - `last_seen` property - Timestamp of last advertisement
+- **Enhanced diagnostics**: Shows `ble_available`, `last_seen` timestamp
+
+### Changed
+- **Improved availability logic**: Device must be both seen by BLE and have status
+
+### Fixed
+- Better Shelly Bluetooth Proxy support through passive listening
+
 ## [1.6.8] - 2025-12-16
 
 ### Changed

@@ -102,6 +102,49 @@ class BeurerInstance:
         self._supported_effects: list[str] = list(SUPPORTED_EFFECTS)
         self._rssi: int | None = rssi
         self._last_command_time: float = 0.0  # For rate limiting
+        self._last_seen: float = time.time()  # Track when device was last seen
+        self._ble_available: bool = True  # Track if device is seen by any BLE adapter
+
+    def update_ble_device(self, device: BLEDevice) -> None:
+        """Update the BLE device reference.
+
+        This is called when a better adapter (e.g., closer proxy) is available.
+        """
+        if device and device.address == self._mac:
+            old_device = self._ble_device
+            self._ble_device = device
+            LOGGER.debug(
+                "Updated BLE device reference for %s (was: %s, now: %s)",
+                self._mac,
+                getattr(old_device, "name", "unknown"),
+                getattr(device, "name", "unknown"),
+            )
+
+    def mark_seen(self) -> None:
+        """Mark the device as seen (received advertisement)."""
+        self._last_seen = time.time()
+        if not self._ble_available:
+            LOGGER.info("Device %s is now reachable again", self._mac)
+            self._ble_available = True
+            self._safe_create_task(self._trigger_update())
+
+    def mark_unavailable(self) -> None:
+        """Mark the device as unavailable (not seen by any adapter)."""
+        if self._ble_available:
+            LOGGER.warning("Device %s marked as unavailable", self._mac)
+            self._ble_available = False
+            self._available = False
+            self._safe_create_task(self._trigger_update())
+
+    @property
+    def ble_available(self) -> bool:
+        """Return True if device is seen by any Bluetooth adapter."""
+        return self._ble_available
+
+    @property
+    def last_seen(self) -> float:
+        """Return timestamp when device was last seen."""
+        return self._last_seen
 
     def _on_disconnect(self, client: BleakClient) -> None:
         """Handle disconnection callback."""
@@ -211,8 +254,13 @@ class BeurerInstance:
 
     @property
     def available(self) -> bool:
-        """Return True if device is available (we've received status from it)."""
-        return self._available
+        """Return True if device is available.
+
+        Device is available if:
+        1. It's seen by at least one Bluetooth adapter (ble_available)
+        2. We've received status from it (_available)
+        """
+        return self._ble_available and self._available
 
     @property
     def is_connected(self) -> bool:

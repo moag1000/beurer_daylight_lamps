@@ -4,9 +4,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from homeassistant.components import bluetooth
+from homeassistant.components.bluetooth import (
+    BluetoothChange,
+    BluetoothScanningMode,
+    BluetoothServiceInfoBleak,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_MAC, CONF_NAME, Platform
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import issue_registry as ir
 
@@ -95,6 +100,69 @@ async def async_setup_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> bo
     ir.async_delete_issue(hass, DOMAIN, f"initialization_failed_{entry.entry_id}")
 
     entry.runtime_data = instance
+
+    # Register callback for real-time Bluetooth updates (RSSI, device presence)
+    # This enables passive listening - we get notified when the device advertises
+    @callback
+    def _async_device_discovered(
+        service_info: BluetoothServiceInfoBleak,
+        change: BluetoothChange,
+    ) -> None:
+        """Handle Bluetooth advertisement from the device."""
+        LOGGER.debug(
+            "BLE advertisement from %s: RSSI=%s, change=%s, source=%s",
+            service_info.address,
+            service_info.rssi,
+            change,
+            service_info.source,
+        )
+        # Update RSSI from advertisement
+        if service_info.rssi:
+            instance.update_rssi(service_info.rssi)
+
+        # Update the BLE device reference to use the best available adapter
+        new_device = bluetooth.async_ble_device_from_address(
+            hass, mac_address, connectable=True
+        )
+        if new_device:
+            instance.update_ble_device(new_device)
+
+        # Mark device as seen (for availability tracking)
+        instance.mark_seen()
+
+    # Register for advertisements from this specific device address
+    entry.async_on_unload(
+        bluetooth.async_register_callback(
+            hass,
+            _async_device_discovered,
+            {"address": mac_address, "connectable": True},
+            BluetoothScanningMode.PASSIVE,
+        )
+    )
+    LOGGER.debug("Registered Bluetooth callback for %s (passive scanning)", mac_address)
+
+    # Track when device becomes unavailable (not seen for ~5 minutes)
+    @callback
+    def _async_device_unavailable(
+        service_info: BluetoothServiceInfoBleak,
+    ) -> None:
+        """Handle device becoming unavailable."""
+        LOGGER.warning(
+            "Device %s is no longer seen by any Bluetooth adapter",
+            service_info.address,
+        )
+        instance.mark_unavailable()
+
+    entry.async_on_unload(
+        bluetooth.async_track_unavailable(
+            hass,
+            _async_device_unavailable,
+            mac_address,
+            connectable=True,
+        )
+    )
+    LOGGER.debug("Registered unavailability tracker for %s", mac_address)
+
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
