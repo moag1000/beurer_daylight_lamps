@@ -5,15 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.6] - 2025-12-16
+
+### Fixed
+- **Kritischer Bug: BleakClient wurde nie aktualisiert**: Der BLE Client wurde bei der Initialisierung erstellt und nie aktualisiert wenn ein besserer Proxy gefunden wurde
+  - Client wird jetzt erst bei `connect()` erstellt mit dem aktuellen Device
+  - Ermöglicht dynamisches Wechseln zwischen Bluetooth-Adaptern/Proxies
+- **Null-Pointer Checks**: Alle `_client.is_connected` Aufrufe prüfen jetzt zuerst ob `_client` existiert
+
 ## [1.8.5] - 2025-12-16
 
 ### Fixed
-- **Config Flow hängt nicht mehr**: 30-Sekunden Timeout für Verbindungstest hinzugefügt
+- **Config Flow hängt nicht mehr**: 45-Sekunden Timeout für Verbindungstest hinzugefügt
 - **Non-connectable Geräte**: Klare Warnung wenn Gerät nicht verbindbar ist
-  - Geräteliste zeigt "⚠️ nicht verbindbar" für solche Geräte
+  - Geräteliste zeigt "(via Proxy)" für solche Geräte
   - Logs zeigen klare Fehlermeldung mit Hinweis (Sleep-Modus, Entfernung)
 - **Verbesserte Verbindungslogik**: Bevorzugt jetzt explizit connectable Geräte
-  - Verhindert vergebliche Verbindungsversuche zu non-connectable Geräten
 
 ## [1.8.2] - 2025-12-16
 

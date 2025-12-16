@@ -84,9 +84,9 @@ class BeurerInstance:
         self._mac: str = device.address
         self._ble_device: BLEDevice = device
         self._hass: HomeAssistant | None = hass
-        self._client: BleakClient = BleakClient(
-            device, disconnected_callback=self._on_disconnect
-        )
+        # Don't create BleakClient here - we'll create it fresh in connect()
+        # This allows us to use updated device references from better proxies
+        self._client: BleakClient | None = None
 
         self._update_callbacks: list[Callable[[], None]] = []
         self._available: bool = False  # True once we've received status from device
@@ -303,7 +303,7 @@ class BeurerInstance:
         Returns:
             True if write was successful, False otherwise.
         """
-        if not self._client.is_connected:
+        if not self._client or not self._client.is_connected:
             LOGGER.warning("Device not connected, attempting reconnect")
             if not await self.connect():
                 LOGGER.error("Failed to reconnect for write")
@@ -346,7 +346,7 @@ class BeurerInstance:
         Returns:
             True if packet was sent successfully, False otherwise.
         """
-        if not self._client.is_connected:
+        if not self._client or not self._client.is_connected:
             if not await self.connect():
                 return False
 
@@ -492,7 +492,7 @@ class BeurerInstance:
             self.is_on,
         )
 
-        if not self._client.is_connected:
+        if not self._client or not self._client.is_connected:
             if not await self.connect():
                 LOGGER.error("Failed to connect for turn_on")
                 return
@@ -655,7 +655,7 @@ class BeurerInstance:
         (including ESPHome Bluetooth Proxies) for connecting to the device.
         """
         try:
-            if self._client and self._client.is_connected:
+            if self._client is not None and self._client.is_connected:
                 LOGGER.debug("Already connected to %s", self._mac)
                 return True
 
@@ -812,7 +812,7 @@ class BeurerInstance:
         """Update device state by requesting current status."""
         LOGGER.debug("Update called for %s", self._mac)
         try:
-            if not self._client.is_connected:
+            if not self._client or not self._client.is_connected:
                 if not await self.connect():
                     LOGGER.warning("Could not connect to %s for update", self._mac)
                     return
@@ -829,10 +829,10 @@ class BeurerInstance:
             await self.disconnect()
 
     async def disconnect(self) -> None:
-        """Disconnect from the device and reset state."""
+        """Disconnect from the device and reset connection state."""
         LOGGER.debug("Disconnecting from %s", self._mac)
 
-        if self._client and self._client.is_connected:
+        if self._client is not None and self._client.is_connected:
             try:
                 if self._read_uuid:
                     await self._client.stop_notify(self._read_uuid)
