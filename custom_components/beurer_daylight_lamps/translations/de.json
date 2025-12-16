@@ -35,6 +35,13 @@
             "reauth_confirm": {
                 "title": "Erneut verbinden",
                 "description": "Die Verbindung zu **{name}** wurde unterbrochen. Klicken Sie auf Absenden um erneut zu verbinden."
+            },
+            "reconfigure": {
+                "title": "Lampe neu konfigurieren",
+                "description": "Ändern Sie die Einstellungen für **{mac}**.",
+                "data": {
+                    "name": "Name"
+                }
             }
         },
         "error": {
@@ -45,7 +52,8 @@
             "already_configured": "Gerät bereits konfiguriert",
             "cannot_validate": "Verbindung konnte nicht validiert werden",
             "cannot_connect": "Verbindung zur Lampe fehlgeschlagen",
-            "reauth_successful": "Erneute Verbindung erfolgreich"
+            "reauth_successful": "Erneute Verbindung erfolgreich",
+            "reconfigure_successful": "Neukonfiguration erfolgreich"
         }
     },
     "options": {
@@ -55,6 +63,13 @@
                 "data": {
                     "scan_interval": "Status-Aktualisierungsintervall (Sekunden)"
                 }
+            }
+        }
+    },
+    "entity": {
+        "sensor": {
+            "rssi": {
+                "name": "Signalstärke"
             }
         }
     }

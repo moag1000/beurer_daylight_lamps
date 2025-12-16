@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Final
+from typing import Any
 
 from homeassistant.components.light import (
     ATTR_BRIGHTNESS,
@@ -12,46 +12,30 @@ from homeassistant.components.light import (
     LightEntity,
     LightEntityFeature,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.device_registry import CONNECTION_BLUETOOTH, DeviceInfo
+from homeassistant.helpers.device_registry import (
+    CONNECTION_BLUETOOTH,
+    DeviceInfo,
+    format_mac,
+)
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util.color import match_max_scale
 
+from . import BeurerConfigEntry
 from .beurer_daylight_lamps import BeurerInstance
-from .const import DOMAIN, LOGGER
-
-# Model detection based on device name
-MODEL_MAP: Final[dict[str, str]] = {
-    "TL100": "TL100 Daylight Therapy Lamp",
-    "TL50": "TL50 Daylight Therapy Lamp",
-    "TL70": "TL70 Daylight Therapy Lamp",
-    "TL80": "TL80 Daylight Therapy Lamp",
-    "TL90": "TL90 Daylight Therapy Lamp",
-}
-
-
-def _detect_model(name: str | None) -> str:
-    """Detect model from device name."""
-    if not name:
-        return "Daylight Therapy Lamp"
-    name_upper = name.upper()
-    for prefix, model in MODEL_MAP.items():
-        if name_upper.startswith(prefix):
-            return model
-    return "Daylight Therapy Lamp"
+from .const import DOMAIN, LOGGER, VERSION, detect_model
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    config_entry: ConfigEntry,
+    entry: BeurerConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Beurer Daylight Lamp from a config entry."""
     LOGGER.debug("Setting up Beurer light entity")
-    instance: BeurerInstance = hass.data[DOMAIN][config_entry.entry_id]
-    name = config_entry.data.get("name", "Beurer Lamp")
-    async_add_entities([BeurerLight(instance, name, config_entry.entry_id)])
+    instance = entry.runtime_data
+    name = entry.data.get("name", "Beurer Lamp")
+    async_add_entities([BeurerLight(instance, name, entry.entry_id)])
 
 
 class BeurerLight(LightEntity):
@@ -72,7 +56,7 @@ class BeurerLight(LightEntity):
         self._instance = beurer_instance
         self._entry_id = entry_id
         self._device_name = name
-        self._attr_unique_id = self._instance.mac
+        self._attr_unique_id = format_mac(self._instance.mac)
 
     async def async_added_to_hass(self) -> None:
         """Run when entity about to be added to hass."""
@@ -81,7 +65,7 @@ class BeurerLight(LightEntity):
 
     async def async_will_remove_from_hass(self) -> None:
         """Run when entity will be removed from hass."""
-        self._instance.set_update_callback(None)
+        self._instance.remove_update_callback(self._handle_update)
 
     @callback
     def _handle_update(self) -> None:
@@ -90,8 +74,12 @@ class BeurerLight(LightEntity):
 
     @property
     def available(self) -> bool:
-        """Return True if entity is available."""
-        return self._instance.is_on is not None
+        """Return True if entity is available.
+
+        Availability is based on whether we have received status from the device,
+        not whether the light is on or off.
+        """
+        return self._instance.available
 
     @property
     def should_poll(self) -> bool:
@@ -137,12 +125,14 @@ class BeurerLight(LightEntity):
     @property
     def device_info(self) -> DeviceInfo:
         """Return device info for device registry."""
+        mac = format_mac(self._instance.mac)
         return DeviceInfo(
-            identifiers={(DOMAIN, self._instance.mac)},
+            identifiers={(DOMAIN, mac)},
             name=self._device_name,
             manufacturer="Beurer",
-            model=_detect_model(self._device_name),
-            connections={(CONNECTION_BLUETOOTH, self._instance.mac)},
+            model=detect_model(self._device_name),
+            sw_version=VERSION,
+            connections={(CONNECTION_BLUETOOTH, mac)},
         )
 
     async def async_turn_on(self, **kwargs: Any) -> None:
@@ -161,7 +151,7 @@ class BeurerLight(LightEntity):
 
         if has_color or has_effect:
             # RGB mode
-            self._instance._mode = ColorMode.RGB
+            self._instance.set_color_mode(ColorMode.RGB)
 
             if has_color:
                 await self._instance.set_color(kwargs[ATTR_RGB_COLOR])
@@ -175,7 +165,7 @@ class BeurerLight(LightEntity):
 
         elif has_brightness:
             # White mode with brightness
-            self._instance._mode = ColorMode.WHITE
+            self._instance.set_color_mode(ColorMode.WHITE)
             await self._instance.set_white(kwargs[ATTR_BRIGHTNESS])
 
     async def async_turn_off(self, **kwargs: Any) -> None:

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Home Assistant Community
+    url: https://community.home-assistant.io/
+    about: General Home Assistant questions and discussions
+  - name: Documentation
+    url: https://github.com/moag1000/beurer_daylight_lamps#readme
+    about: Read the documentation before opening an issue

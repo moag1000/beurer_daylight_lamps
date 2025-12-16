@@ -53,6 +53,7 @@ def mock_beurer_instance() -> Generator[MagicMock, None, None]:
         instance.white_brightness = 255
         instance.effect = "Off"
         instance.color_mode = "white"
+        instance.rssi = -60
         instance.supported_effects = [
             "Off", "Random", "Rainbow", "Rainbow Slow", "Fusion",
             "Pulse", "Wave", "Chill", "Action", "Forest", "Summer"
@@ -66,6 +67,8 @@ def mock_beurer_instance() -> Generator[MagicMock, None, None]:
         instance.set_color_brightness = AsyncMock()
         instance.disconnect = AsyncMock()
         instance.set_update_callback = MagicMock()
+        instance.remove_update_callback = MagicMock()
+        instance.update_rssi = MagicMock()
         mock_class.return_value = instance
         yield instance
 
@@ -89,5 +92,5 @@ def mock_get_device() -> Generator[AsyncMock, None, None]:
         device = MagicMock()
         device.address = "AA:BB:CC:DD:EE:FF"
         device.name = "TL100"
-        mock.return_value = device
+        mock.return_value = (device, -60)  # Returns tuple (device, rssi)
         yield mock

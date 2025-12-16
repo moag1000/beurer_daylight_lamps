@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
+from bleak import BleakError
 import voluptuous as vol
 
 from homeassistant.components.bluetooth import BluetoothServiceInfoBleak
@@ -11,20 +12,14 @@ from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow,
     ConfigFlowResult,
-    OptionsFlow,
 )
 from homeassistant.const import CONF_MAC, CONF_NAME
-from homeassistant.core import callback
 from homeassistant.helpers.device_registry import format_mac
 
 from .beurer_daylight_lamps import BeurerInstance, discover, get_device
 from .const import DOMAIN, LOGGER
 
 MANUAL_MAC = "manual"
-
-# Options
-CONF_SCAN_INTERVAL = "scan_interval"
-DEFAULT_SCAN_INTERVAL = 30
 
 
 class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -39,12 +34,7 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
         self._instance: BeurerInstance | None = None
         self._discovery_info: BluetoothServiceInfoBleak | None = None
         self._reauth_entry: ConfigEntry | None = None
-
-    @staticmethod
-    @callback
-    def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
-        """Get the options flow for this handler."""
-        return BeurerOptionsFlow(config_entry)
+        self._reconfigure_entry: ConfigEntry | None = None
 
     async def async_step_bluetooth(
         self, discovery_info: BluetoothServiceInfoBleak
@@ -161,6 +151,20 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             if user_input.get("flicker"):
+                # Handle reconfigure
+                if self._reconfigure_entry:
+                    self.hass.config_entries.async_update_entry(
+                        self._reconfigure_entry,
+                        data={
+                            CONF_MAC: self._mac,
+                            CONF_NAME: self._name,
+                        },
+                    )
+                    await self.hass.config_entries.async_reload(
+                        self._reconfigure_entry.entry_id
+                    )
+                    return self.async_abort(reason="reconfigure_successful")
+
                 return self.async_create_entry(
                     title=self._name or "Beurer Lamp",
                     data={
@@ -227,15 +231,43 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
             description_placeholders={"name": self._name},
         )
 
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Handle reconfiguration."""
+        self._reconfigure_entry = self.hass.config_entries.async_get_entry(
+            self.context["entry_id"]
+        )
+        if self._reconfigure_entry:
+            self._mac = self._reconfigure_entry.data.get(CONF_MAC)
+            self._name = self._reconfigure_entry.data.get(CONF_NAME)
+
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            self._name = user_input[CONF_NAME]
+            return await self.async_step_validate()
+
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_NAME, default=self._name): str,
+                }
+            ),
+            errors=errors,
+            description_placeholders={"mac": self._mac},
+        )
+
     async def _test_connection(self) -> bool:
         """Test connection by toggling the lamp."""
         try:
             if not self._instance:
-                device = await get_device(self._mac)
+                device, rssi = await get_device(self._mac)
                 if not device:
                     LOGGER.error("Device not found: %s", self._mac)
                     return False
-                self._instance = BeurerInstance(device)
+                self._instance = BeurerInstance(device, rssi)
 
             LOGGER.debug("Testing connection to %s", self._mac)
             await self._instance.update()
@@ -253,15 +285,24 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
 
             return True
 
-        except Exception as err:
-            LOGGER.error("Connection test failed: %s", err)
+        except BleakError as err:
+            LOGGER.error("BLE error during connection test: %s", err)
+            return False
+        except (TimeoutError, asyncio.TimeoutError) as err:
+            LOGGER.error("Timeout during connection test: %s", err)
+            return False
+        except OSError as err:
+            LOGGER.error("OS error during connection test: %s", err)
+            return False
+        except ValueError as err:
+            LOGGER.error("Invalid device during connection test: %s", err)
             return False
 
         finally:
             if self._instance:
                 try:
                     await self._instance.disconnect()
-                except Exception as err:
+                except (BleakError, TimeoutError, asyncio.TimeoutError, OSError) as err:
                     LOGGER.debug("Disconnect error: %s", err)
                 self._instance = None
 
@@ -276,32 +317,3 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
             return True
         except ValueError:
             return False
-
-
-class BeurerOptionsFlow(OptionsFlow):
-    """Handle options flow for Beurer Daylight Lamps."""
-
-    def __init__(self, config_entry: ConfigEntry) -> None:
-        """Initialize options flow."""
-        self._config_entry = config_entry
-
-    async def async_step_init(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        """Manage the options."""
-        if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
-
-        return self.async_show_form(
-            step_id="init",
-            data_schema=vol.Schema(
-                {
-                    vol.Optional(
-                        CONF_SCAN_INTERVAL,
-                        default=self._config_entry.options.get(
-                            CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL
-                        ),
-                    ): vol.All(vol.Coerce(int), vol.Range(min=10, max=300)),
-                }
-            ),
-        )

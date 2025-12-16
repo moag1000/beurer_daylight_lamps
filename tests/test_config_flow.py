@@ -81,7 +81,7 @@ async def test_manual_valid_mac(hass: HomeAssistant) -> None:
         ),
         patch(
             "custom_components.beurer_daylight_lamps.config_flow.get_device",
-            return_value=mock_device,
+            return_value=(mock_device, -60),  # Returns tuple (device, rssi)
         ),
         patch(
             "custom_components.beurer_daylight_lamps.config_flow.BeurerInstance",

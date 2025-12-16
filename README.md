@@ -24,8 +24,11 @@ Home Assistant integration for BLE-based Beurer daylight therapy lamps.
 - **RGB Color Mode**: Full RGB color support
 - **Light Effects**: Rainbow, Pulse, Forest, Wave, and more
 - **Multiple Lamps**: Support for multiple lamps simultaneously
-- **Options Flow**: Configurable settings
+- **Options Flow**: Configurable scan interval
 - **Reauth Flow**: Automatic reconnection handling
+- **Reconfigure Flow**: Change device name after setup
+- **Diagnostics**: Export debug information for troubleshooting
+- **Signal Strength Sensor**: Optional RSSI sensor for monitoring Bluetooth connection quality
 
 ## Installation
 
@@ -90,6 +93,77 @@ The following effects are available (matching the Beurer LightUp app):
 
 - **Timer**: Built-in timer functionality is not supported. Use Home Assistant automations instead.
 
+## Diagnostics
+
+To download diagnostic information for troubleshooting:
+
+1. Go to **Settings** → **Devices & Services**
+2. Click on the Beurer Daylight Lamps integration
+3. Click the three dots menu → **Download diagnostics**
+
+The diagnostic file contains device state, connection info, and configuration (MAC address is redacted).
+
+## Signal Strength Sensor
+
+An optional RSSI (Received Signal Strength Indicator) sensor is available for each lamp. This sensor is disabled by default.
+
+To enable:
+1. Go to **Settings** → **Devices & Services** → **Beurer Daylight Lamps**
+2. Click on your device
+3. Find "Signal strength" under disabled entities
+4. Click and enable it
+
+The RSSI value (in dBm) indicates Bluetooth signal quality:
+- `-30 to -50 dBm`: Excellent
+- `-50 to -70 dBm`: Good
+- `-70 to -85 dBm`: Fair
+- `< -85 dBm`: Poor (may cause connection issues)
+
+## Example Automations
+
+### Wake-up Light
+
+```yaml
+automation:
+  - alias: "Wake-up light"
+    trigger:
+      - platform: time
+        at: "06:30:00"
+    condition:
+      - condition: workday
+        country: DE
+    action:
+      - service: light.turn_on
+        target:
+          entity_id: light.beurer_tl100
+        data:
+          brightness: 50
+      - delay: "00:05:00"
+      - service: light.turn_on
+        target:
+          entity_id: light.beurer_tl100
+        data:
+          brightness: 255
+```
+
+### Mood Lighting
+
+```yaml
+automation:
+  - alias: "Evening mood light"
+    trigger:
+      - platform: sun
+        event: sunset
+    action:
+      - service: light.turn_on
+        target:
+          entity_id: light.beurer_tl100
+        data:
+          rgb_color: [255, 180, 100]
+          brightness: 150
+          effect: "Chill"
+```
+
 ## Debugging
 
 Add to `configuration.yaml`:
@@ -119,6 +193,14 @@ This integration would not exist without the work of many contributors. Thank yo
 
 - **[@pyromaniac2k](https://github.com/pyromaniac2k)** - Contributions to the ha-beurer integration
 - **[@ALandOfDodd](https://github.com/LandOfDodd)** - Contributions to the ha-beurer integration
+
+### Resources & Documentation
+
+This fork was improved using knowledge from:
+
+- **[Home Assistant Developer Documentation](https://developers.home-assistant.io/)** - Config Flow, Bluetooth Discovery, Entity platforms, and Best Practices
+- **[Bleak Library](https://bleak.readthedocs.io/)** - BLE communication patterns
+- **Home Assistant Core Contributors** - Integration patterns from core integrations such as `bluetooth`, `switchbot`, and `led_ble`
 
 Thank you all for your open source contributions!
 

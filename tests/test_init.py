@@ -2,11 +2,8 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import CONF_MAC, CONF_NAME
 from homeassistant.core import HomeAssistant
-
-from custom_components.beurer_daylight_lamps.const import DOMAIN
 
 
 async def test_setup_entry_success(hass: HomeAssistant) -> None:
@@ -24,11 +21,12 @@ async def test_setup_entry_success(hass: HomeAssistant) -> None:
     entry = MagicMock()
     entry.data = {CONF_MAC: "AA:BB:CC:DD:EE:FF", CONF_NAME: "Test"}
     entry.entry_id = "test_entry_id"
+    entry.runtime_data = None
 
     with (
         patch(
             "custom_components.beurer_daylight_lamps.get_device",
-            return_value=mock_device,
+            return_value=(mock_device, -60),
         ),
         patch(
             "custom_components.beurer_daylight_lamps.BeurerInstance",
@@ -43,8 +41,7 @@ async def test_setup_entry_success(hass: HomeAssistant) -> None:
         result = await async_setup_entry(hass, entry)
 
     assert result is True
-    assert DOMAIN in hass.data
-    assert entry.entry_id in hass.data[DOMAIN]
+    assert entry.runtime_data == mock_instance
 
 
 async def test_setup_entry_device_not_found(hass: HomeAssistant) -> None:
@@ -55,7 +52,7 @@ async def test_setup_entry_device_not_found(hass: HomeAssistant) -> None:
 
     with patch(
         "custom_components.beurer_daylight_lamps.get_device",
-        return_value=None,
+        return_value=(None, None),  # Returns tuple (None, None) when not found
     ):
         from custom_components.beurer_daylight_lamps import async_setup_entry
         from homeassistant.exceptions import ConfigEntryNotReady
@@ -71,8 +68,7 @@ async def test_unload_entry(hass: HomeAssistant) -> None:
 
     entry = MagicMock()
     entry.entry_id = "test_entry_id"
-
-    hass.data[DOMAIN] = {entry.entry_id: mock_instance}
+    entry.runtime_data = mock_instance
 
     with patch.object(
         hass.config_entries, "async_unload_platforms", return_value=True
@@ -83,4 +79,3 @@ async def test_unload_entry(hass: HomeAssistant) -> None:
 
     assert result is True
     mock_instance.disconnect.assert_called_once()
-    assert entry.entry_id not in hass.data[DOMAIN]
