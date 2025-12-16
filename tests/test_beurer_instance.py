@@ -333,7 +333,7 @@ class TestDiscovery:
 
     @pytest.mark.asyncio
     async def test_discover_by_name(self):
-        """Test discover finds devices by name prefix."""
+        """Test discover finds devices by TL model name prefix only."""
         from custom_components.beurer_daylight_lamps.beurer_daylight_lamps import (
             discover,
         )
@@ -348,12 +348,17 @@ class TestDiscovery:
 
         mock_device3 = MagicMock()
         mock_device3.address = "77:88:99:AA:BB:CC"
-        mock_device3.name = "beurer-lamp"
+        mock_device3.name = "TL50-5678"
+
+        # Generic "beurer" prefix is no longer matched
+        mock_device4 = MagicMock()
+        mock_device4.address = "DD:EE:FF:00:11:22"
+        mock_device4.name = "beurer-lamp"
 
         with patch(
             "custom_components.beurer_daylight_lamps.beurer_daylight_lamps.BleakScanner.discover",
             new_callable=AsyncMock,
-            return_value=[mock_device1, mock_device2, mock_device3],
+            return_value=[mock_device1, mock_device2, mock_device3, mock_device4],
         ):
             devices = await discover()
 
@@ -361,3 +366,4 @@ class TestDiscovery:
         assert mock_device1 in devices
         assert mock_device3 in devices
         assert mock_device2 not in devices
+        assert mock_device4 not in devices  # Generic "beurer" no longer matched
