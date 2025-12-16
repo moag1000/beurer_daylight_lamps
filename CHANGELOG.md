@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.2] - 2025-12-16
+
+### Added
+- **Exception translations**: Error messages are now translatable (Gold tier: exception-translations)
+- **Entity translations**: Light entity name is now translatable
+- **German translations**: Complete German translations for exceptions and issues
+- **Additional tests**: Expanded test coverage for config flow and sensor
+
+### Fixed
+- Test for `unique_id` in sensor now expects normalized (lowercase) MAC address
+- Test for `available` in sensor now tests connection state via `.available` property
+- Test for device_info in sensor now expects normalized MAC in identifiers
+
 ## [1.6.1] - 2025-12-16
 
 ### Added

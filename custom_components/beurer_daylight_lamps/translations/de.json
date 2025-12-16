@@ -1,4 +1,18 @@
 {
+    "exceptions": {
+        "device_not_found": {
+            "message": "Beurer Lampe {name} ({mac}) konnte nicht gefunden werden. Stellen Sie sicher, dass die Lampe eingeschaltet ist und sich in Bluetooth-Reichweite befindet."
+        },
+        "connection_failed": {
+            "message": "Verbindung zu {name} fehlgeschlagen. Das Gerät ist möglicherweise außer Reichweite oder bereits mit einem anderen Gerät verbunden."
+        },
+        "command_failed": {
+            "message": "Befehl an {name} konnte nicht gesendet werden. Bitte versuchen Sie es erneut."
+        },
+        "initialization_failed": {
+            "message": "Initialisierung von {name} fehlgeschlagen: {error}"
+        }
+    },
     "config": {
         "step": {
             "user": {
@@ -56,17 +70,36 @@
             "reconfigure_successful": "Neukonfiguration erfolgreich"
         }
     },
-    "options": {
-        "step": {
-            "init": {
-                "title": "Einstellungen",
-                "data": {
-                    "scan_interval": "Status-Aktualisierungsintervall (Sekunden)"
+    "issues": {
+        "device_not_found": {
+            "title": "{name} konnte nicht gefunden werden",
+            "fix_flow": {
+                "step": {
+                    "confirm": {
+                        "title": "Gerät nicht gefunden",
+                        "description": "Die Beurer Lampe **{name}** ({mac}) konnte nicht gefunden werden.\n\nBitte stellen Sie sicher:\n- Die Lampe ist eingeschaltet\n- Bluetooth ist auf Ihrem Home Assistant Host aktiviert\n- Die Lampe ist in Bluetooth-Reichweite\n\nKlicken Sie auf Absenden um die Verbindung erneut zu versuchen."
+                    }
+                }
+            }
+        },
+        "initialization_failed": {
+            "title": "Initialisierung von {name} fehlgeschlagen",
+            "fix_flow": {
+                "step": {
+                    "confirm": {
+                        "title": "Initialisierung fehlgeschlagen",
+                        "description": "Die Beurer Lampe **{name}** ({mac}) wurde gefunden, aber die Initialisierung ist fehlgeschlagen.\n\nFehler: {error}\n\nKlicken Sie auf Absenden um es erneut zu versuchen."
+                    }
                 }
             }
         }
     },
     "entity": {
+        "light": {
+            "_": {
+                "name": "Licht"
+            }
+        },
         "sensor": {
             "rssi": {
                 "name": "Signalstärke"

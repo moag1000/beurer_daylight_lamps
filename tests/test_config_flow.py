@@ -137,3 +137,78 @@ async def test_bluetooth_discovery(hass: HomeAssistant) -> None:
 
     assert result["type"] == FlowResultType.FORM
     assert result["step_id"] == "bluetooth_confirm"
+
+
+async def test_connection_test_failure(hass: HomeAssistant) -> None:
+    """Test connection test failure."""
+    with (
+        patch(
+            "custom_components.beurer_daylight_lamps.config_flow.discover",
+            return_value=[],
+        ),
+        patch(
+            "custom_components.beurer_daylight_lamps.config_flow.get_device",
+            return_value=(None, None),  # Device not found
+        ),
+    ):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {CONF_MAC: "AA:BB:CC:DD:EE:FF", CONF_NAME: "Test"},
+        )
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "validate"
+    assert result["errors"] == {"base": "cannot_connect"}
+
+
+async def test_abort_already_configured(hass: HomeAssistant) -> None:
+    """Test we abort if device already configured."""
+    # First, add a config entry
+    entry = MagicMock()
+    entry.unique_id = "aa:bb:cc:dd:ee:ff"
+    hass.config_entries._entries = {"test": entry}
+
+    mock_device = MagicMock()
+    mock_device.address = "AA:BB:CC:DD:EE:FF"
+    mock_device.name = "TL100"
+
+    with patch(
+        "custom_components.beurer_daylight_lamps.config_flow.discover",
+        return_value=[mock_device],
+    ):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+
+        # Select the device
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {CONF_MAC: "AA:BB:CC:DD:EE:FF", CONF_NAME: "Test"},
+        )
+
+    assert result["type"] == FlowResultType.ABORT
+    assert result["reason"] == "already_configured"
+
+
+def test_is_valid_mac() -> None:
+    """Test MAC address validation."""
+    from custom_components.beurer_daylight_lamps.config_flow import BeurerConfigFlow
+
+    flow = BeurerConfigFlow()
+
+    # Valid formats
+    assert flow._is_valid_mac("AA:BB:CC:DD:EE:FF") is True
+    assert flow._is_valid_mac("AA-BB-CC-DD-EE-FF") is True
+    assert flow._is_valid_mac("AABBCCDDEEFF") is True
+    assert flow._is_valid_mac("aabbccddeeff") is True
+
+    # Invalid formats
+    assert flow._is_valid_mac("invalid") is False
+    assert flow._is_valid_mac("AA:BB:CC:DD:EE") is False
+    assert flow._is_valid_mac("AA:BB:CC:DD:EE:FF:GG") is False
+    assert flow._is_valid_mac("GGHHIIJJKKLL") is False
+    assert flow._is_valid_mac("") is False

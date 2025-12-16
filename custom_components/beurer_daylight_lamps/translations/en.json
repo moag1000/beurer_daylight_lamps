@@ -1,4 +1,18 @@
 {
+    "exceptions": {
+        "device_not_found": {
+            "message": "Could not find Beurer lamp {name} ({mac}). Ensure the lamp is powered on and within Bluetooth range."
+        },
+        "connection_failed": {
+            "message": "Failed to connect to {name}. The device may be out of range or already connected to another device."
+        },
+        "command_failed": {
+            "message": "Failed to send command to {name}. Please try again."
+        },
+        "initialization_failed": {
+            "message": "Failed to initialize {name}: {error}"
+        }
+    },
     "config": {
         "step": {
             "user": {
@@ -81,6 +95,11 @@
         }
     },
     "entity": {
+        "light": {
+            "_": {
+                "name": "Light"
+            }
+        },
         "sensor": {
             "rssi": {
                 "name": "Signal strength"

@@ -26,14 +26,15 @@ def test_sensor_descriptions() -> None:
 
 
 def test_sensor_unique_id() -> None:
-    """Test sensor unique ID generation."""
+    """Test sensor unique ID generation with normalized MAC."""
     mock_instance = MagicMock()
     mock_instance.mac = "AA:BB:CC:DD:EE:FF"
     mock_instance.rssi = -60
 
     sensor = BeurerSensor(mock_instance, "Test Lamp", SENSOR_DESCRIPTIONS[0])
 
-    assert sensor.unique_id == "AA:BB:CC:DD:EE:FF_rssi"
+    # Unique ID uses normalized (lowercase) MAC address
+    assert sensor.unique_id == "aa:bb:cc:dd:ee:ff_rssi"
 
 
 def test_sensor_native_value() -> None:
@@ -58,22 +59,24 @@ def test_sensor_native_value_none() -> None:
     assert sensor.native_value is None
 
 
-def test_sensor_available_with_rssi() -> None:
-    """Test sensor is available when RSSI has value."""
+def test_sensor_available_when_connected() -> None:
+    """Test sensor is available when device is connected."""
     mock_instance = MagicMock()
     mock_instance.mac = "AA:BB:CC:DD:EE:FF"
     mock_instance.rssi = -60
+    mock_instance.available = True
 
     sensor = BeurerSensor(mock_instance, "Test Lamp", SENSOR_DESCRIPTIONS[0])
 
     assert sensor.available is True
 
 
-def test_sensor_unavailable_without_rssi() -> None:
-    """Test sensor is unavailable when RSSI is None."""
+def test_sensor_unavailable_when_disconnected() -> None:
+    """Test sensor is unavailable when device is disconnected."""
     mock_instance = MagicMock()
     mock_instance.mac = "AA:BB:CC:DD:EE:FF"
-    mock_instance.rssi = None
+    mock_instance.rssi = -60
+    mock_instance.available = False
 
     sensor = BeurerSensor(mock_instance, "Test Lamp", SENSOR_DESCRIPTIONS[0])
 
@@ -81,7 +84,7 @@ def test_sensor_unavailable_without_rssi() -> None:
 
 
 def test_sensor_device_info() -> None:
-    """Test sensor device info."""
+    """Test sensor device info with normalized MAC."""
     mock_instance = MagicMock()
     mock_instance.mac = "AA:BB:CC:DD:EE:FF"
     mock_instance.rssi = -60
@@ -91,7 +94,8 @@ def test_sensor_device_info() -> None:
 
     assert device_info["manufacturer"] == "Beurer"
     assert device_info["name"] == "Test TL100"
-    assert ("beurer_daylight_lamps", "AA:BB:CC:DD:EE:FF") in device_info["identifiers"]
+    # Device info uses normalized (lowercase) MAC address
+    assert ("beurer_daylight_lamps", "aa:bb:cc:dd:ee:ff") in device_info["identifiers"]
 
 
 def test_sensor_has_entity_name() -> None:
