@@ -377,11 +377,12 @@ class BeurerInstance:
             rgb: Tuple of (red, green, blue) values (0-255 each)
             _from_turn_on: Internal flag to prevent recursion during turn_on
         """
-        r, g, b = rgb
+        # Ensure RGB values are integers (color_temperature_to_rgb may return floats)
+        r, g, b = int(rgb[0]), int(rgb[1]), int(rgb[2])
         LOGGER.debug("Setting color R=%d, G=%d, B=%d for %s", r, g, b, self._mac)
 
         self._mode = ColorMode.RGB
-        self._rgb_color = rgb
+        self._rgb_color = (r, g, b)
 
         if not self._color_on:
             LOGGER.debug("Activating RGB mode")
@@ -399,7 +400,7 @@ class BeurerInstance:
         await self._request_status()
 
     async def set_color_brightness(
-        self, brightness: int | None, _from_turn_on: bool = False
+        self, brightness: int | float | None, _from_turn_on: bool = False
     ) -> None:
         """Set color mode brightness (0-255).
 
@@ -409,6 +410,8 @@ class BeurerInstance:
         """
         if brightness is None:
             brightness = 255
+        else:
+            brightness = int(brightness)  # Ensure integer for BLE protocol
 
         LOGGER.debug("Setting color brightness to %d for %s", brightness, self._mac)
         self._mode = ColorMode.RGB
@@ -424,7 +427,7 @@ class BeurerInstance:
         await self._request_status()
 
     async def set_white(
-        self, intensity: int | None, _from_turn_on: bool = False
+        self, intensity: int | float | None, _from_turn_on: bool = False
     ) -> None:
         """Set white light intensity (0-255).
 
@@ -434,6 +437,8 @@ class BeurerInstance:
         """
         if intensity is None:
             intensity = 255
+        else:
+            intensity = int(intensity)  # Ensure integer for BLE protocol
 
         LOGGER.debug("Setting white intensity to %d for %s", intensity, self._mac)
         self._mode = ColorMode.WHITE

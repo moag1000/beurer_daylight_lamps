@@ -56,10 +56,13 @@ class TestBeurerButton:
     async def test_identify_press(self, mock_instance: MagicMock) -> None:
         """Test identify button press."""
         button = BeurerButton(mock_instance, "Test Lamp", BUTTON_DESCRIPTIONS[0])
-        
-        with patch("asyncio.sleep", new_callable=AsyncMock):
+
+        with patch(
+            "custom_components.beurer_daylight_lamps.button.asyncio.sleep",
+            new_callable=AsyncMock,
+        ):
             await button.async_press()
-        
+
         # Should have called turn_off and turn_on multiple times
         assert mock_instance.turn_off.call_count >= 1
         assert mock_instance.turn_on.call_count >= 1
@@ -68,10 +71,13 @@ class TestBeurerButton:
     async def test_reconnect_press(self, mock_instance: MagicMock) -> None:
         """Test reconnect button press."""
         button = BeurerButton(mock_instance, "Test Lamp", BUTTON_DESCRIPTIONS[1])
-        
-        with patch("asyncio.sleep", new_callable=AsyncMock):
+
+        with patch(
+            "custom_components.beurer_daylight_lamps.button.asyncio.sleep",
+            new_callable=AsyncMock,
+        ):
             await button.async_press()
-        
+
         mock_instance.disconnect.assert_called_once()
         mock_instance.connect.assert_called_once()
 

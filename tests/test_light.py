@@ -145,6 +145,8 @@ async def test_turn_on_with_rgb() -> None:
     mock_instance = MagicMock()
     mock_instance.mac = "AA:BB:CC:DD:EE:FF"
     mock_instance.set_color = AsyncMock()
+    mock_instance.set_color_brightness = AsyncMock()
+    mock_instance.color_brightness = None  # No current brightness
     mock_instance._mode = ColorMode.WHITE
 
     light = BeurerLight(mock_instance, "Test", "entry_id")

@@ -127,29 +127,33 @@ async def async_setup_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> bo
     )
     rssi = service_info.rssi if service_info else None
 
+    device_initially_available = ble_device is not None
+
     if ble_device is None:
-        LOGGER.error(
-            "Could not find device %s via any Bluetooth adapter (including proxies)",
+        LOGGER.warning(
+            "Device %s not currently visible via Bluetooth - will retry when seen",
             mac_address,
         )
-        # Create repair issue for connection problem
-        ir.async_create_issue(
-            hass,
-            DOMAIN,
-            f"device_not_found_{entry.entry_id}",
-            is_fixable=True,
-            is_persistent=True,
-            severity=ir.IssueSeverity.ERROR,
-            translation_key="device_not_found",
-            translation_placeholders={
-                "name": device_name,
-                "mac": mac_address,
-            },
+        # Create a dummy BLEDevice for now - passive listening will update it
+        from bleak.backends.device import BLEDevice
+        ble_device = BLEDevice(
+            address=mac_address,
+            name=device_name,
+            details={},  # Empty details for placeholder
         )
-        raise ConfigEntryNotReady(f"Could not find Beurer device {mac_address}")
+        LOGGER.info(
+            "Created placeholder device for %s - waiting for Bluetooth advertisement",
+            mac_address,
+        )
+    else:
+        LOGGER.info(
+            "Found device %s via HA Bluetooth stack (RSSI: %s)",
+            mac_address,
+            rssi,
+        )
 
-    LOGGER.info(
-        "Found device %s via HA Bluetooth stack (RSSI: %s)",
+    LOGGER.debug(
+        "Device %s initial availability: %s",
         mac_address,
         rssi,
     )
@@ -159,6 +163,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> bo
 
     try:
         instance = BeurerInstance(ble_device, rssi, hass)
+        # Set initial BLE availability based on whether device was found
+        if not device_initially_available:
+            instance._ble_available = False
+            LOGGER.info("Device %s marked as initially unavailable", mac_address)
     except ValueError as err:
         LOGGER.error("Failed to create BeurerInstance for %s: %s", mac_address, err)
         ir.async_create_issue(

@@ -5,6 +5,25 @@ import pytest
 from homeassistant.components.light import ColorMode
 
 
+# Mock BleakClient before importing BeurerInstance to avoid platform-specific imports
+@pytest.fixture(autouse=True)
+def mock_bleak_client():
+    """Mock BleakClient for all tests."""
+    with patch(
+        "custom_components.beurer_daylight_lamps.beurer_daylight_lamps.BleakClient"
+    ) as mock:
+        mock_client = MagicMock()
+        mock_client.is_connected = False
+        mock_client.connect = AsyncMock()
+        mock_client.disconnect = AsyncMock()
+        mock_client.write_gatt_char = AsyncMock()
+        mock_client.start_notify = AsyncMock()
+        mock_client.stop_notify = AsyncMock()
+        mock_client.services = []
+        mock.return_value = mock_client
+        yield mock
+
+
 class TestBeurerInstance:
     """Tests for BeurerInstance class."""
 

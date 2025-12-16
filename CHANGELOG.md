@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.2] - 2025-12-16
+
+### Fixed
+- **Color Temperature RGB conversion bug**: Fixed `TypeError: unsupported operand type(s) for ^=: 'int' and 'float'` when setting color temperature
+  - `color_temperature_to_rgb()` returns floats, now properly converted to integers
+- **Device discovery resilience**: Integration now starts even when device is not initially visible
+  - Creates placeholder BLEDevice and waits for passive Bluetooth discovery
+  - Allows RSSI sensor and other entities to work once device is found
+- **Unit test fixes**: Updated tests for new HA Bluetooth API and mocked BleakClient
+
 ## [1.8.1] - 2025-12-16
 
 ### Added

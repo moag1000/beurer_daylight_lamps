@@ -12,21 +12,38 @@ async def test_setup_entry_success(hass: HomeAssistant) -> None:
     mock_device.address = "AA:BB:CC:DD:EE:FF"
     mock_device.name = "TL100"
 
+    mock_service_info = MagicMock()
+    mock_service_info.rssi = -60
+
     mock_instance = MagicMock()
     mock_instance.mac = "AA:BB:CC:DD:EE:FF"
     mock_instance.update = AsyncMock()
     mock_instance.disconnect = AsyncMock()
     mock_instance.set_update_callback = MagicMock()
+    mock_instance._ble_available = True
 
     entry = MagicMock()
     entry.data = {CONF_MAC: "AA:BB:CC:DD:EE:FF", CONF_NAME: "Test"}
     entry.entry_id = "test_entry_id"
     entry.runtime_data = None
+    entry.async_on_unload = MagicMock()
 
     with (
         patch(
-            "custom_components.beurer_daylight_lamps.get_device",
-            return_value=(mock_device, -60),
+            "custom_components.beurer_daylight_lamps.bluetooth.async_ble_device_from_address",
+            return_value=mock_device,
+        ),
+        patch(
+            "custom_components.beurer_daylight_lamps.bluetooth.async_last_service_info",
+            return_value=mock_service_info,
+        ),
+        patch(
+            "custom_components.beurer_daylight_lamps.bluetooth.async_register_callback",
+            return_value=MagicMock(),
+        ),
+        patch(
+            "custom_components.beurer_daylight_lamps.bluetooth.async_track_unavailable",
+            return_value=MagicMock(),
         ),
         patch(
             "custom_components.beurer_daylight_lamps.BeurerInstance",
@@ -45,20 +62,54 @@ async def test_setup_entry_success(hass: HomeAssistant) -> None:
 
 
 async def test_setup_entry_device_not_found(hass: HomeAssistant) -> None:
-    """Test setup fails when device not found."""
+    """Test setup continues with placeholder device when device not found.
+
+    Note: The integration now creates a placeholder device instead of failing,
+    so it should succeed and wait for passive Bluetooth discovery.
+    """
+    mock_instance = MagicMock()
+    mock_instance.mac = "AA:BB:CC:DD:EE:FF"
+    mock_instance._ble_available = False
+
     entry = MagicMock()
     entry.data = {CONF_MAC: "AA:BB:CC:DD:EE:FF", CONF_NAME: "Test"}
     entry.entry_id = "test_entry_id"
+    entry.runtime_data = None
+    entry.async_on_unload = MagicMock()
 
-    with patch(
-        "custom_components.beurer_daylight_lamps.get_device",
-        return_value=(None, None),  # Returns tuple (None, None) when not found
+    with (
+        patch(
+            "custom_components.beurer_daylight_lamps.bluetooth.async_ble_device_from_address",
+            return_value=None,  # Device not found
+        ),
+        patch(
+            "custom_components.beurer_daylight_lamps.bluetooth.async_last_service_info",
+            return_value=None,
+        ),
+        patch(
+            "custom_components.beurer_daylight_lamps.bluetooth.async_register_callback",
+            return_value=MagicMock(),
+        ),
+        patch(
+            "custom_components.beurer_daylight_lamps.bluetooth.async_track_unavailable",
+            return_value=MagicMock(),
+        ),
+        patch(
+            "custom_components.beurer_daylight_lamps.BeurerInstance",
+            return_value=mock_instance,
+        ),
+        patch.object(
+            hass.config_entries, "async_forward_entry_setups", return_value=True
+        ),
     ):
         from custom_components.beurer_daylight_lamps import async_setup_entry
-        from homeassistant.exceptions import ConfigEntryNotReady
 
-        with pytest.raises(ConfigEntryNotReady):
-            await async_setup_entry(hass, entry)
+        # Should succeed with placeholder device
+        result = await async_setup_entry(hass, entry)
+
+    assert result is True
+    # Instance should be set to unavailable initially
+    assert mock_instance._ble_available is False
 
 
 async def test_unload_entry(hass: HomeAssistant) -> None:
