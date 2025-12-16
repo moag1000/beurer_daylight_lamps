@@ -117,13 +117,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> bo
 
     # Use Home Assistant's Bluetooth stack - this automatically uses all adapters
     # including ESPHome Bluetooth Proxies for better range and reliability
+    # Don't filter by connectable - some devices alternate between
+    # connectable and non-connectable advertisement packets
     ble_device = bluetooth.async_ble_device_from_address(
-        hass, mac_address, connectable=True
+        hass, mac_address
     )
 
     # Also get the latest service info for RSSI
     service_info = bluetooth.async_last_service_info(
-        hass, mac_address, connectable=True
+        hass, mac_address
     )
     rssi = service_info.rssi if service_info else None
 
@@ -210,8 +212,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> bo
             instance.update_rssi(service_info.rssi)
 
         # Update the BLE device reference to use the best available adapter
+        # Don't filter by connectable - some devices alternate between
+        # connectable and non-connectable advertisement packets
         new_device = bluetooth.async_ble_device_from_address(
-            hass, mac_address, connectable=True
+            hass, mac_address
         )
         if new_device:
             instance.update_ble_device(new_device)
@@ -220,11 +224,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> bo
         instance.mark_seen()
 
     # Register for advertisements from this specific device address
+    # Don't filter by connectable - some devices alternate between
+    # connectable and non-connectable advertisement packets
     entry.async_on_unload(
         bluetooth.async_register_callback(
             hass,
             _async_device_discovered,
-            {"address": mac_address, "connectable": True},
+            {"address": mac_address},
             BluetoothScanningMode.PASSIVE,
         )
     )
@@ -242,12 +248,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> bo
         )
         instance.mark_unavailable()
 
+    # Don't filter by connectable - some devices alternate between
+    # connectable and non-connectable advertisement packets
     entry.async_on_unload(
         bluetooth.async_track_unavailable(
             hass,
             _async_device_unavailable,
             mac_address,
-            connectable=True,
         )
     )
     LOGGER.debug("Registered unavailability tracker for %s", mac_address)

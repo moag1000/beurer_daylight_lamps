@@ -3,24 +3,19 @@
     "name": "Beurer Daylight Therapy Lamps",
     "bluetooth": [
         {
-            "local_name": "TL100*",
-            "connectable": true
+            "local_name": "TL100*"
         },
         {
-            "local_name": "TL50*",
-            "connectable": true
+            "local_name": "TL50*"
         },
         {
-            "local_name": "TL70*",
-            "connectable": true
+            "local_name": "TL70*"
         },
         {
-            "local_name": "TL80*",
-            "connectable": true
+            "local_name": "TL80*"
         },
         {
-            "local_name": "TL90*",
-            "connectable": true
+            "local_name": "TL90*"
         }
     ],
     "codeowners": ["@moag1000"],
@@ -31,5 +26,5 @@
     "iot_class": "local_push",
     "issue_tracker": "https://github.com/moag1000/beurer_daylight_lamps/issues",
     "requirements": ["bleak-retry-connector>=3.0.0"],
-    "version": "1.8.2"
+    "version": "1.8.3"
 }
