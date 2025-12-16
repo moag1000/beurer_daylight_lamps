@@ -681,8 +681,8 @@ class BeurerInstance:
                 )
 
                 if fresh_device:
-                    LOGGER.debug(
-                        "Found connectable device via HA Bluetooth: %s (name: %s)",
+                    LOGGER.info(
+                        "Found CONNECTABLE device via HA Bluetooth: %s (name: %s)",
                         fresh_device.address,
                         getattr(fresh_device, "name", "Unknown"),
                     )
@@ -696,19 +696,23 @@ class BeurerInstance:
                         self.update_rssi(service_info.rssi)
                         LOGGER.debug("Updated RSSI from HA Bluetooth: %d", service_info.rssi)
                 else:
-                    # Check if device is only visible as non-connectable
-                    non_conn_device = bluetooth.async_ble_device_from_address(
-                        self._hass, self._mac, connectable=False
+                    # Device not found as connectable - try ANY device
+                    # Some ESPHome proxies can connect even to "non-connectable" devices
+                    any_device = bluetooth.async_ble_device_from_address(
+                        self._hass, self._mac  # No connectable filter
                     )
-                    if non_conn_device:
-                        LOGGER.warning(
-                            "Device %s is visible but NOT connectable. "
-                            "The device may be in sleep mode or out of range. "
-                            "Try moving closer or waking the device.",
+                    if not any_device:
+                        any_device = bluetooth.async_ble_device_from_address(
+                            self._hass, self._mac, connectable=False
+                        )
+
+                    if any_device:
+                        LOGGER.info(
+                            "Device %s not marked connectable, but trying anyway (ESPHome proxy may work). "
+                            "If this fails, try: 1) Turn lamp ON physically, 2) Move closer to proxy",
                             self._mac,
                         )
-                        # Still use it - connection will fail but with better error
-                        self._ble_device = non_conn_device
+                        self._ble_device = any_device
                     else:
                         LOGGER.warning(
                             "Device %s not found via any Bluetooth adapter, using cached reference",
@@ -734,17 +738,27 @@ class BeurerInstance:
                 """
                 if self._hass:
                     from homeassistant.components import bluetooth
+                    # Try connectable first, then any device
                     fresh = bluetooth.async_ble_device_from_address(
                         self._hass, self._mac, connectable=True
                     )
+                    if not fresh:
+                        fresh = bluetooth.async_ble_device_from_address(
+                            self._hass, self._mac  # Any device
+                        )
                     if fresh:
                         LOGGER.debug(
-                            "ble_device_callback: Got fresh device for %s from %s",
+                            "ble_device_callback: Got fresh device for %s (name: %s)",
                             self._mac,
                             getattr(fresh, "name", "unknown"),
                         )
                         self._ble_device = fresh
                         return fresh
+                    else:
+                        LOGGER.debug(
+                            "ble_device_callback: No device found for %s, using cached",
+                            self._mac,
+                        )
                 return self._ble_device
 
             self._client = await establish_connection(
