@@ -25,6 +25,9 @@ from . import BeurerConfigEntry
 from .beurer_daylight_lamps import BeurerInstance
 from .const import DOMAIN, LOGGER, VERSION, detect_model
 
+# Limit parallel updates to 1 per device to prevent BLE command conflicts
+PARALLEL_UPDATES = 1
+
 
 async def async_setup_entry(
     hass: HomeAssistant,

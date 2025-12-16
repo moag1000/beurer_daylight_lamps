@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.1] - 2025-12-16
+
+### Added
+- **PARALLEL_UPDATES**: Limit concurrent updates to prevent BLE command conflicts (Silver tier requirement)
+- **Documentation**: Added removal instructions to README
+- **Documentation**: Added troubleshooting section to README
+
+### Changed
+- Moved `detect_model()` function to `const.py` (was causing circular import in tests)
+
+### Fixed
+- Test imports now correctly reference `detect_model` from `const.py`
+- Test for `available` property now tests connection state, not power state
+- Test for `unique_id` now expects normalized (lowercase) MAC address
+
 ## [1.6.0] - 2025-12-16
 
 ### Added

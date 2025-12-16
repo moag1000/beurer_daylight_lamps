@@ -24,11 +24,11 @@ Home Assistant integration for BLE-based Beurer daylight therapy lamps.
 - **RGB Color Mode**: Full RGB color support
 - **Light Effects**: Rainbow, Pulse, Forest, Wave, and more
 - **Multiple Lamps**: Support for multiple lamps simultaneously
-- **Options Flow**: Configurable scan interval
 - **Reauth Flow**: Automatic reconnection handling
 - **Reconfigure Flow**: Change device name after setup
 - **Diagnostics**: Export debug information for troubleshooting
 - **Signal Strength Sensor**: Optional RSSI sensor for monitoring Bluetooth connection quality
+- **Repair Issues**: Connection problems appear in Home Assistant's Repairs section
 
 ## Installation
 
@@ -49,6 +49,14 @@ git clone https://github.com/moag1000/beurer_daylight_lamps
 cd beurer_daylight_lamps
 cp -r custom_components/beurer_daylight_lamps ~/.homeassistant/custom_components/
 ```
+
+## Removal
+
+1. Go to **Settings** → **Devices & Services**
+2. Find the Beurer Daylight Lamps integration
+3. Click the three dots menu → **Delete**
+4. Restart Home Assistant
+5. (Optional) Remove the integration folder from `custom_components/`
 
 ## Setup
 
@@ -163,6 +171,36 @@ automation:
           brightness: 150
           effect: "Chill"
 ```
+
+## Troubleshooting
+
+### Lamp not discovered
+
+1. Ensure the lamp is powered on and not connected to another device (e.g., Beurer LightUp app)
+2. Check that your Home Assistant host has Bluetooth enabled
+3. Move the lamp closer to your Home Assistant host (within 10 meters)
+4. Try restarting the lamp by unplugging and plugging it back in
+5. Check **Settings** → **System** → **Repairs** for any connection issues
+
+### Connection keeps dropping
+
+1. Check the signal strength sensor (enable it under the device's disabled entities)
+2. If RSSI is below -80 dBm, move the lamp closer or use a Bluetooth adapter with better range
+3. Ensure no other devices are interfering with Bluetooth (e.g., USB 3.0 devices near the adapter)
+4. Try using a Bluetooth proxy like ESPHome Bluetooth Proxy
+
+### Lamp responds slowly
+
+1. The integration limits commands to prevent overwhelming the BLE device
+2. Multiple rapid commands may be queued (100ms minimum between commands)
+3. This is normal behavior to ensure reliable communication
+
+### Entity shows unavailable
+
+1. The lamp may have lost Bluetooth connection
+2. Check **Settings** → **System** → **Repairs** for repair issues
+3. Try turning the lamp off and on again
+4. The integration will automatically try to reconnect
 
 ## Debugging
 
