@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.9] - 2025-12-17
+
+### Added
+- **Multi-Proxy Fallback**: Wenn ein Bluetooth Proxy keine freien Verbindungs-Slots hat, wird automatisch der nächste probiert
+  - Nutzt `async_scanner_devices_by_address` um ALLE Adapter/Proxies zu finden die das Gerät sehen
+  - Besonders nützlich für Shelly Plug Bluetooth Gateways (nur 1-2 Slots)
+  - Log zeigt alle verfügbaren Adapter und welcher erfolgreich verbunden hat
+  - Klare Fehlermeldung wenn kein Adapter freie Slots hat
+
+### Changed
+- **Verbesserte Verbindungslogik**: Probiert jeden verfügbaren Adapter nacheinander
+  - Weniger Retry-Versuche pro Adapter (2 statt 5), aber mehr Adapter werden probiert
+  - Schnellerer Wechsel zum nächsten Proxy bei "no connection slot" Fehlern
+
 ## [1.8.8] - 2025-12-17
 
 ### Fixed
