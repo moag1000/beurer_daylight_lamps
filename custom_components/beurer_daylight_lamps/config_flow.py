@@ -7,7 +7,10 @@ from typing import Any
 from bleak import BleakError
 import voluptuous as vol
 
-from homeassistant.components.bluetooth import BluetoothServiceInfoBleak
+from homeassistant.components.bluetooth import (
+    BluetoothServiceInfoBleak,
+    async_discovered_service_info,
+)
 from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow,
@@ -16,8 +19,8 @@ from homeassistant.config_entries import (
 from homeassistant.const import CONF_MAC, CONF_NAME
 from homeassistant.helpers.device_registry import format_mac
 
-from .beurer_daylight_lamps import BeurerInstance, discover, get_device
-from .const import DOMAIN, LOGGER
+from .beurer_daylight_lamps import BeurerInstance, get_device
+from .const import DEVICE_NAME_PREFIXES, DOMAIN, LOGGER
 
 MANUAL_MAC = "manual"
 
@@ -91,11 +94,17 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
 
             return await self.async_step_validate()
 
-        # Discover devices
+        # Use Home Assistant's Bluetooth stack instead of custom BLE scan
+        # This is more efficient as HA already continuously scans for devices
         configured_macs = self._async_current_ids(include_ignore=False)
-        devices = await discover()
+        discovered = async_discovered_service_info(self.hass)
+
+        # Filter for Beurer TL devices by name prefix
         available_devices = [
-            d for d in devices if format_mac(d.address) not in configured_macs
+            info for info in discovered
+            if info.name
+            and info.name.lower().startswith(DEVICE_NAME_PREFIXES)
+            and format_mac(info.address) not in configured_macs
         ]
 
         if not available_devices:

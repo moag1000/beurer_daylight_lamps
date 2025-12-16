@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.5] - 2025-12-16
+
+### Changed
+- **Improved discovery**: Now uses Home Assistant's Bluetooth stack instead of custom BLE scan for device discovery
+- **Code cleanup**: Removed unused `discover()` and `_has_beurer_characteristics()` functions
+
+### Fixed
+- **Faster manual setup**: Device list in config flow now uses already-discovered devices from HA's continuous scan
+
 ## [1.6.4] - 2025-12-16
 
 ### Changed

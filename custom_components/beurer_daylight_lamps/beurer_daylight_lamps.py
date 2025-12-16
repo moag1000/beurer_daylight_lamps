@@ -35,9 +35,7 @@ from homeassistant.components.light import ColorMode
 from homeassistant.helpers.device_registry import format_mac
 
 from .const import (
-    DEFAULT_CONNECT_TIMEOUT,
     DEFAULT_SCAN_TIMEOUT,
-    DEVICE_NAME_PREFIXES,
     LOGGER,
     MODE_RGB,
     MODE_WHITE,
@@ -59,60 +57,6 @@ from .const import (
     TURN_OFF_DELAY,
     MIN_COMMAND_INTERVAL,
 )
-
-
-async def discover() -> list[BLEDevice]:
-    """Discover Beurer daylight lamps via BLE scan.
-
-    Only discovers devices by name prefix matching. No characteristic-based
-    fallback to avoid connecting to random devices.
-    """
-    devices = await BleakScanner.discover(timeout=DEFAULT_SCAN_TIMEOUT)
-    LOGGER.debug(
-        "Discovered %d BLE devices",
-        len(devices),
-    )
-
-    beurer_devices: list[BLEDevice] = []
-    for device in devices:
-        if device.name and device.name.lower().startswith(DEVICE_NAME_PREFIXES):
-            beurer_devices.append(device)
-            LOGGER.debug(
-                "Found Beurer device: %s - %s",
-                device.address,
-                device.name,
-            )
-
-    return beurer_devices
-
-
-async def _has_beurer_characteristics(device: BLEDevice) -> bool:
-    """Check if device has Beurer BLE characteristics."""
-    try:
-        client = await establish_connection(
-            BleakClient,
-            device,
-            device.address,
-            max_attempts=2,
-        )
-        try:
-            if not client.is_connected:
-                return False
-            has_read = any(
-                char.uuid == READ_CHARACTERISTIC_UUID
-                for service in client.services
-                for char in service.characteristics
-            )
-            has_write = any(
-                char.uuid == WRITE_CHARACTERISTIC_UUID
-                for service in client.services
-                for char in service.characteristics
-            )
-            return has_read and has_write
-        finally:
-            await client.disconnect()
-    except (BleakError, TimeoutError, OSError):
-        return False
 
 
 async def get_device(mac: str) -> tuple[BLEDevice | None, int | None]:
