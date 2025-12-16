@@ -11,21 +11,66 @@ Home Assistant custom integration for Beurer daylight therapy lamps via Bluetoot
 
 | Model | Status | Notes |
 |-------|--------|-------|
-| TL100 | Tested | Full support |
-| TL50  | Untested | Should work |
-| TL70  | Untested | Should work |
-| TL80  | Untested | Should work |
-| TL90  | Untested | Should work |
+| TL100 | ✅ Tested | Full support |
+| TL50  | ⚠️ Untested | Should work |
+| TL70  | ⚠️ Untested | Should work |
+| TL80  | ⚠️ Untested | Should work |
+| TL90  | ⚠️ Untested | Should work |
 
 ## Features
 
-- Bluetooth auto-discovery
-- On/off and brightness control
-- RGB color mode
-- Light effects (Rainbow, Pulse, Forest, etc.)
-- Multiple lamp support
-- Diagnostics export
-- Optional RSSI sensor
+### Light Control
+- 💡 On/off and brightness control
+- 🎨 RGB color mode with color picker
+- 🌡️ Color temperature (2700K - 6500K)
+- ✨ Light effects (Rainbow, Pulse, Forest, Wave, etc.)
+- 🔆 Separate white/color brightness sliders
+
+### Connectivity
+- 📡 Bluetooth auto-discovery
+- 🔄 ESPHome/Shelly Bluetooth Proxy support
+- 📶 Automatic adapter switching to best signal
+- 🔗 Connection status monitoring
+
+### Entities Created
+
+| Entity Type | Name | Description |
+|-------------|------|-------------|
+| **Light** | Beurer Lamp | Main light entity with all controls |
+| **Button** | Identify | Blinks lamp 3x to find it |
+| **Button** | Reconnect | Forces BLE reconnection |
+| **Select** | Effect | Dropdown for light effects |
+| **Number** | White brightness | Slider 0-100% |
+| **Number** | Color brightness | Slider 0-100% |
+| **Sensor** | Signal strength | RSSI in dBm (disabled by default) |
+| **Binary Sensor** | Connected | BLE connection status |
+| **Binary Sensor** | Bluetooth reachable | Device seen by any adapter |
+
+### Services
+
+#### `beurer_daylight_lamps.apply_preset`
+
+Apply predefined lighting presets:
+
+| Preset | Description |
+|--------|-------------|
+| `daylight_therapy` | Full brightness 5300K for therapy |
+| `relax` | Warm dim light (2700K, 40%) |
+| `focus` | Cool bright light (5000K, 90%) |
+| `reading` | Neutral white (4000K, 80%) |
+| `warm_cozy` | Very warm (2700K, 60%) |
+| `cool_bright` | Cool white full brightness |
+| `sunset` | Orange sunset simulation |
+| `night_light` | Very dim warm light |
+| `energize` | Bright cool light to wake up |
+
+Example usage:
+```yaml
+service: beurer_daylight_lamps.apply_preset
+data:
+  device_id: "abc123..."
+  preset: daylight_therapy
+```
 
 ## Installation
 
@@ -72,21 +117,116 @@ cp -r custom_components/beurer_daylight_lamps ~/.homeassistant/custom_components
 3. Select your lamp from the list or enter MAC address manually
 4. The lamp will blink to confirm - click "Yes" if it blinked
 
+## Bluetooth Proxy Support
+
+This integration fully supports ESPHome and Shelly Bluetooth Proxies:
+
+- Automatically uses the proxy with the best signal
+- Seamlessly switches between adapters as signal changes
+- No configuration needed - just set up your proxies in Home Assistant
+
 ## Light Effects
 
 The following effects are available (matching the Beurer LightUp app):
 
-- Off
-- Random
-- Rainbow
-- Rainbow Slow
-- Fusion
-- Pulse
-- Wave
-- Chill
-- Action
-- Forest
-- Summer
+| Effect | Description |
+|--------|-------------|
+| Off | No effect |
+| Random | Random color changes |
+| Rainbow | Smooth rainbow cycle |
+| Rainbow Slow | Slower rainbow cycle |
+| Fusion | Color fusion effect |
+| Pulse | Pulsing brightness |
+| Wave | Wave-like transitions |
+| Chill | Relaxing color changes |
+| Action | Dynamic color changes |
+| Forest | Green/nature tones |
+| Summer | Warm summer colors |
+
+## Example Automations
+
+### Wake-up Light with Preset
+
+```yaml
+automation:
+  - alias: "Wake-up light"
+    trigger:
+      - platform: time
+        at: "06:30:00"
+    condition:
+      - condition: workday
+        country: DE
+    action:
+      - service: beurer_daylight_lamps.apply_preset
+        data:
+          device_id: !input beurer_device
+          preset: energize
+```
+
+### Gradual Wake-up
+
+```yaml
+automation:
+  - alias: "Gradual wake-up light"
+    trigger:
+      - platform: time
+        at: "06:30:00"
+    action:
+      - service: light.turn_on
+        target:
+          entity_id: light.beurer_tl100
+        data:
+          color_temp_kelvin: 2700
+          brightness: 25
+      - delay: "00:05:00"
+      - service: light.turn_on
+        target:
+          entity_id: light.beurer_tl100
+        data:
+          color_temp_kelvin: 4000
+          brightness: 128
+      - delay: "00:05:00"
+      - service: light.turn_on
+        target:
+          entity_id: light.beurer_tl100
+        data:
+          color_temp_kelvin: 5300
+          brightness: 255
+```
+
+### Evening Mood Light
+
+```yaml
+automation:
+  - alias: "Evening mood light"
+    trigger:
+      - platform: sun
+        event: sunset
+    action:
+      - service: beurer_daylight_lamps.apply_preset
+        data:
+          device_id: !input beurer_device
+          preset: sunset
+```
+
+### Light Therapy Session
+
+```yaml
+automation:
+  - alias: "Morning light therapy"
+    trigger:
+      - platform: time
+        at: "07:00:00"
+    action:
+      - service: beurer_daylight_lamps.apply_preset
+        data:
+          device_id: !input beurer_device
+          preset: daylight_therapy
+      - delay: "00:30:00"
+      - service: light.turn_off
+        target:
+          entity_id: light.beurer_tl100
+```
 
 ## Known Issues
 
@@ -96,7 +236,8 @@ The following effects are available (matching the Beurer LightUp app):
 
 ## Not Supported
 
-- **Timer**: Built-in timer functionality is not supported. Use Home Assistant automations instead.
+- **Timer**: Built-in timer functionality is not yet reverse-engineered. Use Home Assistant automations instead.
+- **Sunrise/Sunset simulation**: Hardware feature not yet implemented. Use automations with gradual brightness changes.
 
 ## Diagnostics
 
@@ -124,51 +265,6 @@ The RSSI value (in dBm) indicates Bluetooth signal quality:
 - `-70 to -85 dBm`: Fair
 - `< -85 dBm`: Poor (may cause connection issues)
 
-## Example Automations
-
-### Wake-up Light
-
-```yaml
-automation:
-  - alias: "Wake-up light"
-    trigger:
-      - platform: time
-        at: "06:30:00"
-    condition:
-      - condition: workday
-        country: DE
-    action:
-      - service: light.turn_on
-        target:
-          entity_id: light.beurer_tl100
-        data:
-          brightness: 50
-      - delay: "00:05:00"
-      - service: light.turn_on
-        target:
-          entity_id: light.beurer_tl100
-        data:
-          brightness: 255
-```
-
-### Mood Lighting
-
-```yaml
-automation:
-  - alias: "Evening mood light"
-    trigger:
-      - platform: sun
-        event: sunset
-    action:
-      - service: light.turn_on
-        target:
-          entity_id: light.beurer_tl100
-        data:
-          rgb_color: [255, 180, 100]
-          brightness: 150
-          effect: "Chill"
-```
-
 ## Troubleshooting
 
 ### Lamp not discovered
@@ -184,7 +280,7 @@ automation:
 1. Check the signal strength sensor (enable it under the device's disabled entities)
 2. If RSSI is below -80 dBm, move the lamp closer or use a Bluetooth adapter with better range
 3. Ensure no other devices are interfering with Bluetooth (e.g., USB 3.0 devices near the adapter)
-4. Try using a Bluetooth proxy like ESPHome Bluetooth Proxy
+4. **Recommended**: Use an ESPHome Bluetooth Proxy for better range and reliability
 
 ### Lamp responds slowly
 
@@ -196,8 +292,9 @@ automation:
 
 1. The lamp may have lost Bluetooth connection
 2. Check **Settings** → **System** → **Repairs** for repair issues
-3. Try turning the lamp off and on again
-4. The integration will automatically try to reconnect
+3. Try using the "Reconnect" button entity
+4. Try turning the lamp off and on again
+5. The integration will automatically try to reconnect
 
 ## Debugging
 
@@ -209,6 +306,22 @@ logger:
   logs:
     custom_components.beurer_daylight_lamps: debug
 ```
+
+## BLE Protocol Reverse Engineering
+
+A sniffer tool is included for reverse engineering additional features:
+
+```bash
+pip install bleak
+python tools/ble_sniffer.py AA:BB:CC:DD:EE:FF
+```
+
+Commands:
+- `status` - Request current status
+- `probe` - Test unknown commands (0x33, 0x36, 0x38, 0x39)
+- `raw 33 01 0A` - Send raw bytes
+
+Contributions for Timer and Sunrise/Sunset features welcome!
 
 ## Credits
 

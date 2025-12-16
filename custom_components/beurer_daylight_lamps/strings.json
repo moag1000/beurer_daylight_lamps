@@ -99,6 +99,51 @@
             "rssi": {
                 "name": "Signal strength"
             }
+        },
+        "button": {
+            "identify": {
+                "name": "Identify"
+            },
+            "reconnect": {
+                "name": "Reconnect"
+            }
+        },
+        "select": {
+            "effect": {
+                "name": "Effect"
+            }
+        },
+        "number": {
+            "white_brightness": {
+                "name": "White brightness"
+            },
+            "color_brightness": {
+                "name": "Color brightness"
+            }
+        },
+        "binary_sensor": {
+            "connected": {
+                "name": "Connected"
+            },
+            "ble_available": {
+                "name": "Bluetooth reachable"
+            }
+        }
+    },
+    "services": {
+        "apply_preset": {
+            "name": "Apply preset",
+            "description": "Apply a predefined lighting preset to the lamp",
+            "fields": {
+                "device_id": {
+                    "name": "Device",
+                    "description": "The Beurer lamp device to control"
+                },
+                "preset": {
+                    "name": "Preset",
+                    "description": "The preset to apply (daylight_therapy, relax, focus, reading, warm_cozy, cool_bright, sunset, night_light, energize)"
+                }
+            }
         }
     }
 }

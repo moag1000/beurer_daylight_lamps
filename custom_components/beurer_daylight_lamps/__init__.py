@@ -1,7 +1,9 @@
 """The Beurer Daylight Lamps integration."""
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
+
+import voluptuous as vol
 
 from homeassistant.components import bluetooth
 from homeassistant.components.bluetooth import (
@@ -11,12 +13,75 @@ from homeassistant.components.bluetooth import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_MAC, CONF_NAME, Platform
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.exceptions import ConfigEntryNotReady
-from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers import device_registry as dr, issue_registry as ir
+import homeassistant.helpers.config_validation as cv
 
 from .beurer_daylight_lamps import BeurerInstance
 from .const import DOMAIN, LOGGER
+
+# Service constants
+SERVICE_APPLY_PRESET = "apply_preset"
+ATTR_DEVICE_ID = "device_id"
+ATTR_PRESET = "preset"
+
+# Preset definitions: {preset_name: (rgb, brightness, color_temp_kelvin, effect)}
+# brightness is 0-255, color_temp is Kelvin, effect is effect name or None
+PRESETS: dict[str, dict[str, Any]] = {
+    "daylight_therapy": {
+        "description": "Full brightness daylight for therapy",
+        "color_temp_kelvin": 5300,
+        "brightness": 255,
+    },
+    "relax": {
+        "description": "Warm, dim light for relaxation",
+        "color_temp_kelvin": 2700,
+        "brightness": 100,
+    },
+    "focus": {
+        "description": "Cool, bright light for concentration",
+        "color_temp_kelvin": 5000,
+        "brightness": 230,
+    },
+    "reading": {
+        "description": "Neutral white for comfortable reading",
+        "color_temp_kelvin": 4000,
+        "brightness": 200,
+    },
+    "warm_cozy": {
+        "description": "Very warm light for cozy atmosphere",
+        "color_temp_kelvin": 2700,
+        "brightness": 150,
+    },
+    "cool_bright": {
+        "description": "Cool white at full brightness",
+        "color_temp_kelvin": 6500,
+        "brightness": 255,
+    },
+    "sunset": {
+        "description": "Orange sunset simulation",
+        "rgb": (255, 120, 50),
+        "brightness": 180,
+    },
+    "night_light": {
+        "description": "Very dim warm light for nighttime",
+        "rgb": (255, 100, 50),
+        "brightness": 30,
+    },
+    "energize": {
+        "description": "Bright cool light to wake up",
+        "color_temp_kelvin": 6000,
+        "brightness": 255,
+    },
+}
+
+SERVICE_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_DEVICE_ID): cv.string,
+        vol.Required(ATTR_PRESET): vol.In(list(PRESETS.keys())),
+    }
+)
 
 if TYPE_CHECKING:
     from .beurer_daylight_lamps import BeurerInstance as BeurerInstanceType
@@ -25,7 +90,14 @@ if TYPE_CHECKING:
 else:
     BeurerConfigEntry = ConfigEntry
 
-PLATFORMS: list[Platform] = [Platform.LIGHT, Platform.SENSOR]
+PLATFORMS: list[Platform] = [
+    Platform.LIGHT,
+    Platform.SENSOR,
+    Platform.BUTTON,
+    Platform.SELECT,
+    Platform.NUMBER,
+    Platform.BINARY_SENSOR,
+]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> bool:
@@ -164,7 +236,74 @@ async def async_setup_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> bo
     LOGGER.debug("Registered unavailability tracker for %s", mac_address)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    # Register services (only once)
+    await _async_setup_services(hass)
+
     return True
+
+
+async def _async_setup_services(hass: HomeAssistant) -> None:
+    """Set up Beurer services."""
+    if hass.services.has_service(DOMAIN, SERVICE_APPLY_PRESET):
+        return  # Already registered
+
+    async def async_apply_preset(call: ServiceCall) -> None:
+        """Apply a preset to a Beurer lamp."""
+        device_id = call.data[ATTR_DEVICE_ID]
+        preset_name = call.data[ATTR_PRESET]
+
+        LOGGER.debug("Applying preset '%s' to device %s", preset_name, device_id)
+
+        # Find the config entry for this device
+        device_reg = dr.async_get(hass)
+        device = device_reg.async_get(device_id)
+
+        if not device:
+            LOGGER.error("Device %s not found", device_id)
+            return
+
+        # Find config entry for this device
+        config_entry_id = None
+        for entry_id in device.config_entries:
+            entry = hass.config_entries.async_get_entry(entry_id)
+            if entry and entry.domain == DOMAIN:
+                config_entry_id = entry_id
+                break
+
+        if not config_entry_id:
+            LOGGER.error("No Beurer config entry found for device %s", device_id)
+            return
+
+        entry = hass.config_entries.async_get_entry(config_entry_id)
+        if not entry or not hasattr(entry, "runtime_data"):
+            LOGGER.error("Config entry not ready for device %s", device_id)
+            return
+
+        instance: BeurerInstance = entry.runtime_data
+        preset = PRESETS[preset_name]
+
+        # Apply preset settings
+        from homeassistant.util.color import color_temperature_to_rgb
+
+        if "rgb" in preset:
+            await instance.set_color(preset["rgb"])
+        elif "color_temp_kelvin" in preset:
+            rgb = color_temperature_to_rgb(preset["color_temp_kelvin"])
+            await instance.set_color(rgb)
+
+        if "brightness" in preset:
+            await instance.set_color_brightness(preset["brightness"])
+
+        LOGGER.info("Applied preset '%s' to %s", preset_name, instance.mac)
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_APPLY_PRESET,
+        async_apply_preset,
+        schema=SERVICE_SCHEMA,
+    )
+    LOGGER.debug("Registered service %s.%s", DOMAIN, SERVICE_APPLY_PRESET)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> bool:

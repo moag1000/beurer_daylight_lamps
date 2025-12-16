@@ -696,6 +696,7 @@ class BeurerInstance:
                 LOGGER.debug("No hass reference, using cached device for %s", self._mac)
 
             # Use bleak-retry-connector for reliable connection establishment
+            # This handles retries automatically and is the recommended approach
             LOGGER.debug(
                 "Establishing connection to %s with bleak-retry-connector (max 3 attempts)...",
                 self._mac,

@@ -61,6 +61,9 @@ def mock_beurer_instance() -> Generator[MagicMock, None, None]:
         instance.effect = "Off"
         instance.color_mode = "white"
         instance.rssi = -60
+        instance.available = True
+        instance.is_connected = True
+        instance.ble_available = True
         instance.supported_effects = [
             "Off", "Random", "Rainbow", "Rainbow Slow", "Fusion",
             "Pulse", "Wave", "Chill", "Action", "Forest", "Summer"
@@ -72,6 +75,7 @@ def mock_beurer_instance() -> Generator[MagicMock, None, None]:
         instance.set_white = AsyncMock()
         instance.set_effect = AsyncMock()
         instance.set_color_brightness = AsyncMock()
+        instance.connect = AsyncMock(return_value=True)
         instance.disconnect = AsyncMock()
         instance.set_update_callback = MagicMock()
         instance.remove_update_callback = MagicMock()

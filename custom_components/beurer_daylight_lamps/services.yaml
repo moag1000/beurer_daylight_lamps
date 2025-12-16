@@ -1,0 +1,29 @@
+# Services for Beurer Daylight Lamps
+
+apply_preset:
+  name: Apply preset
+  description: Apply a predefined lighting preset to the lamp
+  fields:
+    device_id:
+      name: Device
+      description: The Beurer lamp device to control
+      required: true
+      selector:
+        device:
+          integration: beurer_daylight_lamps
+    preset:
+      name: Preset
+      description: The preset to apply
+      required: true
+      selector:
+        select:
+          options:
+            - "daylight_therapy"
+            - "relax"
+            - "focus"
+            - "reading"
+            - "warm_cozy"
+            - "cool_bright"
+            - "sunset"
+            - "night_light"
+            - "energize"

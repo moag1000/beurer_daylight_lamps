@@ -5,6 +5,47 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.0] - 2025-12-16
+
+### Added
+- **New Entity Types**:
+  - **Button entities**:
+    - "Identify" - Blinks the lamp 3 times to find it
+    - "Reconnect" - Forces a BLE reconnection
+  - **Select entity**: "Effect" dropdown for choosing light effects
+  - **Number entities**:
+    - "White brightness" slider (0-100%)
+    - "Color brightness" slider (0-100%)
+  - **Binary sensors**:
+    - "Connected" - Shows BLE connection status
+    - "Bluetooth reachable" - Shows if device is seen by any adapter
+- **Service `beurer_daylight_lamps.apply_preset`**: Apply predefined lighting presets
+  - `daylight_therapy` - Full brightness 5300K for therapy
+  - `relax` - Warm dim light (2700K, 40%)
+  - `focus` - Cool bright light (5000K, 90%)
+  - `reading` - Neutral white (4000K, 80%)
+  - `warm_cozy` - Very warm (2700K, 60%)
+  - `cool_bright` - Cool white full brightness
+  - `sunset` - Orange sunset simulation
+  - `night_light` - Very dim warm light
+  - `energize` - Bright cool light to wake up
+- **BLE Sniffer Tool**: `tools/ble_sniffer.py` for reverse engineering protocol
+  - Interactive command mode
+  - Logs all BLE traffic to CSV
+  - Probe function for discovering unknown commands
+
+## [1.7.1] - 2025-12-16
+
+### Added
+- **Color Temperature support**: Adjustable color temperature from 2700K (warm white) to 6500K (cool daylight)
+  - Uses RGB simulation to achieve color temperature values
+  - Slider in Home Assistant UI for easy adjustment
+  - `color_temp_kelvin` property for automations
+
+### Fixed
+- **Brightness preserves color mode**: Adjusting brightness no longer switches from RGB to white mode
+- **Color changes preserve brightness**: Changing color now keeps the current brightness level
+
 ## [1.7.0] - 2025-12-16
 
 ### Added
