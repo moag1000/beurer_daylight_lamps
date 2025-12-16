@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.10] - 2025-12-17
+
+### Fixed
+- **Schnelleres Adapter-Fallback**: 15 Sekunden Timeout pro Adapter statt 45s gesamt
+  - Bei "no connection slot" Fehler wird sofort der nächste Adapter probiert
+  - Timeout verhindert Hängenbleiben bei nicht-reagierenden Proxies
+- **Besseres Scanner-Logging**: Zeigt `source` (Adapter-MAC) statt Gerätenamen
+  - Debug-Logging für Scanner-Details (source, name, adapter, type)
+
 ## [1.8.9] - 2025-12-17
 
 ### Added

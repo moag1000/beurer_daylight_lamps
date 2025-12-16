@@ -687,11 +687,25 @@ class BeurerInstance:
                 if scanner_devices:
                     for scanner_device in scanner_devices:
                         ble_dev = scanner_device.ble_device
-                        scanner_name = getattr(scanner_device.scanner, "name", "unknown")
+                        scanner = scanner_device.scanner
+                        # Try to get meaningful scanner identification
+                        scanner_source = getattr(scanner, "source", None)
+                        scanner_name = getattr(scanner, "name", None)
+                        scanner_adapter = getattr(scanner, "adapter", None)
+                        # Log all available info for debugging
+                        LOGGER.debug(
+                            "Scanner details: source=%s, name=%s, adapter=%s, type=%s",
+                            scanner_source,
+                            scanner_name,
+                            scanner_adapter,
+                            type(scanner).__name__,
+                        )
+                        # Use source (usually adapter MAC) as identifier, fallback to name
+                        display_name = scanner_source or scanner_name or "unknown"
                         rssi = scanner_device.advertisement.rssi if scanner_device.advertisement else None
                         LOGGER.info(
                             "Found device via adapter '%s' (RSSI: %s)",
-                            scanner_name,
+                            display_name,
                             rssi,
                         )
                         available_devices.append(ble_dev)
@@ -764,14 +778,18 @@ class BeurerInstance:
                     return self._ble_device
 
                 try:
-                    self._client = await establish_connection(
-                        BleakClientWithServiceCache,
-                        device_to_try,
-                        self._mac,
-                        disconnected_callback=self._on_disconnect,
-                        max_attempts=2,  # Fewer attempts per adapter, try next faster
-                        ble_device_callback=get_device,
-                    )
+                    # Use timeout to fail fast and try next adapter
+                    # Shelly proxies with no slots will fail quickly with BleakError
+                    # but we also need a timeout for stuck connections
+                    async with asyncio.timeout(15):  # 15s per adapter, not 45s total
+                        self._client = await establish_connection(
+                            BleakClientWithServiceCache,
+                            device_to_try,
+                            self._mac,
+                            disconnected_callback=self._on_disconnect,
+                            max_attempts=2,  # Fewer attempts per adapter, try next faster
+                            ble_device_callback=get_device,
+                        )
                     LOGGER.info(
                         "Connected to %s successfully via '%s'",
                         self._mac,
