@@ -116,16 +116,43 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
         # Use Home Assistant's Bluetooth stack instead of custom BLE scan
         # This is more efficient as HA already continuously scans for devices
         configured_macs = self._async_current_ids(include_ignore=False)
-        discovered = async_discovered_service_info(self.hass)
+
+        # Get both connectable and non-connectable devices
+        # Some devices alternate between these states
+        discovered_connectable = async_discovered_service_info(self.hass, connectable=True)
+        discovered_non_connectable = async_discovered_service_info(self.hass, connectable=False)
+
+        # Combine both lists (use dict to deduplicate by address)
+        all_discovered = {}
+        for info in discovered_connectable:
+            all_discovered[info.address] = info
+        for info in discovered_non_connectable:
+            # Prefer connectable version if both exist
+            if info.address not in all_discovered:
+                all_discovered[info.address] = info
+
+        LOGGER.debug(
+            "Found %d connectable and %d non-connectable devices, %d total unique",
+            len(discovered_connectable),
+            len(discovered_non_connectable),
+            len(all_discovered),
+        )
 
         # Filter for Beurer TL devices by name prefix and cache them
         self._discovered_devices = {}
-        for info in discovered:
+        for info in all_discovered.values():
             if (
                 info.name
                 and info.name.lower().startswith(DEVICE_NAME_PREFIXES)
                 and format_mac(info.address) not in configured_macs
             ):
+                LOGGER.debug(
+                    "Found Beurer device: %s (%s) RSSI: %s, connectable: %s",
+                    info.name,
+                    info.address,
+                    info.rssi,
+                    getattr(info, "connectable", "unknown"),
+                )
                 self._discovered_devices[info.address] = info
 
         if not self._discovered_devices:
@@ -313,24 +340,39 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
                     )
                 else:
                     # Use HA Bluetooth stack to find device (includes all proxies)
-                    # Don't filter by connectable - some devices alternate between
-                    # connectable and non-connectable advertisement packets
+                    # Try both connectable and non-connectable devices
                     LOGGER.debug(
                         "Getting device %s via HA Bluetooth stack...", self._mac
                     )
+
+                    # Try without filter first (should get both types)
                     ble_device = bluetooth.async_ble_device_from_address(
                         self.hass, self._mac
                     )
+
+                    # If not found, explicitly try non-connectable
+                    if not ble_device:
+                        LOGGER.debug(
+                            "Device not found without filter, trying connectable=False..."
+                        )
+                        ble_device = bluetooth.async_ble_device_from_address(
+                            self.hass, self._mac, connectable=False
+                        )
+
                     if not ble_device:
                         LOGGER.error(
                             "Device %s not found via any Bluetooth adapter", self._mac
                         )
                         return False
 
-                    # Get RSSI from service info
+                    # Get RSSI from service info (try both types)
                     service_info = bluetooth.async_last_service_info(
                         self.hass, self._mac
                     )
+                    if not service_info:
+                        service_info = bluetooth.async_last_service_info(
+                            self.hass, self._mac, connectable=False
+                        )
                     rssi = service_info.rssi if service_info else None
 
                     self._ble_device = ble_device
