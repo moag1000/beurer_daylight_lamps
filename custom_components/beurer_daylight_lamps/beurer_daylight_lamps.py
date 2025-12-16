@@ -62,7 +62,11 @@ from .const import (
 
 
 async def discover() -> list[BLEDevice]:
-    """Discover Beurer daylight lamps via BLE scan."""
+    """Discover Beurer daylight lamps via BLE scan.
+
+    Only discovers devices by name prefix matching. No characteristic-based
+    fallback to avoid connecting to random devices.
+    """
     devices = await BleakScanner.discover(timeout=DEFAULT_SCAN_TIMEOUT)
     LOGGER.debug(
         "Discovered %d BLE devices",
@@ -78,18 +82,6 @@ async def discover() -> list[BLEDevice]:
                 device.address,
                 device.name,
             )
-
-    # Fallback: check for devices with matching characteristics
-    if not beurer_devices:
-        LOGGER.debug("No devices found by name, checking characteristics...")
-        for device in devices:
-            if await _has_beurer_characteristics(device):
-                beurer_devices.append(device)
-                LOGGER.debug(
-                    "Found device by characteristics: %s - %s",
-                    device.address,
-                    device.name,
-                )
 
     return beurer_devices
 

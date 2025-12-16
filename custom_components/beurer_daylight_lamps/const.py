@@ -5,7 +5,7 @@ import logging
 from typing import Final
 
 DOMAIN: Final = "beurer_daylight_lamps"
-VERSION: Final = "1.6.3"
+VERSION: Final = "1.6.4"
 LOGGER = logging.getLogger(__package__)
 
 # BLE Characteristic UUIDs
@@ -56,13 +56,13 @@ DEFAULT_SCAN_TIMEOUT: Final = 15.0
 DEFAULT_CONNECT_TIMEOUT: Final = 20.0
 
 # Device name prefixes for discovery (lowercase for case-insensitive matching)
+# Only specific TL model prefixes to avoid conflicts with other Beurer devices
 DEVICE_NAME_PREFIXES: Final[tuple[str, ...]] = (
     "tl100",
     "tl50",
     "tl70",
     "tl80",
     "tl90",
-    "beurer",
 )
 
 # Model detection map based on device name prefixes
