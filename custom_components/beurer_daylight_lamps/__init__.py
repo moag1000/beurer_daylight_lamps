@@ -14,10 +14,12 @@ from .const import DOMAIN, LOGGER
 
 if TYPE_CHECKING:
     from .beurer_daylight_lamps import BeurerInstance as BeurerInstanceType
+    # Type alias only evaluated during type checking
+    BeurerConfigEntry = ConfigEntry[BeurerInstance]
+else:
+    BeurerConfigEntry = ConfigEntry
 
 PLATFORMS: list[Platform] = [Platform.LIGHT, Platform.SENSOR]
-
-BeurerConfigEntry = ConfigEntry[BeurerInstance]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> bool:
