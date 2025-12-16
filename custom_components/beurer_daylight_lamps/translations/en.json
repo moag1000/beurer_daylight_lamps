@@ -2,7 +2,7 @@
     "config": {
         "step": {
             "user": {
-                "title": "Select a Beurer lamp",
+                "title": "Select Beurer lamp",
                 "description": "Select a discovered lamp or enter MAC address manually.",
                 "data": {
                     "mac": "Device",
@@ -10,8 +10,8 @@
                 }
             },
             "bluetooth_confirm": {
-                "title": "Confirm Beurer lamp setup",
-                "description": "A Beurer lamp was discovered: **{name}**\n\nThe lamp will blink to confirm the connection.",
+                "title": "Confirm Beurer lamp",
+                "description": "Found Beurer lamp: **{name}**\n\nThe lamp will blink to confirm the connection.",
                 "data": {
                     "name": "Name (optional)"
                 }
@@ -28,19 +28,19 @@
                 "title": "Manual setup",
                 "description": "Enter the Bluetooth MAC address manually.",
                 "data": {
-                    "mac": "Bluetooth MAC address",
+                    "mac": "MAC address",
                     "name": "Name"
                 }
             }
         },
         "error": {
-            "cannot_connect": "Unable to connect to Beurer lamp"
+            "cannot_connect": "Failed to connect to lamp",
+            "invalid_mac": "Invalid MAC address format"
         },
         "abort": {
             "already_configured": "Device is already configured",
-            "cannot_validate": "Could not validate lamp connection",
-            "cannot_connect": "Unable to connect to Beurer lamp"
+            "cannot_validate": "Could not validate connection",
+            "cannot_connect": "Failed to connect to lamp"
         }
-    },
-    "title": "Beurer Daylight Lamps"
+    }
 }

@@ -10,8 +10,8 @@
                 }
             },
             "bluetooth_confirm": {
-                "title": "Beurer Lampe einrichten",
-                "description": "Eine Beurer Lampe wurde entdeckt: **{name}**\n\nDie Lampe wird blinken um die Verbindung zu bestätigen.",
+                "title": "Beurer Lampe bestätigen",
+                "description": "Beurer Lampe gefunden: **{name}**\n\nDie Lampe wird blinken um die Verbindung zu bestätigen.",
                 "data": {
                     "name": "Name (optional)"
                 }
@@ -28,19 +28,19 @@
                 "title": "Manuelle Einrichtung",
                 "description": "Bluetooth MAC-Adresse manuell eingeben.",
                 "data": {
-                    "mac": "Bluetooth MAC-Adresse",
+                    "mac": "MAC-Adresse",
                     "name": "Name"
                 }
             }
         },
         "error": {
-            "cannot_connect": "Verbindung zur Beurer Lampe nicht möglich"
+            "cannot_connect": "Verbindung zur Lampe fehlgeschlagen",
+            "invalid_mac": "Ungültiges MAC-Adressformat"
         },
         "abort": {
-            "already_configured": "Gerät ist bereits konfiguriert",
-            "cannot_validate": "Lampenverbindung konnte nicht validiert werden",
-            "cannot_connect": "Verbindung zur Beurer Lampe nicht möglich"
+            "already_configured": "Gerät bereits konfiguriert",
+            "cannot_validate": "Verbindung konnte nicht validiert werden",
+            "cannot_connect": "Verbindung zur Lampe fehlgeschlagen"
         }
-    },
-    "title": "Beurer Tageslicht-Lampen"
+    }
 }

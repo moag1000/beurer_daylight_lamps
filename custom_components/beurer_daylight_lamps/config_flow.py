@@ -6,133 +6,159 @@ from typing import Any
 
 import voluptuous as vol
 
-from homeassistant import config_entries
 from homeassistant.components.bluetooth import BluetoothServiceInfoBleak
-from homeassistant.const import CONF_MAC
-from homeassistant.data_entry_flow import FlowResult
+from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.const import CONF_MAC, CONF_NAME
 from homeassistant.helpers.device_registry import format_mac
 
-from .beurer_daylight_lamps import discover, get_device, BeurerInstance
+from .beurer_daylight_lamps import BeurerInstance, discover, get_device
 from .const import DOMAIN, LOGGER
 
 MANUAL_MAC = "manual"
 
 
-class BeurerFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
+class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Beurer Daylight Lamps."""
 
     VERSION = 1
 
     def __init__(self) -> None:
         """Initialize the config flow."""
-        self.mac: str | None = None
-        self.beurer_instance: BeurerInstance | None = None
-        self.name: str | None = None
+        self._mac: str | None = None
+        self._name: str | None = None
+        self._instance: BeurerInstance | None = None
         self._discovery_info: BluetoothServiceInfoBleak | None = None
 
     async def async_step_bluetooth(
         self, discovery_info: BluetoothServiceInfoBleak
-    ) -> FlowResult:
-        """Handle the Bluetooth discovery step."""
+    ) -> ConfigFlowResult:
+        """Handle Bluetooth discovery."""
         LOGGER.debug(
-            "Bluetooth discovery: address=%s, name=%s",
-            discovery_info.address,
+            "Bluetooth discovery: %s (%s)",
             discovery_info.name,
+            discovery_info.address,
         )
 
-        # Set unique ID from MAC address
         await self.async_set_unique_id(format_mac(discovery_info.address))
         self._abort_if_unique_id_configured()
 
-        # Store discovery info for later steps
         self._discovery_info = discovery_info
-        self.mac = discovery_info.address
-        self.name = discovery_info.name or f"Beurer {discovery_info.address[-8:]}"
+        self._mac = discovery_info.address
+        self._name = discovery_info.name or f"Beurer {discovery_info.address[-8:]}"
 
-        # Show confirmation dialog to user
-        self.context["title_placeholders"] = {"name": self.name}
+        self.context["title_placeholders"] = {"name": self._name}
         return await self.async_step_bluetooth_confirm()
 
     async def async_step_bluetooth_confirm(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         """Confirm Bluetooth discovery."""
         if user_input is not None:
-            # User confirmed, optionally update name
-            if "name" in user_input and user_input["name"]:
-                self.name = user_input["name"]
+            if user_input.get(CONF_NAME):
+                self._name = user_input[CONF_NAME]
             return await self.async_step_validate()
 
         return self.async_show_form(
             step_id="bluetooth_confirm",
             data_schema=vol.Schema(
-                {
-                    vol.Optional("name", default=self.name): str,
-                }
+                {vol.Optional(CONF_NAME, default=self._name): str}
             ),
-            description_placeholders={"name": self.name},
+            description_placeholders={"name": self._name},
         )
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
-        """Handle the initial step (manual setup)."""
+    ) -> ConfigFlowResult:
+        """Handle manual setup."""
+        errors: dict[str, str] = {}
+
         if user_input is not None:
-            if user_input["mac"] == MANUAL_MAC:
+            if user_input[CONF_MAC] == MANUAL_MAC:
                 return await self.async_step_manual()
 
-            self.mac = user_input["mac"]
-            self.name = user_input["name"]
-            await self.async_set_unique_id(format_mac(self.mac))
+            self._mac = user_input[CONF_MAC]
+            self._name = user_input[CONF_NAME]
+
+            await self.async_set_unique_id(format_mac(self._mac))
             self._abort_if_unique_id_configured()
+
             return await self.async_step_validate()
 
-        already_configured = self._async_current_ids(False)
+        # Discover devices
+        configured_macs = self._async_current_ids(include_ignore=False)
         devices = await discover()
-        devices = [
-            device
-            for device in devices
-            if format_mac(device.address) not in already_configured
+        available_devices = [
+            d for d in devices if format_mac(d.address) not in configured_macs
         ]
 
-        if not devices:
+        if not available_devices:
             return await self.async_step_manual()
+
+        device_options = {d.address: d.name or d.address for d in available_devices}
+        device_options[MANUAL_MAC] = "Enter MAC manually"
 
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema(
                 {
-                    vol.Required("mac"): vol.In(
-                        {
-                            **{device.address: device.name for device in devices},
-                            MANUAL_MAC: "Manual MAC entry",
-                        }
-                    ),
-                    vol.Required("name"): str,
+                    vol.Required(CONF_MAC): vol.In(device_options),
+                    vol.Required(CONF_NAME): str,
                 }
             ),
-            errors={},
+            errors=errors,
+        )
+
+    async def async_step_manual(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Handle manual MAC entry."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            self._mac = user_input[CONF_MAC].strip().upper()
+            self._name = user_input[CONF_NAME]
+
+            # Validate MAC format
+            if not self._is_valid_mac(self._mac):
+                errors[CONF_MAC] = "invalid_mac"
+            else:
+                await self.async_set_unique_id(format_mac(self._mac))
+                self._abort_if_unique_id_configured()
+                return await self.async_step_validate()
+
+        return self.async_show_form(
+            step_id="manual",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_MAC): str,
+                    vol.Required(CONF_NAME): str,
+                }
+            ),
+            errors=errors,
         )
 
     async def async_step_validate(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         """Validate connection by toggling the light."""
-        if user_input is not None:
-            if "flicker" in user_input:
-                if user_input["flicker"]:
-                    return self.async_create_entry(
-                        title=self.name,
-                        data={CONF_MAC: self.mac, "name": self.name},
-                    )
-                return self.async_abort(reason="cannot_validate")
+        errors: dict[str, str] = {}
 
-            if "retry" in user_input and not user_input["retry"]:
+        if user_input is not None:
+            if user_input.get("flicker"):
+                return self.async_create_entry(
+                    title=self._name or "Beurer Lamp",
+                    data={
+                        CONF_MAC: self._mac,
+                        CONF_NAME: self._name,
+                    },
+                )
+            if user_input.get("retry") is False:
                 return self.async_abort(reason="cannot_connect")
 
-        error = await self._toggle_light()
+        # Try to toggle the light
+        success = await self._test_connection()
 
-        if error:
+        if not success:
             return self.async_show_form(
                 step_id="validate",
                 data_schema=vol.Schema({vol.Required("retry"): bool}),
@@ -142,75 +168,56 @@ class BeurerFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="validate",
             data_schema=vol.Schema({vol.Required("flicker"): bool}),
-            errors={},
+            errors=errors,
         )
 
-    async def async_step_manual(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
-        """Handle manual MAC address entry."""
-        if user_input is not None:
-            self.mac = user_input["mac"]
-            self.name = user_input["name"]
-            await self.async_set_unique_id(format_mac(self.mac))
-            self._abort_if_unique_id_configured()
-            return await self.async_step_validate()
-
-        return self.async_show_form(
-            step_id="manual",
-            data_schema=vol.Schema(
-                {
-                    vol.Required("mac"): str,
-                    vol.Required("name"): str,
-                }
-            ),
-            errors={},
-        )
-
-    async def _toggle_light(self) -> Exception | None:
-        """Toggle the light to validate connection."""
-        if not self.beurer_instance:
-            device = await get_device(self.mac)
-            if not device:
-                LOGGER.error("Could not find device with MAC %s", self.mac)
-                return Exception("Device not found")
-            self.beurer_instance = BeurerInstance(device)
-
-        if not self.beurer_instance or not self.beurer_instance._device:
-            LOGGER.error(
-                "BeurerInstance not properly initialized for MAC %s", self.mac
-            )
-            return Exception("Instance initialization failed")
-
+    async def _test_connection(self) -> bool:
+        """Test connection by toggling the lamp."""
         try:
-            LOGGER.debug("Going to update from config flow")
-            await self.beurer_instance.update()
-            LOGGER.debug(
-                "Finished updating from config flow, lamp is %s",
-                self.beurer_instance.is_on,
-            )
+            if not self._instance:
+                device = await get_device(self._mac)
+                if not device:
+                    LOGGER.error("Device not found: %s", self._mac)
+                    return False
+                self._instance = BeurerInstance(device)
 
+            LOGGER.debug("Testing connection to %s", self._mac)
+            await self._instance.update()
             await asyncio.sleep(0.5)
 
-            current_state = bool(self.beurer_instance.is_on)
-            if current_state:
-                await self.beurer_instance.turn_off()
-                await asyncio.sleep(2)
-                await self.beurer_instance.turn_on()
+            # Toggle light to verify connection
+            is_on = bool(self._instance.is_on)
+            if is_on:
+                await self._instance.turn_off()
+                await asyncio.sleep(1.5)
+                await self._instance.turn_on()
             else:
-                await self.beurer_instance.turn_on()
-                await asyncio.sleep(2)
-                await self.beurer_instance.turn_off()
+                await self._instance.turn_on()
+                await asyncio.sleep(1.5)
+                await self._instance.turn_off()
 
-            return None
+            return True
 
-        except Exception as error:
-            LOGGER.error("Error while toggling lamp: %s", str(error))
-            return error
+        except Exception as err:
+            LOGGER.error("Connection test failed: %s", err)
+            return False
 
         finally:
-            try:
-                if self.beurer_instance:
-                    await self.beurer_instance.disconnect()
-            except Exception as error:
-                LOGGER.warning("Error during disconnect: %s", str(error))
+            if self._instance:
+                try:
+                    await self._instance.disconnect()
+                except Exception as err:
+                    LOGGER.debug("Disconnect error: %s", err)
+                self._instance = None
+
+    @staticmethod
+    def _is_valid_mac(mac: str) -> bool:
+        """Validate MAC address format."""
+        mac = mac.replace(":", "").replace("-", "")
+        if len(mac) != 12:
+            return False
+        try:
+            int(mac, 16)
+            return True
+        except ValueError:
+            return False
