@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable
-from typing import TYPE_CHECKING
 
 from bleak import BleakClient, BleakError, BleakScanner
 from bleak.backends.device import BLEDevice
