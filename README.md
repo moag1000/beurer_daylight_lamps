@@ -308,6 +308,19 @@ The RSSI value (in dBm) indicates Bluetooth signal quality:
 4. Try turning the lamp off and on again
 5. The integration will automatically try to reconnect
 
+### Timer not working
+
+1. Timer only works in **RGB/color mode** - it will not work in white mode
+2. Make sure you set a color or effect before using the timer
+3. The Timer entity will show as "unavailable" when the lamp is in white mode
+4. Use the `set_timer` service or the Timer number entity under the device
+
+### Effects not showing correctly
+
+1. Some effects only work at specific brightness levels
+2. Try setting brightness to 100% first, then apply the effect
+3. The "Off" effect disables all effects and returns to static color
+
 ## Debugging
 
 Add to `configuration.yaml`:
