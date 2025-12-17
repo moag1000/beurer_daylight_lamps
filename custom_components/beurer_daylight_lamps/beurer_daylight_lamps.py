@@ -140,7 +140,7 @@ class BeurerInstance:
     def mark_unavailable(self) -> None:
         """Mark the device as unavailable (not seen by any adapter)."""
         if self._ble_available:
-            LOGGER.warning("Device %s marked as unavailable", self._mac)
+            LOGGER.debug("Device %s marked as unavailable (no BLE advertisements)", self._mac)
             self._ble_available = False
             self._available = False
             self._safe_create_task(self._trigger_update())
@@ -323,7 +323,7 @@ class BeurerInstance:
         try:
             return self._supported_effects.index(effect)
         except ValueError:
-            LOGGER.warning("Effect '%s' not found, defaulting to 'Off'", effect)
+            LOGGER.debug("Effect '%s' not in supported list, defaulting to 'Off'", effect)
             return 0
 
     def _calculate_checksum(self, length: int, data: list[int]) -> int:
@@ -343,9 +343,9 @@ class BeurerInstance:
             True if write was successful, False otherwise.
         """
         if not self._client or not self._client.is_connected:
-            LOGGER.warning("Device not connected, attempting reconnect")
+            LOGGER.debug("Device not connected, attempting reconnect for write")
             if not await self.connect():
-                LOGGER.error("Failed to reconnect for write")
+                LOGGER.debug("Failed to reconnect for write to %s", self._mac)
                 return False
 
         if not self._write_uuid:
@@ -361,11 +361,11 @@ class BeurerInstance:
             await self._client.write_gatt_char(self._write_uuid, data)
             return True
         except BleakError as err:
-            LOGGER.warning("BleakError during write to %s: %s", self._mac, err)
+            LOGGER.debug("BleakError during write to %s: %s", self._mac, err)
             await self.disconnect()
             return False
         except (TimeoutError, asyncio.TimeoutError) as err:
-            LOGGER.warning("Timeout during write to %s: %s", self._mac, err)
+            LOGGER.debug("Timeout during write to %s: %s", self._mac, err)
             await self.disconnect()
             return False
         except OSError as err:
@@ -698,7 +698,7 @@ class BeurerInstance:
         self._last_raw_notification = hex_str
 
         if len(data) < 10:
-            LOGGER.warning("Short notification (%d bytes), ignoring", len(data))
+            LOGGER.debug("Short notification (%d bytes), ignoring", len(data))
             return
 
         # Check payload length (byte 6) to determine packet type
@@ -857,13 +857,13 @@ class BeurerInstance:
                         self._hass, self._mac, connectable=False
                     )
                     if fresh_device:
-                        LOGGER.warning(
+                        LOGGER.debug(
                             "Device %s only available as non-connectable, trying anyway",
                             self._mac,
                         )
                         self._ble_device = fresh_device
                     else:
-                        LOGGER.warning(
+                        LOGGER.debug(
                             "Device %s not found by HA, using cached reference",
                             self._mac,
                         )
@@ -889,7 +889,7 @@ class BeurerInstance:
                         old_name = getattr(self._ble_device, "name", "?")
                         new_name = getattr(fresh, "name", "?")
                         if old_name != new_name:
-                            LOGGER.info(
+                            LOGGER.debug(
                                 "HA switched adapter: %s -> %s",
                                 old_name,
                                 new_name,

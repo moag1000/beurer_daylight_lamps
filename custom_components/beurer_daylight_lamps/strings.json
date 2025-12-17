@@ -11,6 +11,21 @@
         },
         "initialization_failed": {
             "message": "Failed to initialize {name}: {error}"
+        },
+        "timer_failed": {
+            "message": "Failed to set timer on {name}. Timer only works in RGB/color mode."
+        },
+        "timer_invalid_range": {
+            "message": "Timer must be between 1 and 240 minutes, got {minutes}."
+        },
+        "device_unavailable": {
+            "message": "Device {name} is not available. It may be out of Bluetooth range or powered off."
+        },
+        "write_failed": {
+            "message": "Failed to write to {name}. The Bluetooth connection may have been lost."
+        },
+        "reconnect_failed": {
+            "message": "Failed to reconnect to {name} after multiple attempts. Try moving the device closer or check if it's powered on."
         }
     },
     "config": {

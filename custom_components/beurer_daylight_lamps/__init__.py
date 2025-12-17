@@ -149,7 +149,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> bo
     device_initially_available = ble_device is not None
 
     if ble_device is None:
-        LOGGER.warning(
+        LOGGER.debug(
             "Device %s not currently visible via Bluetooth - will retry when seen",
             mac_address,
         )
@@ -262,7 +262,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> bo
         service_info: BluetoothServiceInfoBleak,
     ) -> None:
         """Handle device becoming unavailable."""
-        LOGGER.warning(
+        LOGGER.debug(
             "Device %s is no longer seen by any Bluetooth adapter",
             service_info.address,
         )
