@@ -22,11 +22,50 @@ This document describes the Bluetooth Low Energy (BLE) protocol used by Beurer T
 
 - **Header**: `0xFE 0xEF 0x0A` (fixed)
 - **Length**: Total packet length (payload_len + 7)
-- **Magic**: `0xAB 0xAA` (fixed)
+- **Magic**: `0xAB 0xAA` (commands to lamp)
 - **Payload Length**: Length of payload + 2
 - **Payload**: Command bytes (see below)
 - **Checksum**: XOR of (length + all payload bytes)
 - **Trailer**: `0x55 0x0D 0x0A` (fixed)
+
+### Response Packet (Lamp → Host)
+
+```
+┌──────┬──────┬──────┬────────┬──────┬──────┬─────────────┬───────────┬──────────┬──────┬──────┬──────┐
+│ 0xFE │ 0xEF │ 0x0A │ Length │ 0xAB │ 0xBB │ Payload Len │ Payload   │ Checksum │ 0x55 │ 0x0D │ 0x0A │
+└──────┴──────┴──────┴────────┴──────┴──────┴─────────────┴───────────┴──────────┴──────┴──────┴──────┘
+  Byte 0  1      2       3       4      5        6          7..N        N+1       N+2    N+3    N+4
+```
+
+- **Header**: `0xFE 0xEF 0x0A` (fixed, same as command)
+- **Length**: Total packet length
+- **Magic**: `0xAB 0xBB` (responses from lamp) ← **Different from commands!**
+- **Payload Length**: Length of payload + 2
+- **Payload**: Response data (version byte at offset 1, then status data)
+- **Checksum**: XOR of (length + all payload bytes)
+- **Trailer**: `0x55 0x0D 0x0A` (fixed)
+
+### Magic Byte Difference
+
+| Direction | Magic Bytes | Meaning |
+|-----------|-------------|---------|
+| Host → Lamp | `0xAB 0xAA` | Command packet |
+| Lamp → Host | `0xAB 0xBB` | Response/Notification packet |
+
+### Example Response: Device Off
+
+```
+feef0c09abbb04d0ff2b550d0a
+│    │ │ │  │ │ │ │ └────── Trailer (55 0D 0A)
+│    │ │ │  │ │ │ └──────── Checksum (0x2B)
+│    │ │ │  │ │ └────────── Version: 0xFF = Device OFF
+│    │ │ │  │ └──────────── Unknown (0xD0)
+│    │ │ │  └────────────── Payload Len (4)
+│    │ │ └───────────────── Magic: 0xAB 0xBB (response)
+│    │ └─────────────────── Unknown (0x09)
+│    └───────────────────── Length (0x0C = 12)
+└────────────────────────── Header (FE EF 0A)
+```
 
 ## Known Commands
 

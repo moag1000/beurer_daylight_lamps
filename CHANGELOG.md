@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.3] - 2025-12-17
+
+### Fixed
+- **HomeKit/Siri "Kaltweiß" aktiviert jetzt White-Modus**:
+  - Erkennt weiß-ähnliche RGB-Werte (alle >= 200, max Differenz 55) und nutzt nativen White-Modus
+  - Siri "Kaltweiß" sendet RGB statt Farbtemperatur - wird jetzt korrekt behandelt
+- **Effect wird jetzt immer zurückgesetzt beim Farbwechsel**:
+  - Behebt Bug wo Rainbow/Forest Effect aktiv blieb obwohl Farbe gesetzt wurde
+  - Effect wird nur zurückgesetzt wenn er nicht bereits "Off" ist (weniger BLE-Commands)
+
+### Changed
+- PROTOCOL.md: Dokumentiert Magic-Byte-Unterschied zwischen Commands (AB AA) und Responses (AB BB)
+
 ## [1.9.2] - 2025-12-17
 
 ### Added

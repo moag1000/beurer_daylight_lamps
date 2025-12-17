@@ -452,7 +452,11 @@ class BeurerInstance:
             self._color_on = True
             self._light_on = False
             self._available = True
-            # Clear effect when switching to color mode
+
+        # Always clear effect when setting a specific color
+        # This ensures no rainbow/animation overrides the color
+        if self._effect != "Off":
+            LOGGER.debug("Clearing effect (was: %s)", self._effect)
             self._effect = "Off"
             await self._send_packet([CMD_EFFECT, 0])
             await asyncio.sleep(COMMAND_DELAY)

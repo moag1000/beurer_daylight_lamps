@@ -196,6 +196,26 @@ class BeurerLight(LightEntity):
         # Get brightness value (use provided or keep current)
         brightness = kwargs.get(ATTR_BRIGHTNESS)
 
+        # Detect "white" RGB values from HomeKit/Siri
+        # When Siri says "cold white", HomeKit sends RGB (255,255,255) or similar
+        # high-white values instead of color temperature
+        if has_color and not has_color_temp and not has_effect:
+            rgb = kwargs[ATTR_RGB_COLOR]
+            r, g, b = rgb[0], rgb[1], rgb[2]
+            # Check if this is a "white-ish" color (all components high and similar)
+            min_val = min(r, g, b)
+            max_val = max(r, g, b)
+            # If all RGB values are >= 200 and within 55 of each other, treat as white
+            if min_val >= 200 and (max_val - min_val) <= 55:
+                LOGGER.debug(
+                    "Detected white-ish RGB %s from HomeKit, using native white mode",
+                    rgb
+                )
+                await self._instance.set_white(
+                    brightness if has_brightness else self._instance.white_brightness
+                )
+                return
+
         if has_color_temp:
             # Color temperature mode
             kelvin = kwargs[ATTR_COLOR_TEMP_KELVIN]
