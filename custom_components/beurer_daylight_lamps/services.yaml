@@ -41,8 +41,31 @@ send_raw_command:
           integration: beurer_daylight_lamps
     command:
       name: Command bytes
-      description: "Hex bytes to send (e.g., '33 01 1E'). Known commands: 30=status, 31=brightness, 32=color, 34=effect, 35=off, 37=mode. Unknown: 33, 36, 38, 39"
+      description: "Hex bytes to send (e.g., '33 01 1E'). Known commands: 30=status, 31=brightness, 32=color, 34=effect, 35=off, 37=mode, 3E=timer. Unknown: 33, 36, 38, 39"
       required: true
       example: "33 01 1E"
       selector:
         text:
+
+set_timer:
+  name: Set Timer
+  description: "Set an auto-off timer on the lamp. Timer only works in RGB mode - the lamp will automatically switch to RGB mode if needed. Range: 1-240 minutes."
+  fields:
+    device_id:
+      name: Device
+      description: The Beurer lamp device to control
+      required: true
+      selector:
+        device:
+          integration: beurer_daylight_lamps
+    minutes:
+      name: Minutes
+      description: "Timer duration in minutes (1-240). Popular values: 15, 21, 30, 60 minutes for therapy sessions."
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 240
+          step: 1
+          unit_of_measurement: "min"
+          mode: slider

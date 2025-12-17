@@ -109,6 +109,9 @@ class BeurerInstance:
         self._last_unknown_notification: str | None = None
         self._last_notification_version: int | None = None
         self._heartbeat_count: int = 0  # Counter for ACK/heartbeat packets
+        # Timer state tracking (discovered via reverse engineering)
+        self._timer_active: bool = False
+        self._timer_minutes: int | None = None
 
     def update_ble_device(self, device: BLEDevice) -> None:
         """Update the BLE device reference.
@@ -170,6 +173,16 @@ class BeurerInstance:
     def heartbeat_count(self) -> int:
         """Return the number of heartbeat/ACK packets received."""
         return self._heartbeat_count
+
+    @property
+    def timer_active(self) -> bool:
+        """Return True if timer is currently active."""
+        return self._timer_active
+
+    @property
+    def timer_minutes(self) -> int | None:
+        """Return remaining timer minutes if active."""
+        return self._timer_minutes if self._timer_active else None
 
     def _on_disconnect(self, client: BleakClient) -> None:
         """Handle disconnection callback."""

@@ -24,9 +24,11 @@ from .const import DOMAIN, LOGGER
 # Service constants
 SERVICE_APPLY_PRESET = "apply_preset"
 SERVICE_SEND_RAW = "send_raw_command"
+SERVICE_SET_TIMER = "set_timer"
 ATTR_DEVICE_ID = "device_id"
 ATTR_PRESET = "preset"
 ATTR_COMMAND = "command"
+ATTR_MINUTES = "minutes"
 
 # Preset definitions: {preset_name: (rgb, brightness, color_temp_kelvin, effect)}
 # brightness is 0-255, color_temp is Kelvin, effect is effect name or None
@@ -89,6 +91,13 @@ SERVICE_RAW_SCHEMA = vol.Schema(
     {
         vol.Required(ATTR_DEVICE_ID): cv.string,
         vol.Required(ATTR_COMMAND): cv.string,
+    }
+)
+
+SERVICE_TIMER_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_DEVICE_ID): cv.string,
+        vol.Required(ATTR_MINUTES): vol.All(vol.Coerce(int), vol.Range(min=1, max=240)),
     }
 )
 
@@ -402,6 +411,64 @@ async def _async_setup_services(hass: HomeAssistant) -> None:
         schema=SERVICE_RAW_SCHEMA,
     )
     LOGGER.debug("Registered service %s.%s", DOMAIN, SERVICE_SEND_RAW)
+
+    async def async_set_timer(call: ServiceCall) -> None:
+        """Set a timer on a Beurer lamp (requires RGB mode).
+
+        Timer will turn off the lamp after the specified minutes.
+        Note: Timer only works when the lamp is in RGB mode.
+        """
+        device_id = call.data[ATTR_DEVICE_ID]
+        minutes = call.data[ATTR_MINUTES]
+
+        LOGGER.info("TIMER: Setting %d minute timer on device %s", minutes, device_id)
+
+        # Find the config entry for this device
+        device_reg = dr.async_get(hass)
+        device = device_reg.async_get(device_id)
+
+        if not device:
+            LOGGER.error("TIMER: Device %s not found in registry", device_id)
+            return
+
+        # Find config entry for this device
+        config_entry_id = None
+        for entry_id in device.config_entries:
+            entry = hass.config_entries.async_get_entry(entry_id)
+            if entry and entry.domain == DOMAIN:
+                config_entry_id = entry_id
+                break
+
+        if not config_entry_id:
+            LOGGER.error("TIMER: No Beurer config entry found for device %s", device_id)
+            return
+
+        entry = hass.config_entries.async_get_entry(config_entry_id)
+        if not entry or not hasattr(entry, "runtime_data"):
+            LOGGER.error("TIMER: Config entry not ready for device %s", device_id)
+            return
+
+        instance: BeurerInstance = entry.runtime_data
+
+        # Timer command: 0x3E followed by minutes (1-240)
+        # Note: Timer only works in RGB mode
+        payload = [0x3E, minutes]
+
+        LOGGER.info("TIMER: Sending timer command %s to %s", [f"0x{b:02X}" for b in payload], instance.mac)
+
+        success = await instance._send_packet(payload)
+        if success:
+            LOGGER.info("TIMER: Set %d minute timer on %s", minutes, instance.mac)
+        else:
+            LOGGER.error("TIMER: Failed to set timer on %s", instance.mac)
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SET_TIMER,
+        async_set_timer,
+        schema=SERVICE_TIMER_SCHEMA,
+    )
+    LOGGER.debug("Registered service %s.%s", DOMAIN, SERVICE_SET_TIMER)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> bool:

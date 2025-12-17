@@ -5,7 +5,7 @@ import logging
 from typing import Final
 
 DOMAIN: Final = "beurer_daylight_lamps"
-VERSION: Final = "1.9.6"
+VERSION: Final = "1.10.0"
 LOGGER = logging.getLogger(__package__)
 
 # BLE Characteristic UUIDs
@@ -20,6 +20,7 @@ CMD_COLOR: Final = 0x32       # Set RGB color
 CMD_EFFECT: Final = 0x34      # Set light effect
 CMD_OFF: Final = 0x35         # Turn off
 CMD_MODE: Final = 0x37        # Set mode (white/rgb)
+CMD_TIMER: Final = 0x3E       # Set timer (minutes in hex, requires RGB mode)
 
 # Mode identifiers (second byte after CMD_MODE, CMD_BRIGHTNESS, CMD_OFF, CMD_STATUS)
 MODE_WHITE: Final = 0x01

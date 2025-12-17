@@ -98,9 +98,63 @@ If you have a Beurer daylight lamp (TL50, TL70, TL80, TL90, TL100):
 
 ## Reverse Engineering New Features
 
-The integration includes diagnostic sensors and services to help discover undocumented BLE commands.
+There are two main approaches to reverse engineering BLE commands:
+1. **In-app testing** with Home Assistant's diagnostic sensors and raw command service
+2. **Android BLE sniffing** to capture traffic from the official Beurer app
 
-### Diagnostic Sensors (disabled by default)
+### Method 1: Android BLE Sniffing (Recommended for Discovery)
+
+This method captures BLE traffic from the official Beurer "LightUp" app, which is useful for discovering commands you don't know about yet.
+
+#### Step 1: Enable BLE Logging on Android
+
+1. Enable **Developer Options** (Settings → About Phone → Tap Build Number 7x)
+2. Enable **Bluetooth HCI snoop log** in Developer Options
+3. Use the Beurer LightUp app extensively - test all features you want to reverse engineer
+
+#### Step 2: Generate and Extract Bug Report
+
+```bash
+# Connect your phone via USB and run:
+adb bugreport bugreport-$(date +%Y%m%d-%H%M%S).zip
+
+# Or on the phone: Settings → Developer Options → Take Bug Report
+```
+
+#### Step 3: Extract BLE Data with btsnooz.py
+
+The bug report contains BLE traffic in a compressed format. Use `btsnooz.py` to extract it:
+
+```bash
+# Download btsnooz.py from Android source
+curl -O https://raw.githubusercontent.com/nickchan-scmp/btsnooz.py/main/btsnooz.py
+chmod +x btsnooz.py
+
+# Extract the btsnoop log
+unzip bugreport-*.zip
+./btsnooz.py bugreport-*.txt > btsnoop.log
+
+# Open in Wireshark for analysis
+wireshark btsnoop.log
+```
+
+#### Step 4: Filter in Wireshark
+
+```
+# Filter for your lamp's MAC address
+bluetooth.src == "AA:BB:CC:DD:EE:FF" or bluetooth.dst == "AA:BB:CC:DD:EE:FF"
+
+# Or filter for ATT protocol only
+btatt
+```
+
+Look for patterns in the hex data - commands follow the format documented in `docs/PROTOCOL.md`.
+
+### Method 2: In-App Testing
+
+The integration includes diagnostic sensors and services for testing commands directly from Home Assistant.
+
+#### Diagnostic Sensors (disabled by default)
 
 Enable these in **Settings → Devices → Beurer Lamp → Entities** (show disabled):
 
@@ -131,12 +185,14 @@ data:
 
 ### Commands to Investigate
 
-| Cmd | Suspected Feature | Test Payloads |
-|-----|-------------------|---------------|
-| `0x33` | Timer | `33 01 0F` (15min?), `33 01 1E` (30min?) |
-| `0x36` | Sunrise/Sunset | `36 01`, `36 00` |
-| `0x38` | Unknown | `38 00`, `38 01` |
-| `0x39` | Unknown | `39 00`, `39 01` |
+| Cmd | Status | Notes |
+|-----|--------|-------|
+| `0x3E` | **Discovered** | Timer (1-240 min, RGB mode only) |
+| `0x33` | Unknown | Possibly unused |
+| `0x36` | Unknown | Suspected Sunrise/Sunset |
+| `0x38` | Unknown | Need investigation |
+| `0x39` | Unknown | Need investigation |
+| `0x3F` | Unknown | Possibly timer cancel |
 
 ### Example: Reverse Engineering the Timer
 

@@ -72,6 +72,19 @@ data:
   preset: daylight_therapy
 ```
 
+#### `beurer_daylight_lamps.set_timer`
+
+Set an auto-off timer (1-240 minutes). The lamp will turn off automatically after the specified time.
+
+```yaml
+service: beurer_daylight_lamps.set_timer
+data:
+  device_id: "abc123..."
+  minutes: 30
+```
+
+**Note**: Timer only works in RGB/color mode. Use it with color or effect settings.
+
 ## Installation
 
 > **Note:** Restart Home Assistant after installation.
@@ -236,7 +249,6 @@ automation:
 
 ## Not Supported
 
-- **Timer**: Built-in timer functionality is not yet reverse-engineered. Use Home Assistant automations instead.
 - **Sunrise/Sunset simulation**: Hardware feature not yet implemented. Use automations with gradual brightness changes.
 
 ## Diagnostics

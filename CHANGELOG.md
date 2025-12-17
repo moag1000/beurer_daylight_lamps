@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.10.0] - 2025-12-17
+
+### Added
+- **Timer-Funktion**: Auto-Off Timer (1-240 Minuten) via BLE-Protokoll
+  - Neuer Service `beurer_daylight_lamps.set_timer`
+  - Neue Number-Entity "Timer" mit Slider (1-240 min)
+  - Timer nur im RGB-Modus verfügbar (Entity zeigt "unavailable" im White-Modus)
+  - Timer-Kommando (0x3E) wurde durch Reverse Engineering entdeckt
+- **Android BLE Sniffing Dokumentation**: CONTRIBUTING.md erweitert mit btsnooz.py Anleitung
+- **Protokoll-Dokumentation**: Timer-Befehl in docs/PROTOCOL.md dokumentiert
+
+### Changed
+- Version auf 1.10.0 erhöht (Minor-Release wegen neuer Funktionalität)
+
 ## [1.9.6] - 2025-12-17
 
 ### Added

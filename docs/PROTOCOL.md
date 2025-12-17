@@ -109,15 +109,46 @@ feef0c11abbb0cd0020115007821ff00006c550d
 | 0x34 | Effect | `[index]` | Set effect 0-10 |
 | 0x35 | Off | `[mode]` | Turn off |
 | 0x37 | Mode | `[mode]` | Switch white/rgb mode |
+| 0x3E | Timer | `[minutes]` | Set auto-off timer (1-240 min, RGB mode only) |
+
+## Timer Command (0x3E)
+
+The timer command sets an auto-off timer. The lamp will automatically turn off after the specified number of minutes.
+
+**Important**: Timer only works when the lamp is in RGB mode (0x37 0x02).
+
+| Payload | Description |
+|---------|-------------|
+| `3E 0F` | 15 minute timer |
+| `3E 1E` | 30 minute timer |
+| `3E 3C` | 60 minute timer |
+| `3E 78` | 120 minute timer |
+
+### Example: Set 30-minute Timer
+
+```yaml
+# First ensure RGB mode
+service: beurer_daylight_lamps.send_raw_command
+data:
+  device_id: "abc123..."
+  command: "37 02"
+
+# Then set timer
+service: beurer_daylight_lamps.set_timer
+data:
+  device_id: "abc123..."
+  minutes: 30
+```
 
 ## Unknown Commands (To Reverse Engineer)
 
 | Cmd | Suspected Feature |
 |-----|-------------------|
-| 0x33 | Timer? |
+| 0x33 | Unknown |
 | 0x36 | Sunrise/Sunset? |
 | 0x38 | Unknown |
 | 0x39 | Unknown |
+| 0x3F | Timer cancel? |
 
 ## Notification Responses
 
