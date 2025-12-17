@@ -14,8 +14,9 @@ from custom_components.beurer_daylight_lamps.sensor import (
 
 def test_sensor_descriptions() -> None:
     """Test sensor descriptions are correctly defined."""
-    assert len(SENSOR_DESCRIPTIONS) == 1
+    assert len(SENSOR_DESCRIPTIONS) == 4
 
+    # RSSI sensor
     rssi_desc = SENSOR_DESCRIPTIONS[0]
     assert rssi_desc.key == "rssi"
     assert rssi_desc.device_class == SensorDeviceClass.SIGNAL_STRENGTH
@@ -23,6 +24,22 @@ def test_sensor_descriptions() -> None:
     assert rssi_desc.native_unit_of_measurement == SIGNAL_STRENGTH_DECIBELS_MILLIWATT
     assert rssi_desc.entity_category == EntityCategory.DIAGNOSTIC
     assert rssi_desc.entity_registry_enabled_default is False
+
+    # Diagnostic sensors for reverse engineering
+    raw_notif_desc = SENSOR_DESCRIPTIONS[1]
+    assert raw_notif_desc.key == "last_raw_notification"
+    assert raw_notif_desc.entity_category == EntityCategory.DIAGNOSTIC
+    assert raw_notif_desc.entity_registry_enabled_default is False
+
+    unknown_notif_desc = SENSOR_DESCRIPTIONS[2]
+    assert unknown_notif_desc.key == "last_unknown_notification"
+    assert unknown_notif_desc.entity_category == EntityCategory.DIAGNOSTIC
+    assert unknown_notif_desc.entity_registry_enabled_default is False
+
+    version_desc = SENSOR_DESCRIPTIONS[3]
+    assert version_desc.key == "last_notification_version"
+    assert version_desc.entity_category == EntityCategory.DIAGNOSTIC
+    assert version_desc.entity_registry_enabled_default is False
 
 
 def test_sensor_unique_id() -> None:

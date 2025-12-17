@@ -132,6 +132,9 @@ async def test_turn_on_with_brightness() -> None:
     mock_instance = MagicMock()
     mock_instance.mac = "AA:BB:CC:DD:EE:FF"
     mock_instance.set_white = AsyncMock()
+    mock_instance.set_color_brightness = AsyncMock()
+    mock_instance.color_mode = ColorMode.WHITE
+    mock_instance._color_on = False
 
     light = BeurerLight(mock_instance, "Test", "entry_id")
     await light.async_turn_on(**{ATTR_BRIGHTNESS: 128})
@@ -144,15 +147,14 @@ async def test_turn_on_with_rgb() -> None:
     """Test turn on with RGB color."""
     mock_instance = MagicMock()
     mock_instance.mac = "AA:BB:CC:DD:EE:FF"
-    mock_instance.set_color = AsyncMock()
-    mock_instance.set_color_brightness = AsyncMock()
+    mock_instance.set_color_with_brightness = AsyncMock()
     mock_instance.color_brightness = None  # No current brightness
     mock_instance._mode = ColorMode.WHITE
 
     light = BeurerLight(mock_instance, "Test", "entry_id")
     await light.async_turn_on(**{ATTR_RGB_COLOR: (255, 128, 64)})
 
-    mock_instance.set_color.assert_called_once_with((255, 128, 64))
+    mock_instance.set_color_with_brightness.assert_called_once_with((255, 128, 64), None)
 
 
 @pytest.mark.asyncio
