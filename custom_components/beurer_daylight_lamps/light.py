@@ -166,9 +166,14 @@ class BeurerLight(LightEntity):
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on the light."""
-        LOGGER.debug("Turn on with kwargs: %s, current_mode: %s", kwargs, self._instance.color_mode)
+        LOGGER.debug(
+            "Turn on with kwargs: %s, current_mode: %s, is_on: %s",
+            kwargs,
+            self._instance.color_mode,
+            self._instance.is_on,
+        )
 
-        # No parameters - just turn on
+        # No parameters - just turn on with current settings
         if not kwargs:
             await self._instance.turn_on()
             return
@@ -178,6 +183,9 @@ class BeurerLight(LightEntity):
         has_color_temp = ATTR_COLOR_TEMP_KELVIN in kwargs
         has_effect = ATTR_EFFECT in kwargs
         has_brightness = ATTR_BRIGHTNESS in kwargs
+
+        # Get brightness value (use provided or keep current)
+        brightness = kwargs.get(ATTR_BRIGHTNESS)
 
         if has_color_temp:
             # Color temperature mode - convert Kelvin to RGB
@@ -190,49 +198,41 @@ class BeurerLight(LightEntity):
             rgb = color_temperature_to_rgb(kelvin)
             LOGGER.debug("Color temp %dK -> RGB %s", kelvin, rgb)
 
-            self._instance.set_color_mode(ColorMode.RGB)
-            await self._instance.set_color(rgb)
+            # Use combined method to set color + brightness atomically
+            await self._instance.set_color_with_brightness(
+                rgb,
+                brightness if has_brightness else self._instance.color_brightness,
+            )
 
-            # Apply brightness if provided, otherwise keep current
-            if has_brightness:
-                await asyncio.sleep(0.2)
-                await self._instance.set_color_brightness(kwargs[ATTR_BRIGHTNESS])
-            elif self._instance.color_brightness:
-                await asyncio.sleep(0.2)
-                await self._instance.set_color_brightness(self._instance.color_brightness)
-
-        elif has_color or has_effect:
-            # RGB mode requested explicitly - clear color temp tracking
+        elif has_color:
+            # RGB color mode - clear color temp tracking
             self._color_temp_kelvin = None
-            self._instance.set_color_mode(ColorMode.RGB)
 
-            if has_color:
-                await self._instance.set_color(kwargs[ATTR_RGB_COLOR])
-                # If brightness is provided, use it; otherwise keep current brightness
-                if has_brightness:
-                    await asyncio.sleep(0.2)
-                    await self._instance.set_color_brightness(kwargs[ATTR_BRIGHTNESS])
-                elif self._instance.color_brightness:
-                    # Restore current brightness after color change
-                    await asyncio.sleep(0.2)
-                    await self._instance.set_color_brightness(self._instance.color_brightness)
+            # Use combined method to set color + brightness atomically
+            await self._instance.set_color_with_brightness(
+                kwargs[ATTR_RGB_COLOR],
+                brightness if has_brightness else self._instance.color_brightness,
+            )
 
-            if has_effect:
-                await asyncio.sleep(0.2)
-                await self._instance.set_effect(kwargs[ATTR_EFFECT])
+        elif has_effect:
+            # Effect mode - clear color temp tracking
+            self._color_temp_kelvin = None
+            await self._instance.set_effect(kwargs[ATTR_EFFECT])
+            # Apply brightness after effect if provided
+            if has_brightness:
+                await self._instance.set_color_brightness(brightness)
 
         elif has_brightness:
-            # Brightness only - keep current mode!
-            current_mode = self._instance.color_mode
-            if current_mode == ColorMode.RGB:
-                # Stay in RGB mode, just adjust brightness
-                await self._instance.set_color_brightness(kwargs[ATTR_BRIGHTNESS])
-            elif current_mode == ColorMode.COLOR_TEMP or self._color_temp_kelvin is not None:
-                # Color temp mode - stay in it, just adjust brightness
-                await self._instance.set_color_brightness(kwargs[ATTR_BRIGHTNESS])
+            # Brightness only - determine mode from current state
+            if self._color_temp_kelvin is not None:
+                # We're in color temp mode (simulated via RGB)
+                await self._instance.set_color_brightness(brightness)
+            elif self._instance.color_mode == ColorMode.RGB or self._instance._color_on:
+                # In RGB mode
+                await self._instance.set_color_brightness(brightness)
             else:
-                # White mode
-                await self._instance.set_white(kwargs[ATTR_BRIGHTNESS])
+                # In White mode
+                await self._instance.set_white(brightness)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off the light."""

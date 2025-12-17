@@ -384,19 +384,73 @@ class BeurerInstance:
         self._mode = ColorMode.RGB
         self._rgb_color = (r, g, b)
 
+        # Activate RGB mode if not already active
         if not self._color_on:
             LOGGER.debug("Activating RGB mode")
             await self._send_packet([CMD_MODE, MODE_RGB])
-            await asyncio.sleep(COMMAND_DELAY)
+            await asyncio.sleep(MODE_CHANGE_DELAY)
             self._color_on = True
             self._light_on = False
             self._available = True
+            # Only set effect to Off if we're switching modes
+            if self._effect != "Off":
+                self._effect = "Off"
+                await self._send_packet([CMD_EFFECT, 0])
+                await asyncio.sleep(COMMAND_DELAY)
+
+        await self._send_packet([CMD_COLOR, r, g, b])
+        await asyncio.sleep(COMMAND_DELAY)
+        await self._request_status()
+
+    async def set_color_with_brightness(
+        self,
+        rgb: tuple[int, int, int],
+        brightness: int | None = None,
+    ) -> None:
+        """Set RGB color and brightness atomically.
+
+        This method combines color and brightness setting to avoid
+        intermediate states where the color changes but brightness is wrong.
+
+        Args:
+            rgb: Tuple of (red, green, blue) values (0-255 each)
+            brightness: Brightness value (0-255), or None to keep current
+        """
+        r, g, b = int(rgb[0]), int(rgb[1]), int(rgb[2])
+        LOGGER.debug(
+            "Setting color R=%d, G=%d, B=%d with brightness=%s for %s",
+            r, g, b, brightness, self._mac
+        )
+
+        self._mode = ColorMode.RGB
+        self._rgb_color = (r, g, b)
+
+        # Activate RGB mode if not already active
+        if not self._color_on:
+            LOGGER.debug("Activating RGB mode")
+            await self._send_packet([CMD_MODE, MODE_RGB])
+            await asyncio.sleep(MODE_CHANGE_DELAY)
+            self._color_on = True
+            self._light_on = False
+            self._available = True
+            # Clear effect when switching to color mode
             self._effect = "Off"
             await self._send_packet([CMD_EFFECT, 0])
             await asyncio.sleep(COMMAND_DELAY)
 
+        # Set color
         await self._send_packet([CMD_COLOR, r, g, b])
         await asyncio.sleep(COMMAND_DELAY)
+
+        # Set brightness if provided
+        if brightness is not None:
+            brightness = int(brightness)
+            self._color_brightness = brightness
+            brightness_percent = max(0, min(100, int(brightness / 255 * 100)))
+            await self._send_packet([CMD_BRIGHTNESS, MODE_RGB, brightness_percent])
+            await asyncio.sleep(COMMAND_DELAY)
+
+        # Single status request at the end
         await self._request_status()
 
     async def set_color_brightness(
@@ -414,16 +468,21 @@ class BeurerInstance:
             brightness = int(brightness)  # Ensure integer for BLE protocol
 
         LOGGER.debug("Setting color brightness to %d for %s", brightness, self._mac)
-        self._mode = ColorMode.RGB
         self._color_brightness = brightness
 
-        if not _from_turn_on and (not self.is_on or not self._color_on):
-            await self.turn_on()
-            return
+        # If not in RGB mode, switch to it first
+        if not self._color_on:
+            LOGGER.debug("Switching to RGB mode for brightness change")
+            self._mode = ColorMode.RGB
+            await self._send_packet([CMD_MODE, MODE_RGB])
+            await asyncio.sleep(MODE_CHANGE_DELAY)
+            self._color_on = True
+            self._light_on = False
+            self._available = True
 
         brightness_percent = max(0, min(100, int(brightness / 255 * 100)))
         await self._send_packet([CMD_BRIGHTNESS, MODE_RGB, brightness_percent])
-        await asyncio.sleep(MODE_CHANGE_DELAY)
+        await asyncio.sleep(COMMAND_DELAY)
         await self._request_status()
 
     async def set_white(
@@ -444,10 +503,11 @@ class BeurerInstance:
         self._mode = ColorMode.WHITE
         self._brightness = intensity
 
+        # Switch to white mode if not already active
         if not self._light_on:
             LOGGER.debug("Activating white mode")
             await self._send_packet([CMD_MODE, MODE_WHITE])
-            await asyncio.sleep(COMMAND_DELAY)
+            await asyncio.sleep(MODE_CHANGE_DELAY)
             self._light_on = True
             self._color_on = False
             self._available = True
@@ -468,12 +528,17 @@ class BeurerInstance:
             effect = "Off"
 
         LOGGER.debug("Setting effect to '%s' for %s", effect, self._mac)
-        self._mode = ColorMode.RGB
         self._effect = effect
 
-        if not _from_turn_on and (not self.is_on or not self._color_on):
-            await self.turn_on()
-            return
+        # Switch to RGB mode if not already active (effects require RGB mode)
+        if not self._color_on:
+            LOGGER.debug("Activating RGB mode for effect")
+            self._mode = ColorMode.RGB
+            await self._send_packet([CMD_MODE, MODE_RGB])
+            await asyncio.sleep(MODE_CHANGE_DELAY)
+            self._color_on = True
+            self._light_on = False
+            self._available = True
 
         await self._send_packet([CMD_EFFECT, self._find_effect_index(effect)])
         await asyncio.sleep(EFFECT_DELAY)

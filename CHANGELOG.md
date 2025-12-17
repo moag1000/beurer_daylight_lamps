@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.0] - 2025-12-17
+
+### Fixed
+- **Moduswechsel führt nicht mehr zu falschen Helligkeiten/Farben**
+  - Neue `set_color_with_brightness()` Methode setzt Farbe und Helligkeit atomar
+  - Keine Race Conditions mehr zwischen Farb- und Helligkeitsänderungen
+  - Modus wird nur gewechselt wenn wirklich nötig
+- **Effect wird nur zurückgesetzt wenn nötig**: Beim Wechsel zu RGB wird Effect nur auf "Off" gesetzt wenn vorher ein anderer Effect aktiv war
+- **Brightness-Änderungen wechseln nicht mehr ungewollt den Modus**
+  - Brightness im RGB-Modus bleibt im RGB-Modus
+  - Brightness im White-Modus bleibt im White-Modus
+  - Color-Temp-Modus (simuliert) wird korrekt erkannt
+
+### Changed
+- **Vereinfachte light.py Logik**: Klarere Trennung zwischen Farbtemperatur, RGB-Farbe, Effect und reiner Helligkeit
+- **Weniger BLE-Befehle**: Kein unnötiges `turn_on()` mehr, Moduswechsel direkt in den Methoden
+
 ## [1.8.11] - 2025-12-17
 
 ### Changed
