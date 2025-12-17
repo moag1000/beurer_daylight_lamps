@@ -52,6 +52,14 @@ SENSOR_DESCRIPTIONS: tuple[SensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
     ),
+    SensorEntityDescription(
+        key="heartbeat_count",
+        name="Heartbeat count",
+        icon="mdi:heart-pulse",
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+    ),
 )
 
 
@@ -100,6 +108,8 @@ class BeurerSensor(SensorEntity):
             return self._instance.last_unknown_notification
         if key == "last_notification_version":
             return self._instance.last_notification_version
+        if key == "heartbeat_count":
+            return self._instance.heartbeat_count
         return None
 
     @property

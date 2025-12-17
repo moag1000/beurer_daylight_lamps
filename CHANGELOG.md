@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.6] - 2025-12-17
+
+### Added
+- **Heartbeat Counter Sensor**: Neuer Diagnose-Sensor zählt ACK/Heartbeat-Pakete
+  - Hilft beim Monitoring der BLE-Verbindungsqualität
+  - `state_class: total_increasing` für Statistiken
+  - Standardmäßig deaktiviert (Entity-Registry)
+
+### Fixed
+- **Heartbeat-Pakete markieren Gerät als verfügbar**: Wenn nur Heartbeats empfangen werden, wird das Gerät jetzt korrekt als "available" markiert
+- **Test-Fixes für Notification-Parsing**: Tests setzen jetzt korrekt das payload_len Byte (Position 6)
+
 ## [1.9.5] - 2025-12-17
 
 ### Fixed

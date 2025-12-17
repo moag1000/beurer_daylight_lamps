@@ -108,6 +108,7 @@ class BeurerInstance:
         self._last_raw_notification: str | None = None
         self._last_unknown_notification: str | None = None
         self._last_notification_version: int | None = None
+        self._heartbeat_count: int = 0  # Counter for ACK/heartbeat packets
 
     def update_ble_device(self, device: BLEDevice) -> None:
         """Update the BLE device reference.
@@ -164,6 +165,11 @@ class BeurerInstance:
     def last_notification_version(self) -> int | None:
         """Return the version byte of the last notification."""
         return self._last_notification_version
+
+    @property
+    def heartbeat_count(self) -> int:
+        """Return the number of heartbeat/ACK packets received."""
+        return self._heartbeat_count
 
     def _on_disconnect(self, client: BleakClient) -> None:
         """Handle disconnection callback."""
@@ -673,7 +679,14 @@ class BeurerInstance:
                 "Short payload (%d bytes), likely ACK/heartbeat - not updating state",
                 payload_len
             )
-            # Still store for diagnostics but don't change state
+            # Use heartbeat to confirm device is still alive
+            self._last_seen = time.time()
+            self._heartbeat_count += 1
+            # Mark as available since we're receiving communication from the device
+            if not self._available:
+                self._available = True
+            # Trigger update to refresh heartbeat counter sensor
+            await self._trigger_update()
             return
 
         version = data[8]

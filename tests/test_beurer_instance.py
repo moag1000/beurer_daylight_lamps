@@ -231,7 +231,10 @@ class TestNotificationParsing:
         char = MagicMock()
 
         # White mode notification: version=1, on=1, brightness=50%
+        # Packet structure: [header...][len][magic][payload_len][payload...][checksum][trailer]
+        # Byte 6 = payload_len: 0x08 for white status, 0x0C for RGB status
         data = bytearray([0x00] * 11)
+        data[6] = 0x08  # payload_len = 0x08 (white status packet)
         data[8] = 1  # version = white mode
         data[9] = 1  # on
         data[10] = 50  # brightness 50%
@@ -255,7 +258,9 @@ class TestNotificationParsing:
         char = MagicMock()
 
         # RGB mode notification: version=2, on=1, brightness=100%, rgb=(255,128,64), effect=2
+        # Byte 6 = payload_len: 0x0C for RGB status packet
         data = bytearray([0x00] * 17)
+        data[6] = 0x0C  # payload_len = 0x0C (RGB status packet)
         data[8] = 2  # version = RGB mode
         data[9] = 1  # on
         data[10] = 100  # brightness 100%
@@ -287,7 +292,9 @@ class TestNotificationParsing:
         char = MagicMock()
 
         # Device off notification: version=255
+        # Byte 6 = payload_len: 0x08 for status packet (white mode structure)
         data = bytearray([0x00] * 10)
+        data[6] = 0x08  # payload_len = 0x08 (status packet)
         data[8] = 255  # version = device off
 
         await instance._handle_notification(char, data)

@@ -14,7 +14,7 @@ from custom_components.beurer_daylight_lamps.sensor import (
 
 def test_sensor_descriptions() -> None:
     """Test sensor descriptions are correctly defined."""
-    assert len(SENSOR_DESCRIPTIONS) == 4
+    assert len(SENSOR_DESCRIPTIONS) == 5
 
     # RSSI sensor
     rssi_desc = SENSOR_DESCRIPTIONS[0]
@@ -40,6 +40,13 @@ def test_sensor_descriptions() -> None:
     assert version_desc.key == "last_notification_version"
     assert version_desc.entity_category == EntityCategory.DIAGNOSTIC
     assert version_desc.entity_registry_enabled_default is False
+
+    # Heartbeat counter sensor
+    heartbeat_desc = SENSOR_DESCRIPTIONS[4]
+    assert heartbeat_desc.key == "heartbeat_count"
+    assert heartbeat_desc.state_class == SensorStateClass.TOTAL_INCREASING
+    assert heartbeat_desc.entity_category == EntityCategory.DIAGNOSTIC
+    assert heartbeat_desc.entity_registry_enabled_default is False
 
 
 def test_sensor_unique_id() -> None:
