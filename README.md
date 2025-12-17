@@ -220,26 +220,15 @@ The following effects are available (matching the Beurer LightUp app):
 
 ## Blueprints
 
-Three ready-to-use blueprints are included for common lighting scenarios:
-
-| Blueprint | Use Case |
-|-----------|----------|
-| **Morning Light Therapy** | Wake-up with sunrise simulation + therapy session |
-| **Evening Wind Down** | Gradual dimming at sunset for better sleep |
-| **Focus Work Session** | Alerting light for productivity with break reminders |
-
-### Installation
-
-1. Copy the `blueprints/automation/` folder contents to your Home Assistant's `config/blueprints/automation/beurer_daylight_lamps/` folder
-2. Restart Home Assistant or reload automations
-3. Go to **Settings** → **Automations & Scenes** → **Blueprints**
-4. Find the Beurer blueprints and click "Create Automation"
+Three ready-to-use blueprints for common lighting scenarios. **Click the badge to import directly into Home Assistant!**
 
 ### Morning Light Therapy
 
-Simulates a natural sunrise followed by full light therapy.
+[![Import Blueprint](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fmoag1000%2Fbeurer_daylight_lamps%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fbeurer_daylight_lamps%2Fmorning_light_therapy.yaml)
 
-- Gradual warm-to-cool transition (2700K → 5300K)
+Wake up naturally with a sunrise simulation followed by bright light therapy.
+
+- Gradual warm-to-cool transition (2700K -> 5300K)
 - Configurable sunrise duration (0-30 min)
 - Therapy session at full brightness (10-60 min)
 - Schedule: Workdays, weekends, or every day
@@ -247,7 +236,9 @@ Simulates a natural sunrise followed by full light therapy.
 
 ### Evening Wind Down
 
-Prepares you for sleep by gradually dimming to warm light.
+[![Import Blueprint](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fmoag1000%2Fbeurer_daylight_lamps%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fbeurer_daylight_lamps%2Fevening_wind_down.yaml)
+
+Prepare for sleep by gradually dimming to warm light.
 
 - Triggers at sunset or fixed time
 - Gradual dimming over 15-120 minutes
@@ -256,12 +247,22 @@ Prepares you for sleep by gradually dimming to warm light.
 
 ### Focus Work Session
 
-Optimizes your environment for concentration.
+[![Import Blueprint](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fmoag1000%2Fbeurer_daylight_lamps%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fbeurer_daylight_lamps%2Ffocus_work_session.yaml)
+
+Optimize your work environment with alerting cool light.
 
 - Cool, alerting light (4000K-6500K configurable)
 - Optional Pomodoro-style break reminders
 - Work sessions from 15-120 minutes
 - End with relaxing light or turn off
+
+### Manual Installation
+
+Alternatively, copy the blueprint files manually:
+
+1. Download the YAML files from [`blueprints/automation/beurer_daylight_lamps/`](blueprints/automation/beurer_daylight_lamps/)
+2. Copy to `config/blueprints/automation/beurer_daylight_lamps/` in your Home Assistant
+3. Restart Home Assistant or reload automations
 
 ## Example Automations
 

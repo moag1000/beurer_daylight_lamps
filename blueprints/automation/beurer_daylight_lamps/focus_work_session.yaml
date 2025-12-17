@@ -1,0 +1,209 @@
+blueprint:
+  name: Focus Work Session
+  description: >
+    Optimize your work environment with alerting cool light for better concentration.
+
+    This blueprint sets bright, cool light to help you stay focused during work sessions.
+    Optionally enable Pomodoro-style break reminders with a brief light dim.
+  domain: automation
+  source_url: https://github.com/moag1000/beurer_daylight_lamps/blob/main/blueprints/automation/beurer_daylight_lamps/focus_work_session.yaml
+  author: moag1000
+  input:
+    beurer_light:
+      name: Beurer Lamp
+      description: Select your Beurer daylight therapy lamp
+      selector:
+        entity:
+          filter:
+            - integration: beurer_daylight_lamps
+              domain: light
+
+    trigger_entity:
+      name: Trigger (Optional)
+      description: Entity that starts the focus session (e.g., input_boolean, button)
+      default: []
+      selector:
+        entity:
+
+    manual_trigger:
+      name: Manual Time Trigger
+      description: Alternatively, start at a fixed time
+      default: "09:00:00"
+      selector:
+        time:
+
+    use_time_trigger:
+      name: Use Time Trigger
+      description: Enable to use the time trigger instead of entity trigger
+      default: false
+      selector:
+        boolean:
+
+    focus_brightness:
+      name: Focus Brightness
+      description: Brightness level during focus work
+      default: 90
+      selector:
+        number:
+          min: 50
+          max: 100
+          unit_of_measurement: "%"
+          mode: slider
+
+    color_temperature:
+      name: Color Temperature
+      description: Light temperature (higher = cooler/more alerting)
+      default: 5000
+      selector:
+        number:
+          min: 4000
+          max: 6500
+          unit_of_measurement: K
+          mode: slider
+
+    session_duration:
+      name: Session Duration
+      description: Total focus session length
+      default: 60
+      selector:
+        number:
+          min: 15
+          max: 120
+          unit_of_measurement: minutes
+          mode: slider
+
+    enable_breaks:
+      name: Enable Break Reminders
+      description: Dim light briefly every 25 minutes as a break reminder
+      default: false
+      selector:
+        boolean:
+
+    break_interval:
+      name: Break Interval
+      description: Minutes between break reminders (Pomodoro = 25)
+      default: 25
+      selector:
+        number:
+          min: 15
+          max: 45
+          unit_of_measurement: minutes
+          mode: slider
+
+    end_action:
+      name: After Session
+      description: What should happen after the focus session?
+      default: "relax"
+      selector:
+        select:
+          options:
+            - label: "Switch to relaxing light"
+              value: "relax"
+            - label: "Turn off"
+              value: "off"
+            - label: "Stay on (focus light)"
+              value: "stay_on"
+
+variables:
+  light_entity: !input beurer_light
+  focus_bright: !input focus_brightness
+  focus_temp: !input color_temperature
+  session_mins: !input session_duration
+  breaks_enabled: !input enable_breaks
+  break_mins: !input break_interval
+  end_behavior: !input end_action
+  use_time: !input use_time_trigger
+
+trigger:
+  - platform: state
+    entity_id: !input trigger_entity
+    to: "on"
+    id: entity_trigger
+  - platform: time
+    at: !input manual_trigger
+    id: time_trigger
+
+condition:
+  - condition: or
+    conditions:
+      - condition: and
+        conditions:
+          - condition: template
+            value_template: "{{ not use_time }}"
+          - condition: trigger
+            id: entity_trigger
+      - condition: and
+        conditions:
+          - condition: template
+            value_template: "{{ use_time }}"
+          - condition: trigger
+            id: time_trigger
+
+action:
+  # Start focus light
+  - service: light.turn_on
+    target:
+      entity_id: "{{ light_entity }}"
+    data:
+      brightness_pct: "{{ focus_bright }}"
+      color_temp_kelvin: "{{ focus_temp }}"
+
+  # Main session with optional breaks
+  - choose:
+      # With break reminders
+      - conditions:
+          - condition: template
+            value_template: "{{ breaks_enabled }}"
+        sequence:
+          - variables:
+              total_breaks: "{{ (session_mins / break_mins) | int }}"
+          - repeat:
+              count: "{{ total_breaks }}"
+              sequence:
+                # Work period
+                - delay:
+                    minutes: "{{ break_mins }}"
+                # Break reminder: dim briefly
+                - service: light.turn_on
+                  target:
+                    entity_id: "{{ light_entity }}"
+                  data:
+                    brightness_pct: 30
+                    color_temp_kelvin: 3500
+                - delay:
+                    seconds: 10
+                # Back to focus
+                - service: light.turn_on
+                  target:
+                    entity_id: "{{ light_entity }}"
+                  data:
+                    brightness_pct: "{{ focus_bright }}"
+                    color_temp_kelvin: "{{ focus_temp }}"
+
+    # Without breaks - just wait
+    default:
+      - delay:
+          minutes: "{{ session_mins }}"
+
+  # End action
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ end_behavior == 'off' }}"
+        sequence:
+          - service: light.turn_off
+            target:
+              entity_id: "{{ light_entity }}"
+
+      - conditions:
+          - condition: template
+            value_template: "{{ end_behavior == 'relax' }}"
+        sequence:
+          - service: light.turn_on
+            target:
+              entity_id: "{{ light_entity }}"
+            data:
+              brightness_pct: 50
+              color_temp_kelvin: 2700
+
+mode: single

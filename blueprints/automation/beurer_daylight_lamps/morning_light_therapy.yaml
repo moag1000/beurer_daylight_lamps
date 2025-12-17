@@ -1,0 +1,164 @@
+blueprint:
+  name: Morning Light Therapy
+  description: >
+    Wake up naturally with a sunrise simulation followed by bright light therapy.
+
+    This blueprint gradually increases brightness and color temperature to simulate
+    a natural sunrise, then maintains full brightness for your therapy session.
+
+    **Note**: This is a lifestyle/wellness feature, not a medical device.
+  domain: automation
+  source_url: https://github.com/moag1000/beurer_daylight_lamps/blob/main/blueprints/automation/beurer_daylight_lamps/morning_light_therapy.yaml
+  author: moag1000
+  input:
+    beurer_light:
+      name: Beurer Lamp
+      description: Select your Beurer daylight therapy lamp
+      selector:
+        entity:
+          filter:
+            - integration: beurer_daylight_lamps
+              domain: light
+
+    wake_time:
+      name: Wake-up Time
+      description: When should the sunrise simulation start?
+      default: "06:30:00"
+      selector:
+        time:
+
+    sunrise_duration:
+      name: Sunrise Duration
+      description: How long should the sunrise simulation take? (0 = skip sunrise, start with full brightness)
+      default: 15
+      selector:
+        number:
+          min: 0
+          max: 30
+          unit_of_measurement: minutes
+          mode: slider
+
+    therapy_duration:
+      name: Therapy Duration
+      description: How long to maintain full brightness after sunrise?
+      default: 30
+      selector:
+        number:
+          min: 10
+          max: 60
+          unit_of_measurement: minutes
+          mode: slider
+
+    schedule_days:
+      name: Schedule
+      description: Which days should this run?
+      default: workdays
+      selector:
+        select:
+          options:
+            - label: "Workdays only"
+              value: "workdays"
+            - label: "Weekends only"
+              value: "weekends"
+            - label: "Every day"
+              value: "daily"
+
+    end_action:
+      name: After Therapy
+      description: What should happen after the therapy session?
+      default: "off"
+      selector:
+        select:
+          options:
+            - label: "Turn off"
+              value: "off"
+            - label: "Stay on (full brightness)"
+              value: "stay_on"
+            - label: "Switch to reading light"
+              value: "reading"
+
+variables:
+  light_entity: !input beurer_light
+  sunrise_mins: !input sunrise_duration
+  therapy_mins: !input therapy_duration
+  schedule: !input schedule_days
+  end_behavior: !input end_action
+
+trigger:
+  - platform: time
+    at: !input wake_time
+
+condition:
+  - condition: template
+    value_template: >
+      {% set day = now().weekday() %}
+      {% if schedule == 'workdays' %}
+        {{ day < 5 }}
+      {% elif schedule == 'weekends' %}
+        {{ day >= 5 }}
+      {% else %}
+        {{ true }}
+      {% endif %}
+
+action:
+  # Phase 1: Sunrise simulation (if duration > 0)
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ sunrise_mins > 0 }}"
+        sequence:
+          # Start with warm, dim light
+          - service: light.turn_on
+            target:
+              entity_id: "{{ light_entity }}"
+            data:
+              brightness_pct: 5
+              color_temp_kelvin: 2700
+
+          # Gradual increase over sunrise duration
+          - repeat:
+              count: "{{ (sunrise_mins * 2) | int }}"
+              sequence:
+                - delay:
+                    seconds: 30
+                - service: light.turn_on
+                  target:
+                    entity_id: "{{ light_entity }}"
+                  data:
+                    brightness_pct: "{{ 5 + (95 * (repeat.index / (sunrise_mins * 2))) | int }}"
+                    color_temp_kelvin: "{{ (2700 + (2600 * (repeat.index / (sunrise_mins * 2)))) | int }}"
+
+  # Phase 2: Full therapy brightness
+  - service: light.turn_on
+    target:
+      entity_id: "{{ light_entity }}"
+    data:
+      brightness_pct: 100
+      color_temp_kelvin: 5300
+
+  # Wait for therapy duration
+  - delay:
+      minutes: "{{ therapy_mins }}"
+
+  # Phase 3: End action
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ end_behavior == 'off' }}"
+        sequence:
+          - service: light.turn_off
+            target:
+              entity_id: "{{ light_entity }}"
+
+      - conditions:
+          - condition: template
+            value_template: "{{ end_behavior == 'reading' }}"
+        sequence:
+          - service: light.turn_on
+            target:
+              entity_id: "{{ light_entity }}"
+            data:
+              brightness_pct: 80
+              color_temp_kelvin: 4000
+
+mode: single

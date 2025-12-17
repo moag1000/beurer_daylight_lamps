@@ -1,0 +1,171 @@
+blueprint:
+  name: Evening Wind Down
+  description: >
+    Gradually dim your Beurer lamp in the evening to prepare for sleep.
+
+    This blueprint reduces brightness and shifts to warm light over a configurable
+    duration, helping your body prepare for rest by reducing blue light exposure.
+  domain: automation
+  source_url: https://github.com/moag1000/beurer_daylight_lamps/blob/main/blueprints/automation/beurer_daylight_lamps/evening_wind_down.yaml
+  author: moag1000
+  input:
+    beurer_light:
+      name: Beurer Lamp
+      description: Select your Beurer daylight therapy lamp
+      selector:
+        entity:
+          filter:
+            - integration: beurer_daylight_lamps
+              domain: light
+
+    trigger_type:
+      name: When to Start
+      description: Choose when the wind-down should begin
+      default: sunset
+      selector:
+        select:
+          options:
+            - label: "At sunset"
+              value: "sunset"
+            - label: "At a fixed time"
+              value: "fixed"
+
+    fixed_time:
+      name: Fixed Time (if selected above)
+      description: Start time when using fixed schedule
+      default: "20:00:00"
+      selector:
+        time:
+
+    sunset_offset:
+      name: Sunset Offset
+      description: Minutes before/after sunset (negative = before)
+      default: 0
+      selector:
+        number:
+          min: -120
+          max: 120
+          unit_of_measurement: minutes
+          mode: slider
+
+    wind_down_duration:
+      name: Wind-down Duration
+      description: How long should the dimming take?
+      default: 60
+      selector:
+        number:
+          min: 15
+          max: 120
+          unit_of_measurement: minutes
+          mode: slider
+
+    start_brightness:
+      name: Starting Brightness
+      description: Brightness at the beginning of wind-down
+      default: 80
+      selector:
+        number:
+          min: 30
+          max: 100
+          unit_of_measurement: "%"
+          mode: slider
+
+    end_brightness:
+      name: Ending Brightness
+      description: Brightness at the end (0 = turn off)
+      default: 10
+      selector:
+        number:
+          min: 0
+          max: 50
+          unit_of_measurement: "%"
+          mode: slider
+
+    only_if_on:
+      name: Only if Already On
+      description: Only start wind-down if the lamp is already on
+      default: true
+      selector:
+        boolean:
+
+variables:
+  light_entity: !input beurer_light
+  trigger_mode: !input trigger_type
+  duration_mins: !input wind_down_duration
+  brightness_start: !input start_brightness
+  brightness_end: !input end_brightness
+  check_state: !input only_if_on
+
+trigger:
+  - platform: sun
+    event: sunset
+    offset: !input sunset_offset
+    id: sunset_trigger
+  - platform: time
+    at: !input fixed_time
+    id: time_trigger
+
+condition:
+  # Check trigger type matches
+  - condition: or
+    conditions:
+      - condition: and
+        conditions:
+          - condition: template
+            value_template: "{{ trigger_mode == 'sunset' }}"
+          - condition: trigger
+            id: sunset_trigger
+      - condition: and
+        conditions:
+          - condition: template
+            value_template: "{{ trigger_mode == 'fixed' }}"
+          - condition: trigger
+            id: time_trigger
+
+  # Check if lamp should be on (if setting enabled)
+  - condition: or
+    conditions:
+      - condition: template
+        value_template: "{{ not check_state }}"
+      - condition: state
+        entity_id: !input beurer_light
+        state: "on"
+
+action:
+  # Set initial warm light
+  - service: light.turn_on
+    target:
+      entity_id: "{{ light_entity }}"
+    data:
+      brightness_pct: "{{ brightness_start }}"
+      color_temp_kelvin: 2700
+
+  # Calculate steps (one every 2 minutes)
+  - variables:
+      steps: "{{ (duration_mins / 2) | int }}"
+      brightness_step: "{{ ((brightness_start - brightness_end) / steps) | float }}"
+
+  # Gradual dimming
+  - repeat:
+      count: "{{ steps }}"
+      sequence:
+        - delay:
+            minutes: 2
+        - service: light.turn_on
+          target:
+            entity_id: "{{ light_entity }}"
+          data:
+            brightness_pct: "{{ (brightness_start - (brightness_step * repeat.index)) | int | max(brightness_end) }}"
+            color_temp_kelvin: 2700
+
+  # Final action: turn off if end brightness is 0
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ brightness_end == 0 }}"
+        sequence:
+          - service: light.turn_off
+            target:
+              entity_id: "{{ light_entity }}"
+
+mode: single
