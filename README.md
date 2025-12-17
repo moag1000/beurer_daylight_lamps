@@ -7,6 +7,12 @@
 
 Home Assistant custom integration for Beurer daylight therapy lamps via Bluetooth Low Energy (BLE).
 
+## Motivation
+I noticed that most integrations were fragile. After fiddling for some time I found out that one of the main issues is that the integrations were not reviewed for new developments in Home assistant itself. 
+In addition to that, it bugged me, that no integration had the timer feature like the Beurer LightUp App so it was not possible to integrate it into automations with the already built-in device functions. I managed to sniff BLE traffic between the Beurer LightUp app and the TL100 and let AI sift through it (I was way too lazy to use wireshark). So now I got it working. As far as I can say, it's way more stable than the successors I have forked.
+
+I heavily used claude as I did in other projects but focused on keeping it tight and close to Home Assitant standards and guidelines and general coding guidelines. It may still contain bad code, so feel free to review and submit issues or PRs.
+
 ## Supported Devices
 
 | Model | Status | Notes |
