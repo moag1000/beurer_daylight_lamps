@@ -345,15 +345,17 @@ async def _async_setup_services(hass: HomeAssistant) -> None:
         device_id = call.data[ATTR_DEVICE_ID]
         command_str = call.data[ATTR_COMMAND]
 
-        LOGGER.info("Sending raw command '%s' to device %s", command_str, device_id)
+        LOGGER.warning("RAW_CMD: Sending '%s' to device %s", command_str, device_id)
 
         # Find the config entry for this device
         device_reg = dr.async_get(hass)
         device = device_reg.async_get(device_id)
 
         if not device:
-            LOGGER.error("Device %s not found", device_id)
+            LOGGER.error("RAW_CMD: Device %s not found in registry", device_id)
             return
+
+        LOGGER.warning("RAW_CMD: Found device: %s", device.name)
 
         # Find config entry for this device
         config_entry_id = None
@@ -364,15 +366,16 @@ async def _async_setup_services(hass: HomeAssistant) -> None:
                 break
 
         if not config_entry_id:
-            LOGGER.error("No Beurer config entry found for device %s", device_id)
+            LOGGER.error("RAW_CMD: No Beurer config entry found for device %s", device_id)
             return
 
         entry = hass.config_entries.async_get_entry(config_entry_id)
         if not entry or not hasattr(entry, "runtime_data"):
-            LOGGER.error("Config entry not ready for device %s", device_id)
+            LOGGER.error("RAW_CMD: Config entry not ready for device %s", device_id)
             return
 
         instance: BeurerInstance = entry.runtime_data
+        LOGGER.warning("RAW_CMD: Got instance for MAC %s, connected: %s", instance.mac, instance.is_connected)
 
         # Parse hex bytes from command string (e.g., "33 01 1E" or "33011E")
         try:
@@ -380,17 +383,17 @@ async def _async_setup_services(hass: HomeAssistant) -> None:
             hex_str = command_str.replace(" ", "").replace("0x", "")
             payload = [int(hex_str[i:i+2], 16) for i in range(0, len(hex_str), 2)]
         except ValueError as err:
-            LOGGER.error("Invalid hex command '%s': %s", command_str, err)
+            LOGGER.error("RAW_CMD: Invalid hex command '%s': %s", command_str, err)
             return
 
-        LOGGER.info("Parsed payload: %s", [f"0x{b:02X}" for b in payload])
+        LOGGER.warning("RAW_CMD: Parsed payload: %s", [f"0x{b:02X}" for b in payload])
 
         # Send the raw command using the instance's internal method
         success = await instance._send_packet(payload)
         if success:
-            LOGGER.info("Raw command sent successfully to %s", instance.mac)
+            LOGGER.warning("RAW_CMD: Sent successfully to %s", instance.mac)
         else:
-            LOGGER.error("Failed to send raw command to %s", instance.mac)
+            LOGGER.error("RAW_CMD: Failed to send to %s", instance.mac)
 
     hass.services.async_register(
         DOMAIN,

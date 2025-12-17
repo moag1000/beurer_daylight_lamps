@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.4] - 2025-12-17
+
+### Fixed
+- **send_raw_command Service Logging**: Logs erscheinen jetzt als WARNING statt INFO
+  - Alle RAW_CMD Logs sind nun ohne Debug-Modus sichtbar
+  - Zeigt Device-Name, MAC, Verbindungsstatus und Ergebnis
+
 ## [1.9.3] - 2025-12-17
 
 ### Fixed
