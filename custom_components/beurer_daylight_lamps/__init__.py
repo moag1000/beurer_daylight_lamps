@@ -287,6 +287,41 @@ async def async_setup_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> bo
     return True
 
 
+def _get_instance_for_device(
+    hass: HomeAssistant, device_id: str, service_name: str = ""
+) -> BeurerInstance | None:
+    """Get BeurerInstance for a device ID.
+
+    Args:
+        hass: Home Assistant instance
+        device_id: Device ID from service call
+        service_name: Name of service for logging (optional)
+
+    Returns:
+        BeurerInstance if found, None otherwise
+    """
+    log_prefix = f"{service_name}: " if service_name else ""
+
+    device_reg = dr.async_get(hass)
+    device = device_reg.async_get(device_id)
+
+    if not device:
+        LOGGER.error("%sDevice %s not found", log_prefix, device_id)
+        return None
+
+    # Find config entry for this device
+    for entry_id in device.config_entries:
+        entry = hass.config_entries.async_get_entry(entry_id)
+        if entry and entry.domain == DOMAIN:
+            if hasattr(entry, "runtime_data"):
+                return entry.runtime_data
+            LOGGER.error("%sConfig entry not ready for device %s", log_prefix, device_id)
+            return None
+
+    LOGGER.error("%sNo Beurer config entry found for device %s", log_prefix, device_id)
+    return None
+
+
 async def _async_setup_services(hass: HomeAssistant) -> None:
     """Set up Beurer services."""
     if hass.services.has_service(DOMAIN, SERVICE_APPLY_PRESET):
@@ -299,32 +334,9 @@ async def _async_setup_services(hass: HomeAssistant) -> None:
 
         LOGGER.debug("Applying preset '%s' to device %s", preset_name, device_id)
 
-        # Find the config entry for this device
-        device_reg = dr.async_get(hass)
-        device = device_reg.async_get(device_id)
-
-        if not device:
-            LOGGER.error("Device %s not found", device_id)
+        instance = _get_instance_for_device(hass, device_id, "PRESET")
+        if not instance:
             return
-
-        # Find config entry for this device
-        config_entry_id = None
-        for entry_id in device.config_entries:
-            entry = hass.config_entries.async_get_entry(entry_id)
-            if entry and entry.domain == DOMAIN:
-                config_entry_id = entry_id
-                break
-
-        if not config_entry_id:
-            LOGGER.error("No Beurer config entry found for device %s", device_id)
-            return
-
-        entry = hass.config_entries.async_get_entry(config_entry_id)
-        if not entry or not hasattr(entry, "runtime_data"):
-            LOGGER.error("Config entry not ready for device %s", device_id)
-            return
-
-        instance: BeurerInstance = entry.runtime_data
         preset = PRESETS[preset_name]
 
         # Apply preset settings
@@ -354,53 +366,25 @@ async def _async_setup_services(hass: HomeAssistant) -> None:
         device_id = call.data[ATTR_DEVICE_ID]
         command_str = call.data[ATTR_COMMAND]
 
-        LOGGER.warning("RAW_CMD: Sending '%s' to device %s", command_str, device_id)
+        LOGGER.debug("RAW_CMD: Sending '%s' to device %s", command_str, device_id)
 
-        # Find the config entry for this device
-        device_reg = dr.async_get(hass)
-        device = device_reg.async_get(device_id)
-
-        if not device:
-            LOGGER.error("RAW_CMD: Device %s not found in registry", device_id)
+        instance = _get_instance_for_device(hass, device_id, "RAW_CMD")
+        if not instance:
             return
-
-        LOGGER.warning("RAW_CMD: Found device: %s", device.name)
-
-        # Find config entry for this device
-        config_entry_id = None
-        for entry_id in device.config_entries:
-            entry = hass.config_entries.async_get_entry(entry_id)
-            if entry and entry.domain == DOMAIN:
-                config_entry_id = entry_id
-                break
-
-        if not config_entry_id:
-            LOGGER.error("RAW_CMD: No Beurer config entry found for device %s", device_id)
-            return
-
-        entry = hass.config_entries.async_get_entry(config_entry_id)
-        if not entry or not hasattr(entry, "runtime_data"):
-            LOGGER.error("RAW_CMD: Config entry not ready for device %s", device_id)
-            return
-
-        instance: BeurerInstance = entry.runtime_data
-        LOGGER.warning("RAW_CMD: Got instance for MAC %s, connected: %s", instance.mac, instance.is_connected)
 
         # Parse hex bytes from command string (e.g., "33 01 1E" or "33011E")
         try:
-            # Remove spaces and parse as hex
             hex_str = command_str.replace(" ", "").replace("0x", "")
             payload = [int(hex_str[i:i+2], 16) for i in range(0, len(hex_str), 2)]
         except ValueError as err:
             LOGGER.error("RAW_CMD: Invalid hex command '%s': %s", command_str, err)
             return
 
-        LOGGER.warning("RAW_CMD: Parsed payload: %s", [f"0x{b:02X}" for b in payload])
+        LOGGER.debug("RAW_CMD: Parsed payload: %s", [f"0x{b:02X}" for b in payload])
 
-        # Send the raw command using the instance's internal method
         success = await instance._send_packet(payload)
         if success:
-            LOGGER.warning("RAW_CMD: Sent successfully to %s", instance.mac)
+            LOGGER.debug("RAW_CMD: Sent successfully to %s", instance.mac)
         else:
             LOGGER.error("RAW_CMD: Failed to send to %s", instance.mac)
 
@@ -421,44 +405,15 @@ async def _async_setup_services(hass: HomeAssistant) -> None:
         device_id = call.data[ATTR_DEVICE_ID]
         minutes = call.data[ATTR_MINUTES]
 
-        LOGGER.info("TIMER: Setting %d minute timer on device %s", minutes, device_id)
+        LOGGER.debug("TIMER: Setting %d minute timer on device %s", minutes, device_id)
 
-        # Find the config entry for this device
-        device_reg = dr.async_get(hass)
-        device = device_reg.async_get(device_id)
-
-        if not device:
-            LOGGER.error("TIMER: Device %s not found in registry", device_id)
+        instance = _get_instance_for_device(hass, device_id, "TIMER")
+        if not instance:
             return
 
-        # Find config entry for this device
-        config_entry_id = None
-        for entry_id in device.config_entries:
-            entry = hass.config_entries.async_get_entry(entry_id)
-            if entry and entry.domain == DOMAIN:
-                config_entry_id = entry_id
-                break
-
-        if not config_entry_id:
-            LOGGER.error("TIMER: No Beurer config entry found for device %s", device_id)
-            return
-
-        entry = hass.config_entries.async_get_entry(config_entry_id)
-        if not entry or not hasattr(entry, "runtime_data"):
-            LOGGER.error("TIMER: Config entry not ready for device %s", device_id)
-            return
-
-        instance: BeurerInstance = entry.runtime_data
-
-        # Timer command: 0x3E followed by minutes (1-240)
-        # Note: Timer only works in RGB mode
-        payload = [0x3E, minutes]
-
-        LOGGER.info("TIMER: Sending timer command %s to %s", [f"0x{b:02X}" for b in payload], instance.mac)
-
-        success = await instance._send_packet(payload)
+        success = await instance.set_timer(minutes)
         if success:
-            LOGGER.info("TIMER: Set %d minute timer on %s", minutes, instance.mac)
+            LOGGER.debug("TIMER: Set %d minute timer on %s", minutes, instance.mac)
         else:
             LOGGER.error("TIMER: Failed to set timer on %s", instance.mac)
 

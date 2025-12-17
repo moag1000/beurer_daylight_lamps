@@ -50,6 +50,7 @@ from .const import (
     CMD_EFFECT,
     CMD_OFF,
     CMD_MODE,
+    CMD_TIMER,
     # Timing constants
     COMMAND_DELAY,
     MODE_CHANGE_DELAY,
@@ -585,6 +586,24 @@ class BeurerInstance:
         await self._send_packet([CMD_EFFECT, self._find_effect_index(effect)])
         await asyncio.sleep(EFFECT_DELAY)
         await self._request_status()
+
+    async def set_timer(self, minutes: int) -> bool:
+        """Set auto-off timer.
+
+        Timer only works when the lamp is in RGB mode.
+
+        Args:
+            minutes: Timer duration in minutes (1-240)
+
+        Returns:
+            True if timer command was sent successfully, False otherwise.
+        """
+        if not 1 <= minutes <= 240:
+            LOGGER.error("Timer minutes must be between 1 and 240, got %d", minutes)
+            return False
+
+        LOGGER.debug("Setting timer to %d minutes for %s", minutes, self._mac)
+        return await self._send_packet([CMD_TIMER, minutes])
 
     async def turn_on(self) -> None:
         """Turn on the lamp.

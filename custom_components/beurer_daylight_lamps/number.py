@@ -7,8 +7,9 @@ from homeassistant.components.number import (
     NumberEntityDescription,
     NumberMode,
 )
-from homeassistant.const import PERCENTAGE, UnitOfTime
+from homeassistant.const import EntityCategory, PERCENTAGE, UnitOfTime
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.device_registry import (
     CONNECTION_BLUETOOTH,
     DeviceInfo,
@@ -18,7 +19,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import BeurerConfigEntry
 from .beurer_daylight_lamps import BeurerInstance
-from .const import DOMAIN, LOGGER, VERSION, detect_model, CMD_TIMER
+from .const import DOMAIN, LOGGER, VERSION, detect_model
 
 NUMBER_DESCRIPTIONS: tuple[NumberEntityDescription, ...] = (
     NumberEntityDescription(
@@ -148,7 +149,8 @@ class BeurerTimerNumber(NumberEntity):
     _attr_native_step = 1
     _attr_native_unit_of_measurement = UnitOfTime.MINUTES
     _attr_icon = "mdi:timer-outline"
-    _attr_name = "Timer"
+    _attr_translation_key = "timer"
+    _attr_entity_category = EntityCategory.CONFIG
 
     def __init__(
         self,
@@ -206,12 +208,11 @@ class BeurerTimerNumber(NumberEntity):
     async def async_set_native_value(self, value: float) -> None:
         """Set the timer value in minutes."""
         minutes = int(value)
-        LOGGER.info("Setting timer to %d minutes", minutes)
+        LOGGER.debug("Setting timer to %d minutes", minutes)
 
-        # Send timer command: 0x3E followed by minutes
-        success = await self._instance._send_packet([CMD_TIMER, minutes])
+        success = await self._instance.set_timer(minutes)
         if success:
             self._last_set_value = value
             LOGGER.info("Timer set to %d minutes", minutes)
         else:
-            LOGGER.error("Failed to set timer to %d minutes", minutes)
+            raise HomeAssistantError(f"Failed to set timer to {minutes} minutes")

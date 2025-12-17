@@ -119,6 +119,9 @@
             },
             "color_brightness": {
                 "name": "Color brightness"
+            },
+            "timer": {
+                "name": "Timer"
             }
         },
         "binary_sensor": {
@@ -155,7 +158,21 @@
                 },
                 "command": {
                     "name": "Command bytes",
-                    "description": "Hex bytes to send (e.g., '33 01 1E'). Known: 30=status, 31=brightness, 32=color, 34=effect, 35=off, 37=mode. Unknown: 33, 36, 38, 39"
+                    "description": "Hex bytes to send (e.g., '33 01 1E'). Known: 30=status, 31=brightness, 32=color, 34=effect, 35=off, 37=mode, 3E=timer. Unknown: 33, 36, 38, 39"
+                }
+            }
+        },
+        "set_timer": {
+            "name": "Set Timer",
+            "description": "Set an auto-off timer on the lamp. Timer only works in RGB mode.",
+            "fields": {
+                "device_id": {
+                    "name": "Device",
+                    "description": "The Beurer lamp device to control"
+                },
+                "minutes": {
+                    "name": "Minutes",
+                    "description": "Timer duration in minutes (1-240)"
                 }
             }
         }
