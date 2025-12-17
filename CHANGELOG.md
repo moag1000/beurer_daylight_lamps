@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.11] - 2025-12-17
+
+### Changed
+- **HA wählt den besten Adapter automatisch**: Vereinfachte Verbindungslogik
+  - Nutzt `async_ble_device_from_address` - HA wählt den besten Adapter mit freien Slots
+  - `ble_device_callback` holt bei jedem Retry ein frisches Device von HA
+  - Wenn ein Adapter keine Slots hat, wählt HA beim nächsten Retry automatisch einen anderen
+  - Kein manuelles Iterieren durch Adapter mehr nötig
+- **Logging zeigt Adapter-Wechsel**: "HA switched adapter: X -> Y" wenn HA einen anderen Proxy wählt
+
 ## [1.8.10] - 2025-12-17
 
 ### Fixed

@@ -651,10 +651,10 @@ class BeurerInstance:
     async def connect(self) -> bool:
         """Connect to the device using Home Assistant's Bluetooth stack.
 
-        Uses async_scanner_devices_by_address to get ALL available adapters
-        (including multiple Shelly/ESPHome Bluetooth Proxies) and tries each
-        one until a connection succeeds. This handles the case where one proxy
-        has no available connection slots.
+        Home Assistant automatically selects the best available adapter with
+        free connection slots. We use ble_device_callback to get a fresh
+        device reference on each retry attempt, allowing HA to pick a different
+        adapter if the previous one failed (e.g., no slots available).
         """
         try:
             if self._client is not None and self._client.is_connected:
@@ -662,181 +662,99 @@ class BeurerInstance:
                 return True
 
             LOGGER.info(
-                "Connecting to %s (device: %s, name: %s)",
+                "Connecting to %s (current device: %s)",
                 self._mac,
-                self._ble_device.address if self._ble_device else "None",
                 getattr(self._ble_device, "name", "Unknown") if self._ble_device else "None",
             )
 
-            # Get ALL adapters/proxies that can see this device
-            # This is critical for multi-proxy setups where one may have no slots
-            available_devices: list[BLEDevice] = []
-
+            # Get initial device from HA - it picks the best adapter with free slots
             if self._hass:
                 from homeassistant.components import bluetooth
 
-                LOGGER.debug(
-                    "Getting ALL available adapters/proxies for %s...", self._mac
-                )
-
-                # async_scanner_devices_by_address returns all adapters that see the device
-                scanner_devices = bluetooth.async_scanner_devices_by_address(
+                # HA's async_ble_device_from_address returns the best available adapter
+                # considering signal strength AND available connection slots
+                fresh_device = bluetooth.async_ble_device_from_address(
                     self._hass, self._mac, connectable=True
                 )
 
-                if scanner_devices:
-                    for scanner_device in scanner_devices:
-                        ble_dev = scanner_device.ble_device
-                        scanner = scanner_device.scanner
-                        # Try to get meaningful scanner identification
-                        scanner_source = getattr(scanner, "source", None)
-                        scanner_name = getattr(scanner, "name", None)
-                        scanner_adapter = getattr(scanner, "adapter", None)
-                        # Log all available info for debugging
-                        LOGGER.debug(
-                            "Scanner details: source=%s, name=%s, adapter=%s, type=%s",
-                            scanner_source,
-                            scanner_name,
-                            scanner_adapter,
-                            type(scanner).__name__,
-                        )
-                        # Use source (usually adapter MAC) as identifier, fallback to name
-                        display_name = scanner_source or scanner_name or "unknown"
-                        rssi = scanner_device.advertisement.rssi if scanner_device.advertisement else None
-                        LOGGER.info(
-                            "Found device via adapter '%s' (RSSI: %s)",
-                            display_name,
-                            rssi,
-                        )
-                        available_devices.append(ble_dev)
-                        # Update RSSI from best signal
-                        if rssi and (self._rssi is None or rssi > self._rssi):
-                            self.update_rssi(rssi)
-
-                # If no connectable devices, try non-connectable (proxy may still work)
-                if not available_devices:
-                    LOGGER.debug("No connectable devices found, trying non-connectable...")
-                    scanner_devices = bluetooth.async_scanner_devices_by_address(
-                        self._hass, self._mac, connectable=False
+                if fresh_device:
+                    self._ble_device = fresh_device
+                    LOGGER.info(
+                        "HA selected adapter for %s (device name: %s)",
+                        self._mac,
+                        getattr(fresh_device, "name", "unknown"),
                     )
-                    if scanner_devices:
-                        for scanner_device in scanner_devices:
-                            ble_dev = scanner_device.ble_device
-                            scanner_name = getattr(scanner_device.scanner, "name", "unknown")
-                            LOGGER.info(
-                                "Found non-connectable device via '%s' (may work via proxy)",
-                                scanner_name,
-                            )
-                            available_devices.append(ble_dev)
 
-                # Fallback to single device API if scanner_devices_by_address didn't work
-                if not available_devices:
-                    LOGGER.debug("Falling back to async_ble_device_from_address...")
-                    fresh_device = bluetooth.async_ble_device_from_address(
+                    # Get RSSI from service info
+                    service_info = bluetooth.async_last_service_info(
                         self._hass, self._mac, connectable=True
                     )
-                    if not fresh_device:
-                        fresh_device = bluetooth.async_ble_device_from_address(
-                            self._hass, self._mac
-                        )
-                    if fresh_device:
-                        available_devices.append(fresh_device)
-
-                if available_devices:
-                    LOGGER.info(
-                        "Found %d adapter(s)/proxy(ies) for %s, will try each until connected",
-                        len(available_devices),
-                        self._mac,
-                    )
-                    self._ble_device = available_devices[0]  # Start with first
+                    if service_info and service_info.rssi:
+                        self.update_rssi(service_info.rssi)
                 else:
-                    LOGGER.warning(
-                        "Device %s not found via any Bluetooth adapter, using cached reference",
-                        self._mac,
+                    # Try non-connectable as fallback
+                    fresh_device = bluetooth.async_ble_device_from_address(
+                        self._hass, self._mac, connectable=False
                     )
-            else:
-                LOGGER.debug("No hass reference, using cached device for %s", self._mac)
-
-            # Try each available adapter/proxy until one succeeds
-            # This is the key improvement: if one Shelly has no slots, try the next one
-            last_error = None
-            devices_to_try = available_devices if available_devices else [self._ble_device]
-
-            for idx, device_to_try in enumerate(devices_to_try):
-                self._ble_device = device_to_try
-                device_name = getattr(device_to_try, "name", "unknown")
-
-                LOGGER.info(
-                    "Attempt %d/%d: Connecting via '%s'...",
-                    idx + 1,
-                    len(devices_to_try),
-                    device_name,
-                )
-
-                def get_device() -> BLEDevice:
-                    """Get current device reference for retry attempts."""
-                    return self._ble_device
-
-                try:
-                    # Use timeout to fail fast and try next adapter
-                    # Shelly proxies with no slots will fail quickly with BleakError
-                    # but we also need a timeout for stuck connections
-                    async with asyncio.timeout(15):  # 15s per adapter, not 45s total
-                        self._client = await establish_connection(
-                            BleakClientWithServiceCache,
-                            device_to_try,
-                            self._mac,
-                            disconnected_callback=self._on_disconnect,
-                            max_attempts=2,  # Fewer attempts per adapter, try next faster
-                            ble_device_callback=get_device,
-                        )
-                    LOGGER.info(
-                        "Connected to %s successfully via '%s'",
-                        self._mac,
-                        device_name,
-                    )
-                    break  # Success! Exit the loop
-
-                except BleakError as err:
-                    last_error = err
-                    error_msg = str(err).lower()
-                    if "connection slot" in error_msg or "no backend" in error_msg:
+                    if fresh_device:
                         LOGGER.warning(
-                            "Adapter '%s' has no available connection slots, trying next...",
-                            device_name,
+                            "Device %s only available as non-connectable, trying anyway",
+                            self._mac,
                         )
+                        self._ble_device = fresh_device
                     else:
                         LOGGER.warning(
-                            "Failed to connect via '%s': %s, trying next...",
-                            device_name,
-                            err,
+                            "Device %s not found by HA, using cached reference",
+                            self._mac,
                         )
-                    continue
-                except (TimeoutError, asyncio.TimeoutError) as err:
-                    last_error = err
-                    LOGGER.warning(
-                        "Timeout connecting via '%s', trying next...",
-                        device_name,
+
+            def get_fresh_device() -> BLEDevice:
+                """Get fresh device from HA on each retry.
+
+                This is the KEY for multi-adapter support: on each retry,
+                HA re-evaluates which adapter to use. If the previous adapter
+                had no slots, HA will pick a different one.
+                """
+                if self._hass:
+                    from homeassistant.components import bluetooth
+                    # Ask HA for the best device again - it may pick a different adapter!
+                    fresh = bluetooth.async_ble_device_from_address(
+                        self._hass, self._mac, connectable=True
                     )
-                    continue
-                except OSError as err:
-                    last_error = err
-                    LOGGER.warning(
-                        "OS error connecting via '%s': %s, trying next...",
-                        device_name,
-                        err,
-                    )
-                    continue
-            else:
-                # Loop completed without break - all adapters failed
-                LOGGER.error(
-                    "Failed to connect to %s via all %d available adapter(s). Last error: %s",
-                    self._mac,
-                    len(devices_to_try),
-                    last_error,
-                )
-                await self.disconnect()
-                return False
+                    if not fresh:
+                        fresh = bluetooth.async_ble_device_from_address(
+                            self._hass, self._mac, connectable=False
+                        )
+                    if fresh:
+                        old_name = getattr(self._ble_device, "name", "?")
+                        new_name = getattr(fresh, "name", "?")
+                        if old_name != new_name:
+                            LOGGER.info(
+                                "HA switched adapter: %s -> %s",
+                                old_name,
+                                new_name,
+                            )
+                        self._ble_device = fresh
+                        return fresh
+                return self._ble_device
+
+            # Use establish_connection with ble_device_callback
+            # On each retry, get_fresh_device asks HA for the best adapter
+            # If one adapter has no slots, HA should pick another one
+            LOGGER.debug(
+                "Establishing connection with bleak-retry-connector (max 5 attempts)..."
+            )
+
+            self._client = await establish_connection(
+                BleakClientWithServiceCache,
+                self._ble_device,
+                self._mac,
+                disconnected_callback=self._on_disconnect,
+                max_attempts=5,
+                ble_device_callback=get_fresh_device,  # HA picks best adapter on each retry!
+            )
+
+            LOGGER.info("Connected to %s successfully", self._mac)
 
             # Connection successful - continue with setup
 
