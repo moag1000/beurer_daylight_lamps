@@ -663,6 +663,19 @@ class BeurerInstance:
             LOGGER.warning("Short notification (%d bytes), ignoring", len(data))
             return
 
+        # Check payload length (byte 6) to determine packet type
+        # Full status packets have payload_len >= 0x08
+        # Short ACK/heartbeat packets have payload_len 0x04 and should be ignored
+        # for status updates (they report version 0xFF which would turn off the light)
+        payload_len = data[6] if len(data) > 6 else 0
+        if payload_len < 0x08:
+            LOGGER.debug(
+                "Short payload (%d bytes), likely ACK/heartbeat - not updating state",
+                payload_len
+            )
+            # Still store for diagnostics but don't change state
+            return
+
         version = data[8]
         self._last_notification_version = version
         trigger_update = False

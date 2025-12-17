@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.5] - 2025-12-17
+
+### Fixed
+- **Kritisch: Lampe wurde fälschlich als "aus" angezeigt**
+  - Kurze ACK/Heartbeat-Pakete (payload_len < 8) wurden als Status interpretiert
+  - Diese Pakete haben Version 0xFF was als "OFF" galt
+  - Jetzt werden kurze Pakete ignoriert für State-Updates (nur Diagnostik)
+- PROTOCOL.md: Paketstruktur-Dokumentation erweitert
+
 ## [1.9.4] - 2025-12-17
 
 ### Fixed

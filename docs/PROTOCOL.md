@@ -52,19 +52,51 @@ This document describes the Bluetooth Low Energy (BLE) protocol used by Beurer T
 | Host → Lamp | `0xAB 0xAA` | Command packet |
 | Lamp → Host | `0xAB 0xBB` | Response/Notification packet |
 
-### Example Response: Device Off
+### Packet Types by Payload Length
+
+| Payload Len (Byte 6) | Type | Description |
+|----------------------|------|-------------|
+| `0x04` | ACK/Heartbeat | Short packet, no status data, ignore for state |
+| `0x08` | White Status | Contains on/off and brightness |
+| `0x0C` | RGB Status | Contains on/off, brightness, RGB, effect |
+
+### Example: Short ACK Packet (ignore for state)
 
 ```
 feef0c09abbb04d0ff2b550d0a
 │    │ │ │  │ │ │ │ └────── Trailer (55 0D 0A)
 │    │ │ │  │ │ │ └──────── Checksum (0x2B)
-│    │ │ │  │ │ └────────── Version: 0xFF = Device OFF
+│    │ │ │  │ │ └────────── (not version - short packet!)
 │    │ │ │  │ └──────────── Unknown (0xD0)
-│    │ │ │  └────────────── Payload Len (4)
+│    │ │ │  └────────────── Payload Len: 0x04 = ACK (ignore!)
 │    │ │ └───────────────── Magic: 0xAB 0xBB (response)
 │    │ └─────────────────── Unknown (0x09)
 │    └───────────────────── Length (0x0C = 12)
 └────────────────────────── Header (FE EF 0A)
+```
+
+### Example: White Status (Payload Len 0x08)
+
+```
+feef0c0dabbb08d00100640078c5550d0a
+                  │ │ │
+                  │ │ └─ Brightness: 0x64 = 100%
+                  │ └─── On: 0x00 = OFF (white off, RGB may be on)
+                  └───── Version: 0x01 = White mode
+```
+
+### Example: RGB Status (Payload Len 0x0C)
+
+```
+feef0c11abbb0cd0020115007821ff00006c550d
+                  │ │ │     │ │ │ │ └─ Effect: 0x00 = Off
+                  │ │ │     │ │ │ └─── B: 0x00
+                  │ │ │     │ │ └───── G: 0xFF (255)
+                  │ │ │     │ └─────── R: 0x21 (33)
+                  │ │ │     └───────── ?? (0x78)
+                  │ │ └─────────────── Brightness: 0x15 = 21%
+                  │ └───────────────── On: 0x01 = YES
+                  └─────────────────── Version: 0x02 = RGB mode
 ```
 
 ## Known Commands
