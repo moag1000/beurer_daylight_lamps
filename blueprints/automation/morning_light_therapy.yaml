@@ -1,0 +1,113 @@
+blueprint:
+  name: Morning Light Therapy Session
+  description: >
+    Automatically starts a light therapy session at a specified time on workdays.
+    The lamp gradually increases brightness to simulate sunrise, then runs at
+    full therapy brightness (5300K) for the configured duration.
+  domain: automation
+  input:
+    beurer_light:
+      name: Beurer Daylight Lamp
+      description: Select your Beurer daylight therapy lamp
+      selector:
+        entity:
+          domain: light
+          integration: beurer_daylight_lamps
+    start_time:
+      name: Start Time
+      description: When to start the light therapy session
+      default: "06:30:00"
+      selector:
+        time:
+    session_duration:
+      name: Session Duration (minutes)
+      description: How long to run the therapy session at full brightness
+      default: 30
+      selector:
+        number:
+          min: 10
+          max: 60
+          unit_of_measurement: minutes
+    workdays_only:
+      name: Workdays Only
+      description: Only run on workdays (Mon-Fri)
+      default: true
+      selector:
+        boolean:
+    gradual_start:
+      name: Gradual Start (minutes)
+      description: Time for gradual brightness increase (0 = instant full brightness)
+      default: 10
+      selector:
+        number:
+          min: 0
+          max: 30
+          unit_of_measurement: minutes
+
+trigger:
+  - platform: time
+    at: !input start_time
+
+condition:
+  - condition: or
+    conditions:
+      - condition: template
+        value_template: "{{ not input_boolean_workdays_only }}"
+      - condition: time
+        weekday:
+          - mon
+          - tue
+          - wed
+          - thu
+          - fri
+
+action:
+  - variables:
+      gradual_minutes: !input gradual_start
+      session_minutes: !input session_duration
+      light_entity: !input beurer_light
+
+  # Phase 1: Gradual start (if enabled)
+  - if:
+      - condition: template
+        value_template: "{{ gradual_minutes > 0 }}"
+    then:
+      # Start dim and warm
+      - service: light.turn_on
+        target:
+          entity_id: "{{ light_entity }}"
+        data:
+          color_temp_kelvin: 2700
+          brightness_pct: 10
+
+      # Gradually increase over gradual_minutes
+      - repeat:
+          count: "{{ gradual_minutes }}"
+          sequence:
+            - delay:
+                minutes: 1
+            - service: light.turn_on
+              target:
+                entity_id: "{{ light_entity }}"
+              data:
+                color_temp_kelvin: "{{ 2700 + (repeat.index * (2600 / gradual_minutes)) | int }}"
+                brightness_pct: "{{ 10 + (repeat.index * (90 / gradual_minutes)) | int }}"
+
+  # Phase 2: Full therapy brightness
+  - service: light.turn_on
+    target:
+      entity_id: "{{ light_entity }}"
+    data:
+      color_temp_kelvin: 5300
+      brightness_pct: 100
+
+  # Phase 3: Wait for session duration
+  - delay:
+      minutes: "{{ session_minutes }}"
+
+  # Phase 4: Turn off
+  - service: light.turn_off
+    target:
+      entity_id: "{{ light_entity }}"
+
+mode: single

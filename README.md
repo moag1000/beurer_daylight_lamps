@@ -42,9 +42,27 @@ Home Assistant custom integration for Beurer daylight therapy lamps via Bluetoot
 | **Select** | Effect | Dropdown for light effects |
 | **Number** | White brightness | Slider 0-100% |
 | **Number** | Color brightness | Slider 0-100% |
+| **Number** | Timer | Auto-off timer 1-240 min (RGB mode only) |
 | **Sensor** | Signal strength | RSSI in dBm (disabled by default) |
 | **Binary Sensor** | Connected | BLE connection status |
 | **Binary Sensor** | Bluetooth reachable | Device seen by any adapter |
+
+#### Detailed Entity Descriptions
+
+**Light Entity** (`light.beurer_*`)
+- Supports: On/Off, Brightness, RGB Color, Color Temperature (2700K-6500K), Effects
+- Color modes: `white` (color temperature) and `rgb` (full color)
+- Attributes: `brightness`, `color_mode`, `color_temp_kelvin`, `rgb_color`, `effect`
+
+**Timer Entity** (`number.beurer_*_timer`)
+- Sets auto-off timer in minutes (1-240)
+- Only available when lamp is in RGB/color mode
+- Shows as "unavailable" in white mode (hardware limitation)
+
+**Signal Strength Sensor** (`sensor.beurer_*_signal_strength`)
+- Disabled by default - enable in entity settings if needed
+- Shows Bluetooth RSSI value in dBm
+- Useful for diagnosing connection issues
 
 ### Services
 
@@ -155,6 +173,26 @@ The following effects are available (matching the Beurer LightUp app):
 | Action | Dynamic color changes |
 | Forest | Green/nature tones |
 | Summer | Warm summer colors |
+
+## Blueprints
+
+Ready-to-use automation blueprints are included in the `blueprints/` folder.
+
+### Morning Light Therapy Session
+
+A comprehensive blueprint for daily light therapy with gradual sunrise simulation.
+
+**Features:**
+- Configurable start time
+- Optional workday-only mode
+- Gradual sunrise simulation (2700K → 5300K)
+- Adjustable session duration (10-60 min)
+
+**Installation:**
+1. Copy `blueprints/automation/morning_light_therapy.yaml` to your Home Assistant's `blueprints/automation/beurer_daylight_lamps/` folder
+2. Reload automations or restart Home Assistant
+3. Go to **Settings** → **Automations & Scenes** → **Blueprints**
+4. Find "Morning Light Therapy Session" and click "Create Automation"
 
 ## Example Automations
 
