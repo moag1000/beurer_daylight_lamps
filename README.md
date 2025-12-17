@@ -32,6 +32,15 @@ Home Assistant custom integration for Beurer daylight therapy lamps via Bluetoot
 - 📶 Automatic adapter switching to best signal
 - 🔗 Connection status monitoring
 
+### Lifestyle Wellness Features
+
+> **Important**: These features are for personal lifestyle tracking and wellness purposes only. This integration is **NOT a medical device** and should not be used for medical purposes.
+
+- **Sunrise/Sunset Simulation**: Native integration layer simulation with gradual brightness and color temperature changes
+- **Light Exposure Tracking**: Track daily and weekly bright light exposure minutes
+- **Daily Goal Progress**: Configurable daily light exposure goal with progress sensor
+- **Goal Reached Notification**: Binary sensor for automation triggers when daily goal is met
+
 ### Entities Created
 
 | Entity Type | Name | Description |
@@ -43,26 +52,19 @@ Home Assistant custom integration for Beurer daylight therapy lamps via Bluetoot
 | **Number** | White brightness | Slider 0-100% |
 | **Number** | Color brightness | Slider 0-100% |
 | **Number** | Timer | Auto-off timer 1-240 min (RGB mode only) |
+| **Number** | Daily light goal | Configurable daily exposure goal (5-120 min) |
 | **Sensor** | Signal strength | RSSI in dBm (disabled by default) |
+| **Sensor** | Light exposure today | Minutes of bright light today |
+| **Sensor** | Light exposure this week | Minutes of bright light this week |
+| **Sensor** | Daily goal progress | Percentage of daily goal completed |
 | **Binary Sensor** | Connected | BLE connection status |
 | **Binary Sensor** | Bluetooth reachable | Device seen by any adapter |
+| **Binary Sensor** | Daily goal reached | True when daily exposure goal is met |
 
-#### Detailed Entity Descriptions
+#### Entity Notes
 
-**Light Entity** (`light.beurer_*`)
-- Supports: On/Off, Brightness, RGB Color, Color Temperature (2700K-6500K), Effects
-- Color modes: `white` (color temperature) and `rgb` (full color)
-- Attributes: `brightness`, `color_mode`, `color_temp_kelvin`, `rgb_color`, `effect`
-
-**Timer Entity** (`number.beurer_*_timer`)
-- Sets auto-off timer in minutes (1-240)
-- Only available when lamp is in RGB/color mode
-- Shows as "unavailable" in white mode (hardware limitation)
-
-**Signal Strength Sensor** (`sensor.beurer_*_signal_strength`)
-- Disabled by default - enable in entity settings if needed
-- Shows Bluetooth RSSI value in dBm
-- Useful for diagnosing connection issues
+- **Timer**: Only available in RGB mode (see [Known Limitations](#known-limitations))
+- **Signal Strength**: Disabled by default. RSSI values: -30 to -50 dBm = excellent, -50 to -70 = good, < -80 = poor
 
 ### Services
 
@@ -101,7 +103,49 @@ data:
   minutes: 30
 ```
 
-**Note**: Timer only works in RGB/color mode. Use it with color or effect settings.
+#### `beurer_daylight_lamps.start_sunrise`
+
+Start a sunrise simulation with gradual brightness and color temperature increase.
+
+> **Lifestyle Feature**: This is a personal wellness feature, not a medical device.
+
+```yaml
+service: beurer_daylight_lamps.start_sunrise
+data:
+  device_id: "abc123..."
+  duration: 15  # minutes (1-60)
+  profile: natural  # gentle, natural, energize, or therapy
+```
+
+**Profiles:**
+| Profile | Description |
+|---------|-------------|
+| `gentle` | Slow, soft transition for sensitive users |
+| `natural` | Mimics natural sunrise timing |
+| `energize` | Faster transition with brighter end point |
+| `therapy` | Optimized for bright light exposure |
+
+#### `beurer_daylight_lamps.start_sunset`
+
+Start a sunset simulation with gradual brightness decrease and warm color shift.
+
+```yaml
+service: beurer_daylight_lamps.start_sunset
+data:
+  device_id: "abc123..."
+  duration: 30  # minutes (1-60)
+  end_brightness: 0  # 0-100%, 0 = turn off at end
+```
+
+#### `beurer_daylight_lamps.stop_simulation`
+
+Stop any running sunrise or sunset simulation.
+
+```yaml
+service: beurer_daylight_lamps.stop_simulation
+data:
+  device_id: "abc123..."
+```
 
 ## Installation
 
@@ -304,15 +348,45 @@ automation:
           entity_id: light.beurer_tl100
 ```
 
-## Known Issues
+## Data Updates & Communication
 
-1. **Connection after reboot**: Connection may fail a few times after Home Assistant reboots. The integration will auto-reconnect.
+### How Data is Updated
 
-2. **Bluetooth LED always on**: The small Bluetooth indicator LED on the lamp stays illuminated while connected to Home Assistant.
+This integration uses **Bluetooth Low Energy (BLE)** for communication:
 
-## Not Supported
+- **State Updates**: The lamp sends BLE notifications when its state changes. These are processed in real-time.
+- **RSSI Updates**: Signal strength is updated whenever the lamp sends a Bluetooth advertisement (typically every few seconds).
+- **Polling**: No polling is required - all updates are push-based via BLE notifications.
+- **Command Timing**: Commands are rate-limited to 100ms minimum between sends to prevent overwhelming the device.
+- **Mode Changes**: Mode switches (white <-> RGB) include a 500ms delay to allow the hardware to stabilize.
 
-- **Sunrise/Sunset simulation**: Hardware feature not yet implemented. Use automations with gradual brightness changes.
+### Latency Expectations
+
+| Operation | Typical Latency |
+|-----------|-----------------|
+| On/Off | 100-300ms |
+| Brightness change | 100-200ms |
+| Color change | 150-300ms |
+| Effect change | 200-500ms |
+| Status update | Real-time (push) |
+
+## Known Limitations
+
+> **Note**: These are design constraints, not bugs.
+
+1. **Timer only in RGB mode**: The auto-off timer (0x3E command) only functions when the lamp is in RGB/color mode. This is a hardware limitation of the Beurer protocol.
+
+2. **Bluetooth LED always on**: The small Bluetooth indicator LED on the lamp stays illuminated while connected to Home Assistant. This cannot be disabled.
+
+3. **Single connection**: The lamp can only maintain one BLE connection at a time. You cannot use the Beurer LightUp app while connected to Home Assistant.
+
+4. **Connection after reboot**: Connection may fail a few times after Home Assistant reboots while the Bluetooth stack initializes. The integration will auto-reconnect.
+
+5. **Light exposure tracking resets daily**: The therapy/exposure tracking resets at midnight. Historical data beyond the current week is not retained.
+
+6. **Simulation requires connection**: Sunrise/sunset simulations require an active BLE connection. If the connection drops, the simulation will pause and resume when reconnected.
+
+7. **Color temperature approximation**: Color temperatures are approximated using RGB values since the lamp doesn't have a native CT mode. Results may vary slightly from true Kelvin values.
 
 ## Diagnostics
 
@@ -323,22 +397,6 @@ To download diagnostic information for troubleshooting:
 3. Click the three dots menu → **Download diagnostics**
 
 The diagnostic file contains device state, connection info, and configuration (MAC address is redacted).
-
-## Signal Strength Sensor
-
-An optional RSSI (Received Signal Strength Indicator) sensor is available for each lamp. This sensor is disabled by default.
-
-To enable:
-1. Go to **Settings** → **Devices & Services** → **Beurer Daylight Lamps**
-2. Click on your device
-3. Find "Signal strength" under disabled entities
-4. Click and enable it
-
-The RSSI value (in dBm) indicates Bluetooth signal quality:
-- `-30 to -50 dBm`: Excellent
-- `-50 to -70 dBm`: Good
-- `-70 to -85 dBm`: Fair
-- `< -85 dBm`: Poor (may cause connection issues)
 
 ## Troubleshooting
 
@@ -371,13 +429,6 @@ The RSSI value (in dBm) indicates Bluetooth signal quality:
 4. Try turning the lamp off and on again
 5. The integration will automatically try to reconnect
 
-### Timer not working
-
-1. Timer only works in **RGB/color mode** - it will not work in white mode
-2. Make sure you set a color or effect before using the timer
-3. The Timer entity will show as "unavailable" when the lamp is in white mode
-4. Use the `set_timer` service or the Timer number entity under the device
-
 ### Effects not showing correctly
 
 1. Some effects only work at specific brightness levels
@@ -386,7 +437,7 @@ The RSSI value (in dBm) indicates Bluetooth signal quality:
 
 ## Debugging
 
-Add to `configuration.yaml`:
+Enable debug logging in `configuration.yaml`:
 
 ```yaml
 logger:
@@ -395,21 +446,13 @@ logger:
     custom_components.beurer_daylight_lamps: debug
 ```
 
-## BLE Protocol Reverse Engineering
+For detailed debugging and reverse engineering information, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
-A sniffer tool is included for reverse engineering additional features:
+## BLE Protocol
 
-```bash
-pip install bleak
-python tools/ble_sniffer.py AA:BB:CC:DD:EE:FF
-```
-
-Commands:
-- `status` - Request current status
-- `probe` - Test unknown commands (0x33, 0x36, 0x38, 0x39)
-- `raw 33 01 0A` - Send raw bytes
-
-Contributions for Timer and Sunrise/Sunset features welcome!
+For developers interested in the BLE protocol or contributing new features, see:
+- [docs/PROTOCOL.md](docs/PROTOCOL.md) - BLE protocol documentation
+- [CONTRIBUTING.md](CONTRIBUTING.md) - Development and reverse engineering guide
 
 ## Credits
 

@@ -5,6 +5,50 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.12.0] - 2025-12-17
+
+### Added - Lifestyle Wellness Features
+
+> **Important**: These features are for personal lifestyle tracking and wellness purposes only. This integration is **NOT a medical device** and should not be used for medical purposes.
+
+#### New Services
+- `beurer_daylight_lamps.start_sunrise` - Sunrise simulation with gradual brightness/color temperature increase
+  - Profiles: gentle, natural, energize, therapy
+  - Duration: 1-60 minutes
+- `beurer_daylight_lamps.start_sunset` - Sunset simulation with gradual dimming
+  - Configurable end brightness (0-100%)
+  - Duration: 1-60 minutes
+- `beurer_daylight_lamps.stop_simulation` - Stop any running simulation
+
+#### New Entities
+- **Sensor**: `Light exposure today` - Track bright light exposure in minutes
+- **Sensor**: `Light exposure this week` - Weekly exposure tracking
+- **Sensor**: `Daily goal progress` - Percentage of daily goal completed
+- **Number**: `Daily light goal` - Configurable goal (5-120 minutes)
+- **Binary Sensor**: `Daily goal reached` - True when goal is met
+
+#### Quality & Developer Experience
+- Added `diagnostics.py` - Comprehensive troubleshooting data download
+- Added `repairs.py` - UI-guided repair flows for connection issues
+- Added `quality_scale.yaml` - Self-documentation of compliance status
+- Enhanced translations with repair flow messages
+- Test suite with 126 tests (53% coverage)
+
+### Changed
+- Updated README.md with comprehensive documentation
+- Added Data Updates & Communication section
+- Expanded Known Limitations section (7 items)
+- Added automation blueprints documentation
+
+### Fixed
+- Improved error handling in therapy tracking module
+
+## [1.11.0] - 2025-12-17
+
+### Added
+- **Therapy Module Architecture**: `therapy.py` for wellness tracking
+- **Sunrise/Sunset Engine**: Integration-layer simulation controller
+
 ## [1.10.0] - 2025-12-17
 
 ### Added

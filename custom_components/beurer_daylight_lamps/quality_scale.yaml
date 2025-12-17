@@ -1,0 +1,162 @@
+# Quality Scale for Beurer Daylight Lamps Integration
+# This integration targets Gold tier compliance for HACS custom integrations
+# https://developers.home-assistant.io/docs/core/integration-quality-scale/
+
+rules:
+  # === BRONZE TIER (Foundation) ===
+
+  # Config flow - UI configuration via config_flow.py
+  config-flow:
+    status: done
+    comment: Full config flow with manual entry, discovery, and reauth support
+
+  # Unique IDs - All entities have unique IDs based on MAC address
+  unique-config-entry:
+    status: done
+    comment: Config entries uniquely identified by MAC address
+
+  # Common modules - Reusable components
+  common-modules:
+    status: done
+    comment: therapy.py, beurer_daylight_lamps.py provide reusable components
+
+  # Brands - Logo and branding assets
+  brands:
+    status: exempt
+    comment: Custom HACS integration - no official brand assets
+
+  # === SILVER TIER ===
+
+  # Test coverage - minimum 95%
+  test-coverage:
+    status: partial
+    comment: "53% coverage (126 tests). Missing: config_flow (0%), BLE core (39%), services"
+
+  # Config entry unloading
+  config-entry-unloading:
+    status: done
+    comment: async_unload_entry properly disconnects and cleans up
+
+  # Reauthentication flow
+  reauthentication-flow:
+    status: done
+    comment: Implemented in config_flow.py
+
+  # Reconfiguration flow
+  reconfiguration-flow:
+    status: done
+    comment: Implemented in config_flow.py
+
+  # Log issues once
+  log-when-unavailable:
+    status: done
+    comment: Device unavailability logged once via Bluetooth tracker
+
+  # Parallel updates
+  parallel-updates:
+    status: done
+    comment: BLE serialization handled in beurer_daylight_lamps.py
+
+  # === GOLD TIER ===
+
+  # Device discovery
+  discovery:
+    status: done
+    comment: Bluetooth discovery via HA Bluetooth stack and ESPHome proxies
+
+  # Discovery updates device info
+  discovery-update-info:
+    status: done
+    comment: RSSI and device info updated on each advertisement
+
+  # Creates devices
+  devices:
+    status: done
+    comment: Device created in device registry with proper identifiers
+
+  # Dynamic devices
+  dynamic-devices:
+    status: exempt
+    comment: Single-device integration - one lamp per config entry
+
+  # Stale device removal
+  stale-devices:
+    status: exempt
+    comment: Single-device integration
+
+  # Diagnostics
+  diagnostics:
+    status: done
+    comment: diagnostics.py provides comprehensive troubleshooting data
+
+  # Repair issues
+  repair-issues:
+    status: done
+    comment: Issue registry used for device_not_found and initialization_failed
+
+  # Entity category
+  entity-category:
+    status: done
+    comment: Diagnostic entities properly categorized (RSSI, connected, etc.)
+
+  # Entity device class
+  entity-device-class:
+    status: done
+    comment: Light, sensor, binary_sensor use appropriate device classes
+
+  # Entity disabled by default
+  entity-disabled-by-default:
+    status: done
+    comment: RSSI sensor disabled by default (entity_registry_enabled_default=False)
+
+  # Entity translations
+  entity-translations:
+    status: done
+    comment: All entities have translation_key in strings.json
+
+  # Exception translations
+  exception-translations:
+    status: done
+    comment: exceptions section in strings.json with translatable messages
+
+  # Icon translations
+  icon-translations:
+    status: done
+    comment: icons.json provides entity and service icons
+
+  # === DOCUMENTATION (Gold requirement) ===
+
+  # Documentation describes data updates
+  docs-data-update:
+    status: done
+    comment: README has "Data Updates & Communication" section with latency table
+
+  # Documentation provides automation examples
+  docs-examples:
+    status: done
+    comment: README has 4 automation examples (wake-up, gradual, evening, therapy)
+
+  # Documentation describes known limitations
+  docs-known-limitations:
+    status: done
+    comment: README has "Known Limitations" section with 7 documented items
+
+  # Documentation lists supported devices
+  docs-supported-devices:
+    status: done
+    comment: README has supported devices table (TL50-TL100)
+
+  # Documentation describes supported functions
+  docs-supported-functions:
+    status: done
+    comment: README has full feature list with entities table and services
+
+  # Documentation provides troubleshooting info
+  docs-troubleshooting:
+    status: done
+    comment: README has "Troubleshooting" section with common issues and fixes
+
+  # Documentation describes use cases
+  docs-use-cases:
+    status: done
+    comment: README has blueprints section and example automations for real use cases

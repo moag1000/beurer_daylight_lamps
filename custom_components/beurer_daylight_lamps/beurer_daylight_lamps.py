@@ -33,6 +33,8 @@ from bleak.backends.characteristic import BleakGATTCharacteristic
 from bleak_retry_connector import establish_connection, BleakClientWithServiceCache
 from homeassistant.components.light import ColorMode
 
+from .therapy import SunriseSimulation, SunriseProfile, TherapyTracker
+
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
@@ -114,6 +116,10 @@ class BeurerInstance:
         self._timer_active: bool = False
         self._timer_minutes: int | None = None
 
+        # Therapy tracking - sunrise/sunset simulation and exposure tracking
+        self._sunrise_simulation: SunriseSimulation | None = None
+        self._therapy_tracker: TherapyTracker = TherapyTracker()
+
     def update_ble_device(self, device: BLEDevice) -> None:
         """Update the BLE device reference.
 
@@ -184,6 +190,49 @@ class BeurerInstance:
     def timer_minutes(self) -> int | None:
         """Return remaining timer minutes if active."""
         return self._timer_minutes if self._timer_active else None
+
+    # Therapy tracking properties
+    @property
+    def sunrise_simulation(self) -> SunriseSimulation:
+        """Return the sunrise simulation controller."""
+        if self._sunrise_simulation is None:
+            self._sunrise_simulation = SunriseSimulation(self)
+        return self._sunrise_simulation
+
+    @property
+    def therapy_tracker(self) -> TherapyTracker:
+        """Return the therapy tracker."""
+        return self._therapy_tracker
+
+    @property
+    def therapy_today_minutes(self) -> float:
+        """Return therapy minutes accumulated today."""
+        return self._therapy_tracker.today_minutes
+
+    @property
+    def therapy_week_minutes(self) -> float:
+        """Return therapy minutes accumulated this week."""
+        return self._therapy_tracker.week_minutes
+
+    @property
+    def therapy_goal_reached(self) -> bool:
+        """Return True if daily therapy goal is reached."""
+        return self._therapy_tracker.goal_reached
+
+    @property
+    def therapy_goal_progress_pct(self) -> int:
+        """Return progress towards daily goal as percentage."""
+        return self._therapy_tracker.goal_progress_pct
+
+    @property
+    def therapy_daily_goal(self) -> int:
+        """Return daily goal in minutes."""
+        return self._therapy_tracker.daily_goal_minutes
+
+    def set_therapy_daily_goal(self, minutes: int) -> None:
+        """Set the daily therapy goal."""
+        self._therapy_tracker.daily_goal_minutes = max(1, min(120, minutes))
+        self._safe_create_task(self._trigger_update())
 
     def _on_disconnect(self, client: BleakClient) -> None:
         """Handle disconnection callback."""
@@ -779,9 +828,31 @@ class BeurerInstance:
                 self._effect,
             )
 
+            # Track therapy exposure based on current RGB state
+            # Therapy-relevant light: cool white (high blue component) at high brightness
+            if self._color_on and self._color_brightness is not None:
+                # Estimate color temperature from RGB (simplified: higher blue = cooler)
+                r, g, b = self._rgb_color
+                # Cool light has roughly equal R/G and higher relative values
+                # Therapy-relevant: bright, balanced white (R≈G≈B with high values)
+                is_white_ish = abs(r - g) < 50 and abs(g - b) < 50 and min(r, g, b) > 150
+                brightness_pct = int(self._color_brightness / 255 * 100)
+                # Estimate kelvin (very rough): white-ish light with high brightness
+                estimated_kelvin = 5300 if is_white_ish else 3000
+                self._therapy_tracker.update_session(estimated_kelvin, brightness_pct)
+                if is_white_ish and brightness_pct >= 80:
+                    # Start new session if not tracking, or continue existing
+                    if self._therapy_tracker._current_session is None:
+                        self._therapy_tracker.start_session(estimated_kelvin, brightness_pct)
+            elif not self._color_on:
+                # End session when color mode turns off
+                self._therapy_tracker.end_session()
+
         elif version == 255:  # Device off
             if self._light_on or self._color_on:
                 trigger_update = True
+                # End therapy session when light turns off
+                self._therapy_tracker.end_session()
             self._light_on = False
             self._color_on = False
             LOGGER.debug("Device off notification")

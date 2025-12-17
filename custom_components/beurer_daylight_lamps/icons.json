@@ -11,6 +11,15 @@
     "sensor": {
       "rssi": {
         "default": "mdi:signal"
+      },
+      "therapy_today": {
+        "default": "mdi:sun-clock"
+      },
+      "therapy_week": {
+        "default": "mdi:calendar-week"
+      },
+      "therapy_progress": {
+        "default": "mdi:progress-check"
       }
     },
     "binary_sensor": {
@@ -26,6 +35,13 @@
         "state": {
           "on": "mdi:bluetooth",
           "off": "mdi:bluetooth-off"
+        }
+      },
+      "therapy_goal_reached": {
+        "default": "mdi:check-circle-outline",
+        "state": {
+          "on": "mdi:check-circle",
+          "off": "mdi:circle-outline"
         }
       }
     },
@@ -43,12 +59,18 @@
       },
       "timer": {
         "default": "mdi:timer-outline"
+      },
+      "therapy_goal": {
+        "default": "mdi:target"
       }
     }
   },
   "services": {
     "apply_preset": "mdi:palette-swatch",
     "set_timer": "mdi:timer",
-    "send_raw_command": "mdi:console"
+    "send_raw_command": "mdi:console",
+    "start_sunrise": "mdi:weather-sunset-up",
+    "start_sunset": "mdi:weather-sunset-down",
+    "stop_simulation": "mdi:stop"
   }
 }

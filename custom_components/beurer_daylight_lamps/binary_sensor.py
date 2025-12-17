@@ -34,6 +34,15 @@ BINARY_SENSOR_DESCRIPTIONS: tuple[BinarySensorEntityDescription, ...] = (
     ),
 )
 
+# Therapy goal sensor (lifestyle/wellness feature, NOT medical)
+THERAPY_BINARY_SENSOR_DESCRIPTIONS: tuple[BinarySensorEntityDescription, ...] = (
+    BinarySensorEntityDescription(
+        key="therapy_goal_reached",
+        translation_key="therapy_goal_reached",
+        icon="mdi:check-circle",
+    ),
+)
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -44,10 +53,15 @@ async def async_setup_entry(
     instance = entry.runtime_data
     name = entry.data.get("name", "Beurer Lamp")
 
-    entities = [
+    entities: list[BinarySensorEntity] = [
         BeurerBinarySensor(instance, name, description)
         for description in BINARY_SENSOR_DESCRIPTIONS
     ]
+    # Add therapy goal sensor
+    entities.extend([
+        BeurerTherapyBinarySensor(instance, name, description)
+        for description in THERAPY_BINARY_SENSOR_DESCRIPTIONS
+    ])
     async_add_entities(entities)
 
 
@@ -84,6 +98,66 @@ class BeurerBinarySensor(BinarySensorEntity):
         Binary sensors for connectivity should always be available.
         """
         return True
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device info."""
+        mac = format_mac(self._instance.mac)
+        return DeviceInfo(
+            identifiers={(DOMAIN, mac)},
+            name=self._device_name,
+            manufacturer="Beurer",
+            model=detect_model(self._device_name),
+            sw_version=VERSION,
+            connections={(CONNECTION_BLUETOOTH, mac)},
+        )
+
+    async def async_added_to_hass(self) -> None:
+        """Run when entity about to be added to hass."""
+        self._instance.set_update_callback(self._handle_update)
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Run when entity will be removed from hass."""
+        self._instance.remove_update_callback(self._handle_update)
+
+    @callback
+    def _handle_update(self) -> None:
+        """Handle device state update."""
+        self.async_write_ha_state()
+
+
+class BeurerTherapyBinarySensor(BinarySensorEntity):
+    """Binary sensor for tracking therapy goal completion.
+
+    NOTE: This is a lifestyle/wellness feature for personal tracking.
+    It is NOT a medical device and should not be used for medical purposes.
+    """
+
+    _attr_has_entity_name = True
+
+    def __init__(
+        self,
+        instance: BeurerInstance,
+        device_name: str,
+        description: BinarySensorEntityDescription,
+    ) -> None:
+        """Initialize the therapy binary sensor."""
+        self._instance = instance
+        self._device_name = device_name
+        self.entity_description = description
+        self._attr_unique_id = f"{format_mac(instance.mac)}_{description.key}"
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return True if daily therapy goal is reached."""
+        if self.entity_description.key == "therapy_goal_reached":
+            return self._instance.therapy_goal_reached
+        return None
+
+    @property
+    def available(self) -> bool:
+        """Return True if entity is available."""
+        return True  # Always available as tracking persists
 
     @property
     def device_info(self) -> DeviceInfo:

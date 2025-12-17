@@ -130,3 +130,83 @@ async def test_diagnostics_no_client(hass: HomeAssistant) -> None:
 
     assert result["connection"]["available"] is False
     assert result["connection"]["connected"] is False
+
+
+async def test_diagnostics_therapy_tracking(hass: HomeAssistant) -> None:
+    """Test diagnostics includes therapy tracking info."""
+    mock_instance = MagicMock()
+    mock_instance.is_on = True
+    mock_instance.color_mode = "white"
+    mock_instance.white_brightness = 255
+    mock_instance.color_brightness = 200
+    mock_instance.rgb_color = (255, 255, 255)
+    mock_instance.effect = "Off"
+    mock_instance.supported_effects = ["Off"]
+    mock_instance.rssi = -60
+    mock_instance.available = True
+    mock_instance.is_connected = True
+    mock_instance.ble_available = True
+    mock_instance.last_seen = 1702828800.0  # Example timestamp
+    mock_instance.write_uuid = "write-uuid"
+    mock_instance.read_uuid = "read-uuid"
+    # Therapy tracking properties
+    mock_instance.therapy_daily_goal = 30
+    mock_instance.therapy_today_minutes = 15.5
+    mock_instance.therapy_week_minutes = 120.0
+    mock_instance.therapy_goal_progress_pct = 52
+    mock_instance.therapy_goal_reached = False
+    # Simulation property
+    mock_sim = MagicMock()
+    mock_sim.is_running = False
+    mock_instance.sunrise_simulation = mock_sim
+
+    entry = MagicMock()
+    entry.entry_id = "test_entry"
+    entry.runtime_data = mock_instance
+    entry.as_dict = MagicMock(return_value={"data": {}, "entry_id": "test_entry"})
+
+    result = await async_get_config_entry_diagnostics(hass, entry)
+
+    assert "therapy_tracking" in result
+    assert result["therapy_tracking"]["daily_goal_minutes"] == 30
+    assert result["therapy_tracking"]["today_minutes"] == 15.5
+    assert result["therapy_tracking"]["week_minutes"] == 120.0
+    assert result["therapy_tracking"]["goal_progress_pct"] == 52
+    assert result["therapy_tracking"]["goal_reached"] is False
+    assert "simulation" in result
+    assert result["simulation"]["is_running"] is False
+
+
+async def test_diagnostics_missing_therapy_attributes(hass: HomeAssistant) -> None:
+    """Test diagnostics handles missing therapy attributes gracefully."""
+    mock_instance = MagicMock()
+    mock_instance.is_on = True
+    mock_instance.color_mode = "white"
+    mock_instance.white_brightness = 255
+    mock_instance.color_brightness = 200
+    mock_instance.rgb_color = (255, 255, 255)
+    mock_instance.effect = "Off"
+    mock_instance.supported_effects = ["Off"]
+    mock_instance.rssi = -60
+    mock_instance.available = True
+    mock_instance.is_connected = True
+    mock_instance.ble_available = True
+    mock_instance.last_seen = None
+    mock_instance.write_uuid = "write-uuid"
+    mock_instance.read_uuid = "read-uuid"
+    # Simulate missing therapy attributes
+    del mock_instance.therapy_daily_goal
+    del mock_instance.sunrise_simulation
+
+    entry = MagicMock()
+    entry.entry_id = "test_entry"
+    entry.runtime_data = mock_instance
+    entry.as_dict = MagicMock(return_value={"data": {}, "entry_id": "test_entry"})
+
+    result = await async_get_config_entry_diagnostics(hass, entry)
+
+    # Should have fallback values
+    assert "therapy_tracking" in result
+    assert result["therapy_tracking"].get("available") is False
+    assert "simulation" in result
+    assert result["simulation"].get("available") is False

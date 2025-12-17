@@ -69,3 +69,87 @@ set_timer:
           step: 1
           unit_of_measurement: "min"
           mode: slider
+
+start_sunrise:
+  name: Start Sunrise Simulation
+  description: "Start a gradual sunrise simulation. The light slowly increases brightness and shifts from warm to cool white, mimicking natural sunrise. NOTE: This is a lifestyle/wellness feature, not a medical device."
+  fields:
+    device_id:
+      name: Device
+      description: The Beurer lamp device to control
+      required: true
+      selector:
+        device:
+          integration: beurer_daylight_lamps
+    duration:
+      name: Duration
+      description: "Duration of the sunrise in minutes (1-60)"
+      default: 15
+      selector:
+        number:
+          min: 1
+          max: 60
+          step: 1
+          unit_of_measurement: "min"
+          mode: slider
+    profile:
+      name: Profile
+      description: "Sunrise profile determining color temperature and brightness curves"
+      default: "natural"
+      selector:
+        select:
+          options:
+            - label: "Gentle - Very slow, warm start (2200K to 3500K)"
+              value: "gentle"
+            - label: "Natural - Natural sunrise simulation (2700K to 5000K)"
+              value: "natural"
+            - label: "Energize - Fast, cool light for alertness (3500K to 6500K)"
+              value: "energize"
+            - label: "Therapy - Optimized for light exposure (2700K to 5300K)"
+              value: "therapy"
+
+start_sunset:
+  name: Start Sunset Simulation
+  description: "Start a gradual sunset simulation. The light slowly decreases brightness and shifts to warm tones, helping prepare for sleep. NOTE: This is a lifestyle/wellness feature, not a medical device."
+  fields:
+    device_id:
+      name: Device
+      description: The Beurer lamp device to control
+      required: true
+      selector:
+        device:
+          integration: beurer_daylight_lamps
+    duration:
+      name: Duration
+      description: "Duration of the sunset in minutes (1-60)"
+      default: 30
+      selector:
+        number:
+          min: 1
+          max: 60
+          step: 1
+          unit_of_measurement: "min"
+          mode: slider
+    end_brightness:
+      name: End Brightness
+      description: "Final brightness percentage (0 = turn off completely)"
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 100
+          step: 5
+          unit_of_measurement: "%"
+          mode: slider
+
+stop_simulation:
+  name: Stop Simulation
+  description: "Stop any running sunrise or sunset simulation. The light will remain at its current state."
+  fields:
+    device_id:
+      name: Device
+      description: The Beurer lamp device to control
+      required: true
+      selector:
+        device:
+          integration: beurer_daylight_lamps

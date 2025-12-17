@@ -1,0 +1,82 @@
+# Timer Command Probe Script für Home Assistant
+# Kopiere diese Automations in deine automations.yaml oder führe sie manuell aus
+#
+# ANLEITUNG:
+# 1. Gehe zu Developer Tools -> Services
+# 2. Kopiere jeden Service-Call einzeln und führe ihn aus
+# 3. Prüfe nach jedem Command die "Last raw notification"
+# 4. Suche nach Timer-Wert 01 XX (wobei XX die Minuten sind)
+
+# Ersetze DEVICE_ID mit deiner echten Device ID!
+# Finde sie unter: Settings -> Devices -> Beurer Lamp -> Device Info
+
+# ============================================
+# SCHRITT 1: RGB Modus aktivieren
+# ============================================
+# service: beurer_daylight_lamps.send_raw_command
+# data:
+#   device_id: "DEVICE_ID"
+#   command: "37 02"
+
+# ============================================
+# SCHRITT 2: Teste verschiedene Timer Commands
+# ============================================
+
+# --- Command 33 Varianten ---
+# 33 XX (Timer Minuten direkt?)
+# service: beurer_daylight_lamps.send_raw_command
+# data:
+#   device_id: "DEVICE_ID"
+#   command: "33 0F"
+
+# --- Command 36 Varianten ---
+# 36 XX
+# service: beurer_daylight_lamps.send_raw_command
+# data:
+#   device_id: "DEVICE_ID"
+#   command: "36 0F"
+
+# --- Command 38 Varianten ---
+# service: beurer_daylight_lamps.send_raw_command
+# data:
+#   device_id: "DEVICE_ID"
+#   command: "38 0F"
+
+# --- Command 39 Varianten ---
+# service: beurer_daylight_lamps.send_raw_command
+# data:
+#   device_id: "DEVICE_ID"
+#   command: "39 0F"
+
+# --- Command 3A Varianten ---
+# service: beurer_daylight_lamps.send_raw_command
+# data:
+#   device_id: "DEVICE_ID"
+#   command: "3A 0F"
+
+# --- Command 3B Varianten ---
+# service: beurer_daylight_lamps.send_raw_command
+# data:
+#   device_id: "DEVICE_ID"
+#   command: "3B 0F"
+
+# --- Command 3C Varianten ---
+# service: beurer_daylight_lamps.send_raw_command
+# data:
+#   device_id: "DEVICE_ID"
+#   command: "3C 0F"
+
+# ============================================
+# SCHRITT 3: Status abfragen nach jedem Test
+# ============================================
+# service: beurer_daylight_lamps.send_raw_command
+# data:
+#   device_id: "DEVICE_ID"
+#   command: "30 02"
+
+# ============================================
+# Timer erkannt wenn Notification zeigt:
+# ... 01 0F ... (01 = aktiv, 0F = 15 Minuten)
+# statt:
+# ... 00 78 ... (00 = inaktiv)
+# ============================================

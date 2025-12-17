@@ -20,15 +20,22 @@ import homeassistant.helpers.config_validation as cv
 
 from .beurer_daylight_lamps import BeurerInstance
 from .const import DOMAIN, LOGGER
+from .therapy import SunriseProfile
 
 # Service constants
 SERVICE_APPLY_PRESET = "apply_preset"
 SERVICE_SEND_RAW = "send_raw_command"
 SERVICE_SET_TIMER = "set_timer"
+SERVICE_START_SUNRISE = "start_sunrise"
+SERVICE_START_SUNSET = "start_sunset"
+SERVICE_STOP_SIMULATION = "stop_simulation"
 ATTR_DEVICE_ID = "device_id"
 ATTR_PRESET = "preset"
 ATTR_COMMAND = "command"
 ATTR_MINUTES = "minutes"
+ATTR_DURATION = "duration"
+ATTR_PROFILE = "profile"
+ATTR_END_BRIGHTNESS = "end_brightness"
 
 # Preset definitions: {preset_name: (rgb, brightness, color_temp_kelvin, effect)}
 # brightness is 0-255, color_temp is Kelvin, effect is effect name or None
@@ -98,6 +105,37 @@ SERVICE_TIMER_SCHEMA = vol.Schema(
     {
         vol.Required(ATTR_DEVICE_ID): cv.string,
         vol.Required(ATTR_MINUTES): vol.All(vol.Coerce(int), vol.Range(min=1, max=240)),
+    }
+)
+
+# Sunrise profiles available
+SUNRISE_PROFILES = ["gentle", "natural", "energize", "therapy"]
+
+SERVICE_SUNRISE_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_DEVICE_ID): cv.string,
+        vol.Optional(ATTR_DURATION, default=15): vol.All(
+            vol.Coerce(int), vol.Range(min=1, max=60)
+        ),
+        vol.Optional(ATTR_PROFILE, default="natural"): vol.In(SUNRISE_PROFILES),
+    }
+)
+
+SERVICE_SUNSET_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_DEVICE_ID): cv.string,
+        vol.Optional(ATTR_DURATION, default=30): vol.All(
+            vol.Coerce(int), vol.Range(min=1, max=60)
+        ),
+        vol.Optional(ATTR_END_BRIGHTNESS, default=0): vol.All(
+            vol.Coerce(int), vol.Range(min=0, max=100)
+        ),
+    }
+)
+
+SERVICE_STOP_SIMULATION_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_DEVICE_ID): cv.string,
     }
 )
 
@@ -424,6 +462,95 @@ async def _async_setup_services(hass: HomeAssistant) -> None:
         schema=SERVICE_TIMER_SCHEMA,
     )
     LOGGER.debug("Registered service %s.%s", DOMAIN, SERVICE_SET_TIMER)
+
+    # Sunrise/Sunset simulation services
+    async def async_start_sunrise(call: ServiceCall) -> None:
+        """Start a sunrise simulation on a Beurer lamp.
+
+        Gradually increases brightness and color temperature to simulate
+        natural sunrise. This is a lifestyle feature, not a medical device.
+        """
+        device_id = call.data[ATTR_DEVICE_ID]
+        duration = call.data.get(ATTR_DURATION, 15)
+        profile_name = call.data.get(ATTR_PROFILE, "natural")
+
+        LOGGER.info(
+            "SUNRISE: Starting %d min %s sunrise on device %s",
+            duration, profile_name, device_id
+        )
+
+        instance = _get_instance_for_device(hass, device_id, "SUNRISE")
+        if not instance:
+            return
+
+        # Convert profile name to enum
+        try:
+            profile = SunriseProfile(profile_name)
+        except ValueError:
+            LOGGER.error("SUNRISE: Unknown profile '%s'", profile_name)
+            return
+
+        await instance.sunrise_simulation.start_sunrise(duration, profile)
+        LOGGER.info("SUNRISE: Started on %s", instance.mac)
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_START_SUNRISE,
+        async_start_sunrise,
+        schema=SERVICE_SUNRISE_SCHEMA,
+    )
+    LOGGER.debug("Registered service %s.%s", DOMAIN, SERVICE_START_SUNRISE)
+
+    async def async_start_sunset(call: ServiceCall) -> None:
+        """Start a sunset simulation on a Beurer lamp.
+
+        Gradually decreases brightness and shifts to warm light to simulate
+        natural sunset. This is a lifestyle feature, not a medical device.
+        """
+        device_id = call.data[ATTR_DEVICE_ID]
+        duration = call.data.get(ATTR_DURATION, 30)
+        end_brightness = call.data.get(ATTR_END_BRIGHTNESS, 0)
+
+        LOGGER.info(
+            "SUNSET: Starting %d min sunset (end: %d%%) on device %s",
+            duration, end_brightness, device_id
+        )
+
+        instance = _get_instance_for_device(hass, device_id, "SUNSET")
+        if not instance:
+            return
+
+        await instance.sunrise_simulation.start_sunset(duration, end_brightness)
+        LOGGER.info("SUNSET: Started on %s", instance.mac)
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_START_SUNSET,
+        async_start_sunset,
+        schema=SERVICE_SUNSET_SCHEMA,
+    )
+    LOGGER.debug("Registered service %s.%s", DOMAIN, SERVICE_START_SUNSET)
+
+    async def async_stop_simulation(call: ServiceCall) -> None:
+        """Stop any running sunrise/sunset simulation."""
+        device_id = call.data[ATTR_DEVICE_ID]
+
+        LOGGER.debug("STOP_SIM: Stopping simulation on device %s", device_id)
+
+        instance = _get_instance_for_device(hass, device_id, "STOP_SIM")
+        if not instance:
+            return
+
+        await instance.sunrise_simulation.stop()
+        LOGGER.info("STOP_SIM: Simulation stopped on %s", instance.mac)
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_STOP_SIMULATION,
+        async_stop_simulation,
+        schema=SERVICE_STOP_SIMULATION_SCHEMA,
+    )
+    LOGGER.debug("Registered service %s.%s", DOMAIN, SERVICE_STOP_SIMULATION)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> bool:

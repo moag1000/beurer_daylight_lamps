@@ -105,16 +105,18 @@
                         "title": "Initialization failed",
                         "description": "The Beurer lamp **{name}** ({mac}) was found but failed to initialize.\n\nError: {error}\n\nClick submit to retry."
                     }
+                },
+                "error": {
+                    "still_not_found": "Device is still not reachable. Please check the lamp is powered on and within Bluetooth range.",
+                    "reload_failed": "Reload failed. Please try again or restart Home Assistant."
+                },
+                "abort": {
+                    "entry_not_found": "Configuration entry not found."
                 }
             }
         }
     },
     "entity": {
-        "sensor": {
-            "rssi": {
-                "name": "Signal strength"
-            }
-        },
         "button": {
             "identify": {
                 "name": "Identify"
@@ -137,6 +139,23 @@
             },
             "timer": {
                 "name": "Timer"
+            },
+            "therapy_goal": {
+                "name": "Daily light goal"
+            }
+        },
+        "sensor": {
+            "rssi": {
+                "name": "Signal strength"
+            },
+            "therapy_today": {
+                "name": "Light exposure today"
+            },
+            "therapy_week": {
+                "name": "Light exposure this week"
+            },
+            "therapy_progress": {
+                "name": "Daily goal progress"
             }
         },
         "binary_sensor": {
@@ -145,6 +164,9 @@
             },
             "ble_available": {
                 "name": "Bluetooth reachable"
+            },
+            "therapy_goal_reached": {
+                "name": "Daily goal reached"
             }
         }
     },
@@ -188,6 +210,52 @@
                 "minutes": {
                     "name": "Minutes",
                     "description": "Timer duration in minutes (1-240)"
+                }
+            }
+        },
+        "start_sunrise": {
+            "name": "Start Sunrise Simulation",
+            "description": "Gradually increase brightness and color temperature to simulate a natural sunrise. This is a lifestyle/wellness feature for personal use, NOT a medical device.",
+            "fields": {
+                "device_id": {
+                    "name": "Device",
+                    "description": "The Beurer lamp device to control"
+                },
+                "duration": {
+                    "name": "Duration",
+                    "description": "Duration of the sunrise simulation in minutes (1-60)"
+                },
+                "profile": {
+                    "name": "Profile",
+                    "description": "Sunrise profile: natural, gentle, energizing, or quick"
+                }
+            }
+        },
+        "start_sunset": {
+            "name": "Start Sunset Simulation",
+            "description": "Gradually decrease brightness and color temperature to simulate a natural sunset. This is a lifestyle/wellness feature for personal use, NOT a medical device.",
+            "fields": {
+                "device_id": {
+                    "name": "Device",
+                    "description": "The Beurer lamp device to control"
+                },
+                "duration": {
+                    "name": "Duration",
+                    "description": "Duration of the sunset simulation in minutes (1-60)"
+                },
+                "profile": {
+                    "name": "Profile",
+                    "description": "Sunset profile: natural, gentle, or quick"
+                }
+            }
+        },
+        "stop_simulation": {
+            "name": "Stop Simulation",
+            "description": "Stop any running sunrise or sunset simulation on the lamp.",
+            "fields": {
+                "device_id": {
+                    "name": "Device",
+                    "description": "The Beurer lamp device to control"
                 }
             }
         }
