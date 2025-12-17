@@ -145,10 +145,12 @@ data:
 | Cmd | Suspected Feature |
 |-----|-------------------|
 | 0x33 | Unknown |
-| 0x36 | Sunrise/Sunset? |
+| 0x36 | Sunrise/Sunset simulation? |
 | 0x38 | Unknown |
 | 0x39 | Unknown |
 | 0x3F | Timer cancel? |
+
+**Note**: Timer command is `0x3E` (confirmed working). See Timer section above.
 
 ## Notification Responses
 
@@ -168,7 +170,7 @@ The integration includes a `send_raw_command` service for sending arbitrary BLE 
 2. Search for `beurer_daylight_lamps.send_raw_command`
 3. Fill in the fields:
    - **device_id**: Your lamp's device ID (find in Settings → Devices → Beurer Lamp → Device Info)
-   - **command**: Hex bytes, e.g., `33 01 1E` or `33011E`
+   - **command**: Hex bytes, e.g., `36 01` or `3601`
 4. Click "Call Service"
 
 ### YAML Example
@@ -177,7 +179,7 @@ The integration includes a `send_raw_command` service for sending arbitrary BLE 
 service: beurer_daylight_lamps.send_raw_command
 data:
   device_id: "abc123..."  # Your device ID
-  command: "33 01 1E"     # Timer 30 min?
+  command: "36 01"        # Test unknown command
 ```
 
 ### Viewing Responses
@@ -208,10 +210,13 @@ Notification from AA:BB:CC:DD:EE:FF: feef0a0fabaa...
 
 | Command | Payload Examples | Suspected Feature |
 |---------|------------------|-------------------|
-| `33` | `33 01 1E` (30min?), `33 01 3C` (60min?) | Timer |
-| `36` | `36 01`, `36 00` | Sunrise/Sunset |
+| `33` | `33 00`, `33 01` | Unknown |
+| `36` | `36 01`, `36 00` | Sunrise/Sunset simulation? |
 | `38` | `38 00`, `38 01` | Unknown |
 | `39` | `39 00`, `39 01` | Unknown |
+| `3F` | `3F 00`, `3F 01` | Timer cancel? |
+
+**Confirmed**: Timer is `0x3E [minutes]` - see Timer section above.
 
 ### Probing Strategy
 
@@ -220,26 +225,40 @@ Notification from AA:BB:CC:DD:EE:FF: feef0a0fabaa...
 3. **Vary Parameters**: Try different second bytes (0x00-0xFF)
 4. **Document Findings**: Note any lamp behavior changes
 
-### Example: Probing Timer Command
+### Example: Testing Unknown Commands
 
 ```yaml
-# Try timer 15 min
+# Test unknown command 0x33
 service: beurer_daylight_lamps.send_raw_command
 data:
   device_id: "abc123..."
-  command: "33 01 0F"
+  command: "33 00"
+```
 
-# Try timer 30 min
+```yaml
+# Test unknown command 0x36 (possible sunrise/sunset?)
 service: beurer_daylight_lamps.send_raw_command
 data:
   device_id: "abc123..."
-  command: "33 01 1E"
+  command: "36 01"
+```
 
-# Try timer 60 min
+```yaml
+# Test timer cancel (0x3F)?
 service: beurer_daylight_lamps.send_raw_command
 data:
   device_id: "abc123..."
-  command: "33 01 3C"
+  command: "3F 00"
+```
+
+**For timer functionality, use the dedicated service:**
+
+```yaml
+# Set 30-minute timer (confirmed working)
+service: beurer_daylight_lamps.set_timer
+data:
+  device_id: "abc123..."
+  minutes: 30
 ```
 
 ---
@@ -253,6 +272,7 @@ python tools/ble_sniffer.py AA:BB:CC:DD:EE:FF
 
 # Commands:
 >>> probe          # Test all unknown commands
->>> raw 33 01 1E   # Send raw bytes (e.g., timer 30min?)
+>>> raw 3E 1E      # Send raw bytes (e.g., timer 30min)
+>>> raw 36 01      # Test unknown command 0x36
 >>> status         # Get current status
 ```
