@@ -56,7 +56,95 @@ Byte 8 determines type:
 - `255` = Off
 - `0` = Shutdown
 
-## Reverse Engineering with BLE Sniffer
+## Reverse Engineering via Home Assistant UI
+
+The integration includes a `send_raw_command` service for sending arbitrary BLE commands directly from the Home Assistant interface.
+
+### Using Developer Tools → Services
+
+1. Go to **Settings → Developer Tools → Services**
+2. Search for `beurer_daylight_lamps.send_raw_command`
+3. Fill in the fields:
+   - **device_id**: Your lamp's device ID (find in Settings → Devices → Beurer Lamp → Device Info)
+   - **command**: Hex bytes, e.g., `33 01 1E` or `33011E`
+4. Click "Call Service"
+
+### YAML Example
+
+```yaml
+service: beurer_daylight_lamps.send_raw_command
+data:
+  device_id: "abc123..."  # Your device ID
+  command: "33 01 1E"     # Timer 30 min?
+```
+
+### Viewing Responses
+
+**Debug mode is only needed to see the lamp's response data.**
+Without it, commands still work but you only see success/failure messages.
+
+To enable detailed packet dumps:
+
+1. Go to **Settings → System → Logs**
+2. Filter for `beurer_daylight_lamps`
+3. Set log level to DEBUG:
+
+```yaml
+# configuration.yaml
+logger:
+  default: info
+  logs:
+    custom_components.beurer_daylight_lamps: debug
+```
+
+Responses appear as:
+```
+Notification from AA:BB:CC:DD:EE:FF: feef0a0fabaa...
+```
+
+### Commands to Probe
+
+| Command | Payload Examples | Suspected Feature |
+|---------|------------------|-------------------|
+| `33` | `33 01 1E` (30min?), `33 01 3C` (60min?) | Timer |
+| `36` | `36 01`, `36 00` | Sunrise/Sunset |
+| `38` | `38 00`, `38 01` | Unknown |
+| `39` | `39 00`, `39 01` | Unknown |
+
+### Probing Strategy
+
+1. **Start Simple**: Send `XX 00` and `XX 01` for unknown commands
+2. **Check Response**: Look for version byte changes in notifications
+3. **Vary Parameters**: Try different second bytes (0x00-0xFF)
+4. **Document Findings**: Note any lamp behavior changes
+
+### Example: Probing Timer Command
+
+```yaml
+# Try timer 15 min
+service: beurer_daylight_lamps.send_raw_command
+data:
+  device_id: "abc123..."
+  command: "33 01 0F"
+
+# Try timer 30 min
+service: beurer_daylight_lamps.send_raw_command
+data:
+  device_id: "abc123..."
+  command: "33 01 1E"
+
+# Try timer 60 min
+service: beurer_daylight_lamps.send_raw_command
+data:
+  device_id: "abc123..."
+  command: "33 01 3C"
+```
+
+---
+
+## Reverse Engineering with BLE Sniffer (CLI Tool)
+
+For more advanced testing, use the standalone Python sniffer tool:
 
 ```bash
 python tools/ble_sniffer.py AA:BB:CC:DD:EE:FF

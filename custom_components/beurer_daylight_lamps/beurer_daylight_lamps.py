@@ -104,6 +104,10 @@ class BeurerInstance:
         self._last_command_time: float = 0.0  # For rate limiting
         self._last_seen: float = time.time()  # Track when device was last seen
         self._ble_available: bool = True  # Track if device is seen by any BLE adapter
+        # Diagnostic: raw notification data for reverse engineering
+        self._last_raw_notification: str | None = None
+        self._last_unknown_notification: str | None = None
+        self._last_notification_version: int | None = None
 
     def update_ble_device(self, device: BLEDevice) -> None:
         """Update the BLE device reference.
@@ -145,6 +149,21 @@ class BeurerInstance:
     def last_seen(self) -> float:
         """Return timestamp when device was last seen."""
         return self._last_seen
+
+    @property
+    def last_raw_notification(self) -> str | None:
+        """Return the last raw notification hex string (for diagnostics)."""
+        return self._last_raw_notification
+
+    @property
+    def last_unknown_notification(self) -> str | None:
+        """Return the last unknown notification hex string (for reverse engineering)."""
+        return self._last_unknown_notification
+
+    @property
+    def last_notification_version(self) -> int | None:
+        """Return the version byte of the last notification."""
+        return self._last_notification_version
 
     def _on_disconnect(self, client: BleakClient) -> None:
         """Handle disconnection callback."""
@@ -626,17 +645,22 @@ class BeurerInstance:
         self, characteristic: BleakGATTCharacteristic, data: bytearray
     ) -> None:
         """Handle BLE notification from device."""
+        hex_str = data.hex()
         LOGGER.debug(
             "Notification from %s: %s",
             self._mac,
-            data.hex(),
+            hex_str,
         )
+
+        # Store raw notification for diagnostics (always)
+        self._last_raw_notification = hex_str
 
         if len(data) < 10:
             LOGGER.warning("Short notification (%d bytes), ignoring", len(data))
             return
 
         version = data[8]
+        self._last_notification_version = version
         trigger_update = False
 
         if version == 1:  # White mode status
@@ -704,6 +728,15 @@ class BeurerInstance:
             LOGGER.debug("Device shutting down")
             await self.disconnect()
             return
+
+        else:
+            # Unknown version - store for reverse engineering
+            self._last_unknown_notification = hex_str
+            LOGGER.info(
+                "Unknown notification version %d from %s: %s",
+                version, self._mac, hex_str
+            )
+            trigger_update = True  # Update sensors to show new unknown data
 
         # Mark as available once we've received any valid status
         if not self._available:

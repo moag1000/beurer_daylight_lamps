@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.2] - 2025-12-17
+
+### Added
+- **Diagnostic Sensors für Reverse Engineering** (standardmäßig deaktiviert):
+  - `Last raw notification` - Alle BLE-Notifications als Hex-String mit Historie
+  - `Last unknown notification` - Nur Notifications mit unbekannten Version-Bytes
+  - `Last notification version` - Das Version-Byte der letzten Notification
+- **CONTRIBUTING.md erweitert**: Dokumentation für Entwickler zum Reverse Engineering neuer Features
+- **PROTOCOL.md erweitert**: Anleitung zur Nutzung des `send_raw_command` Service über die HA UI
+
+### Changed
+- Unknown Notifications werden jetzt gespeichert statt nur geloggt (kein Log-Spam mehr)
+- Notification-Handler speichert Raw-Daten für Diagnose-Sensoren
+
 ## [1.9.1] - 2025-12-17
 
 ### Added
