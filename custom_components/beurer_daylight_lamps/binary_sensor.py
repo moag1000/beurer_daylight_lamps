@@ -22,13 +22,13 @@ from .const import DOMAIN, VERSION, detect_model
 BINARY_SENSOR_DESCRIPTIONS: tuple[BinarySensorEntityDescription, ...] = (
     BinarySensorEntityDescription(
         key="connected",
-        name="Connected",
+        translation_key="connected",
         device_class=BinarySensorDeviceClass.CONNECTIVITY,
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
     BinarySensorEntityDescription(
         key="ble_available",
-        name="Bluetooth reachable",
+        translation_key="ble_available",
         device_class=BinarySensorDeviceClass.CONNECTIVITY,
         entity_category=EntityCategory.DIAGNOSTIC,
     ),

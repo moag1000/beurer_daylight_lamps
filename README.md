@@ -176,23 +176,48 @@ The following effects are available (matching the Beurer LightUp app):
 
 ## Blueprints
 
-Ready-to-use automation blueprints are included in the `blueprints/` folder.
+Three ready-to-use blueprints are included for common lighting scenarios:
 
-### Morning Light Therapy Session
+| Blueprint | Use Case |
+|-----------|----------|
+| **Morning Light Therapy** | Wake-up with sunrise simulation + therapy session |
+| **Evening Wind Down** | Gradual dimming at sunset for better sleep |
+| **Focus Work Session** | Alerting light for productivity with break reminders |
 
-A comprehensive blueprint for daily light therapy with gradual sunrise simulation.
+### Installation
 
-**Features:**
-- Configurable start time
-- Optional workday-only mode
-- Gradual sunrise simulation (2700K → 5300K)
-- Adjustable session duration (10-60 min)
-
-**Installation:**
-1. Copy `blueprints/automation/morning_light_therapy.yaml` to your Home Assistant's `blueprints/automation/beurer_daylight_lamps/` folder
-2. Reload automations or restart Home Assistant
+1. Copy the `blueprints/automation/` folder contents to your Home Assistant's `config/blueprints/automation/beurer_daylight_lamps/` folder
+2. Restart Home Assistant or reload automations
 3. Go to **Settings** → **Automations & Scenes** → **Blueprints**
-4. Find "Morning Light Therapy Session" and click "Create Automation"
+4. Find the Beurer blueprints and click "Create Automation"
+
+### Morning Light Therapy
+
+Simulates a natural sunrise followed by full light therapy.
+
+- Gradual warm-to-cool transition (2700K → 5300K)
+- Configurable sunrise duration (0-30 min)
+- Therapy session at full brightness (10-60 min)
+- Schedule: Workdays, weekends, or every day
+- End behavior: Off, stay on, or switch to reading light
+
+### Evening Wind Down
+
+Prepares you for sleep by gradually dimming to warm light.
+
+- Triggers at sunset or fixed time
+- Gradual dimming over 15-120 minutes
+- Warm light only (2700K) to avoid blue light
+- Configurable start and end brightness
+
+### Focus Work Session
+
+Optimizes your environment for concentration.
+
+- Cool, alerting light (4000K-6500K configurable)
+- Optional Pomodoro-style break reminders
+- Work sessions from 15-120 minutes
+- End with relaxing light or turn off
 
 ## Example Automations
 

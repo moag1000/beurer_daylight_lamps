@@ -1,0 +1,54 @@
+{
+  "entity": {
+    "button": {
+      "identify": {
+        "default": "mdi:flashlight"
+      },
+      "reconnect": {
+        "default": "mdi:bluetooth-connect"
+      }
+    },
+    "sensor": {
+      "rssi": {
+        "default": "mdi:signal"
+      }
+    },
+    "binary_sensor": {
+      "connected": {
+        "default": "mdi:bluetooth-connect",
+        "state": {
+          "on": "mdi:bluetooth-connect",
+          "off": "mdi:bluetooth-off"
+        }
+      },
+      "ble_available": {
+        "default": "mdi:bluetooth-audio",
+        "state": {
+          "on": "mdi:bluetooth",
+          "off": "mdi:bluetooth-off"
+        }
+      }
+    },
+    "select": {
+      "effect": {
+        "default": "mdi:palette"
+      }
+    },
+    "number": {
+      "white_brightness": {
+        "default": "mdi:brightness-6"
+      },
+      "color_brightness": {
+        "default": "mdi:brightness-7"
+      },
+      "timer": {
+        "default": "mdi:timer-outline"
+      }
+    }
+  },
+  "services": {
+    "apply_preset": "mdi:palette-swatch",
+    "set_timer": "mdi:timer",
+    "send_raw_command": "mdi:console"
+  }
+}

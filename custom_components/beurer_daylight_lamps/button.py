@@ -20,14 +20,12 @@ from .const import DOMAIN, LOGGER, VERSION, detect_model
 BUTTON_DESCRIPTIONS: tuple[ButtonEntityDescription, ...] = (
     ButtonEntityDescription(
         key="identify",
-        name="Identify",
-        icon="mdi:flash",
+        translation_key="identify",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
     ButtonEntityDescription(
         key="reconnect",
-        name="Reconnect",
-        icon="mdi:bluetooth-connect",
+        translation_key="reconnect",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
 )

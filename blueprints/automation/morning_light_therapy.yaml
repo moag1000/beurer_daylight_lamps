@@ -1,73 +1,123 @@
 blueprint:
-  name: Morning Light Therapy Session
-  description: >
-    Automatically starts a light therapy session at a specified time on workdays.
-    The lamp gradually increases brightness to simulate sunrise, then runs at
-    full therapy brightness (5300K) for the configured duration.
+  name: "Beurer: Morning Light Therapy"
+  description: |
+    Start your day with a gentle sunrise simulation followed by full light therapy.
+
+    **How it works:**
+    1. Lamp starts dim & warm (2700K) at your chosen time
+    2. Gradually brightens to full therapy light (5300K)
+    3. Stays on for your therapy session
+    4. Automatically turns off when done
+
+    **Recommended:** 20-30 min at full brightness for effective light therapy.
   domain: automation
+  author: Beurer Daylight Lamps Integration
+  source_url: https://github.com/moag1000/beurer_daylight_lamps
+
   input:
+    # === REQUIRED ===
     beurer_light:
-      name: Beurer Daylight Lamp
-      description: Select your Beurer daylight therapy lamp
+      name: "Lamp"
+      description: "Your Beurer daylight therapy lamp"
       selector:
         entity:
-          domain: light
-          integration: beurer_daylight_lamps
+          filter:
+            - domain: light
+              integration: beurer_daylight_lamps
+
+    # === SCHEDULE ===
     start_time:
-      name: Start Time
-      description: When to start the light therapy session
+      name: "Wake-up time"
+      description: "When should the light therapy start?"
       default: "06:30:00"
       selector:
         time:
-    session_duration:
-      name: Session Duration (minutes)
-      description: How long to run the therapy session at full brightness
-      default: 30
+
+    schedule_days:
+      name: "Active days"
+      description: "Which days should this run?"
+      default: "workdays"
       selector:
-        number:
-          min: 10
-          max: 60
-          unit_of_measurement: minutes
-    workdays_only:
-      name: Workdays Only
-      description: Only run on workdays (Mon-Fri)
-      default: true
-      selector:
-        boolean:
+        select:
+          options:
+            - label: "Workdays only (Mon-Fri)"
+              value: "workdays"
+            - label: "Every day"
+              value: "daily"
+            - label: "Weekends only (Sat-Sun)"
+              value: "weekends"
+          mode: dropdown
+
+    # === SUNRISE SIMULATION ===
     gradual_start:
-      name: Gradual Start (minutes)
-      description: Time for gradual brightness increase (0 = instant full brightness)
+      name: "Sunrise duration"
+      description: "How long should the gradual wake-up take? Set to 0 for instant full brightness."
       default: 10
       selector:
         number:
           min: 0
           max: 30
-          unit_of_measurement: minutes
+          step: 5
+          unit_of_measurement: "min"
+          mode: slider
+
+    # === THERAPY SESSION ===
+    session_duration:
+      name: "Therapy duration"
+      description: "How long at full brightness (5300K)? Studies recommend 20-30 minutes."
+      default: 30
+      selector:
+        number:
+          min: 10
+          max: 60
+          step: 5
+          unit_of_measurement: "min"
+          mode: slider
+
+    # === OPTIONAL: END BEHAVIOR ===
+    end_behavior:
+      name: "After therapy"
+      description: "What should happen when the session ends?"
+      default: "off"
+      selector:
+        select:
+          options:
+            - label: "Turn off"
+              value: "off"
+            - label: "Stay on (I'll turn it off)"
+              value: "stay_on"
+            - label: "Dim to reading light (4000K, 50%)"
+              value: "reading"
+          mode: dropdown
 
 trigger:
   - platform: time
     at: !input start_time
 
 condition:
-  - condition: or
-    conditions:
-      - condition: template
-        value_template: "{{ not input_boolean_workdays_only }}"
-      - condition: time
-        weekday:
-          - mon
-          - tue
-          - wed
-          - thu
-          - fri
+  - condition: template
+    value_template: >
+      {% set schedule = schedule_days | default('workdays') %}
+      {% set day = now().weekday() %}
+      {% if schedule == 'daily' %}
+        true
+      {% elif schedule == 'workdays' %}
+        {{ day < 5 }}
+      {% elif schedule == 'weekends' %}
+        {{ day >= 5 }}
+      {% else %}
+        true
+      {% endif %}
+
+variables:
+  gradual_minutes: !input gradual_start
+  session_minutes: !input session_duration
+  light_entity: !input beurer_light
+  end_action: !input end_behavior
+  schedule_days: !input schedule_days
 
 action:
-  - variables:
-      gradual_minutes: !input gradual_start
-      session_minutes: !input session_duration
-      light_entity: !input beurer_light
-
-  # Phase 1: Gradual start (if enabled)
+  # === PHASE 1: Sunrise Simulation ===
   - if:
       - condition: template
         value_template: "{{ gradual_minutes > 0 }}"
@@ -80,7 +130,7 @@ action:
           color_temp_kelvin: 2700
           brightness_pct: 10
 
-      # Gradually increase over gradual_minutes
+      # Gradually increase brightness and color temperature
       - repeat:
           count: "{{ gradual_minutes }}"
           sequence:
@@ -90,10 +140,12 @@ action:
               target:
                 entity_id: "{{ light_entity }}"
               data:
-                color_temp_kelvin: "{{ 2700 + (repeat.index * (2600 / gradual_minutes)) | int }}"
-                brightness_pct: "{{ 10 + (repeat.index * (90 / gradual_minutes)) | int }}"
+                color_temp_kelvin: >
+                  {{ (2700 + (repeat.index * (2600 / gradual_minutes))) | int }}
+                brightness_pct: >
+                  {{ (10 + (repeat.index * (90 / gradual_minutes))) | int }}
 
-  # Phase 2: Full therapy brightness
+  # === PHASE 2: Full Therapy Brightness ===
   - service: light.turn_on
     target:
       entity_id: "{{ light_entity }}"
@@ -101,13 +153,32 @@ action:
       color_temp_kelvin: 5300
       brightness_pct: 100
 
-  # Phase 3: Wait for session duration
+  # === PHASE 3: Wait for Session ===
   - delay:
       minutes: "{{ session_minutes }}"
 
-  # Phase 4: Turn off
-  - service: light.turn_off
-    target:
-      entity_id: "{{ light_entity }}"
+  # === PHASE 4: End Behavior ===
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ end_action == 'off' }}"
+        sequence:
+          - service: light.turn_off
+            target:
+              entity_id: "{{ light_entity }}"
+
+      - conditions:
+          - condition: template
+            value_template: "{{ end_action == 'reading' }}"
+        sequence:
+          - service: light.turn_on
+            target:
+              entity_id: "{{ light_entity }}"
+            data:
+              color_temp_kelvin: 4000
+              brightness_pct: 50
+
+    # stay_on: Do nothing, lamp stays at therapy brightness
 
 mode: single
+max_exceeded: silent

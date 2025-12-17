@@ -24,39 +24,10 @@ from .const import DOMAIN, VERSION, detect_model
 SENSOR_DESCRIPTIONS: tuple[SensorEntityDescription, ...] = (
     SensorEntityDescription(
         key="rssi",
-        name="Signal strength",
+        translation_key="rssi",
         device_class=SensorDeviceClass.SIGNAL_STRENGTH,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
-        entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
-    ),
-    SensorEntityDescription(
-        key="last_raw_notification",
-        name="Last raw notification",
-        icon="mdi:bluetooth-transfer",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
-    ),
-    SensorEntityDescription(
-        key="last_unknown_notification",
-        name="Last unknown notification",
-        icon="mdi:help-network",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
-    ),
-    SensorEntityDescription(
-        key="last_notification_version",
-        name="Last notification version",
-        icon="mdi:numeric",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
-    ),
-    SensorEntityDescription(
-        key="heartbeat_count",
-        name="Heartbeat count",
-        icon="mdi:heart-pulse",
-        state_class=SensorStateClass.TOTAL_INCREASING,
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
     ),
@@ -97,19 +68,10 @@ class BeurerSensor(SensorEntity):
         self._attr_unique_id = f"{format_mac(instance.mac)}_{description.key}"
 
     @property
-    def native_value(self) -> int | str | None:
+    def native_value(self) -> int | None:
         """Return the sensor value."""
-        key = self.entity_description.key
-        if key == "rssi":
+        if self.entity_description.key == "rssi":
             return self._instance.rssi
-        if key == "last_raw_notification":
-            return self._instance.last_raw_notification
-        if key == "last_unknown_notification":
-            return self._instance.last_unknown_notification
-        if key == "last_notification_version":
-            return self._instance.last_notification_version
-        if key == "heartbeat_count":
-            return self._instance.heartbeat_count
         return None
 
     @property
