@@ -37,6 +37,11 @@ PARALLEL_UPDATES = 1
 MIN_COLOR_TEMP_KELVIN = 2700  # Warm white
 MAX_COLOR_TEMP_KELVIN = 6500  # Cool daylight
 
+# Threshold for switching to native white mode (Kelvin)
+# When color temp is >= this value, use the lamp's native white mode
+# The TL100's white mode is optimized 5300K daylight therapy light
+WHITE_MODE_THRESHOLD_KELVIN = 5000
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -146,9 +151,13 @@ class BeurerLight(LightEntity):
     @property
     def color_mode(self) -> ColorMode:
         """Return the color mode of the light."""
-        # If we set a color temperature, report COLOR_TEMP mode
-        if self._color_temp_kelvin is not None and self._instance.color_mode == ColorMode.RGB:
+        # If native white mode is active, report WHITE
+        if self._instance.color_mode == ColorMode.WHITE:
+            return ColorMode.WHITE
+        # If we set a color temperature (simulated via RGB), report COLOR_TEMP
+        if self._color_temp_kelvin is not None:
             return ColorMode.COLOR_TEMP
+        # Otherwise report the instance's mode (RGB)
         return self._instance.color_mode
 
     @property
@@ -188,21 +197,32 @@ class BeurerLight(LightEntity):
         brightness = kwargs.get(ATTR_BRIGHTNESS)
 
         if has_color_temp:
-            # Color temperature mode - convert Kelvin to RGB
+            # Color temperature mode
             kelvin = kwargs[ATTR_COLOR_TEMP_KELVIN]
             # Clamp to supported range
             kelvin = max(MIN_COLOR_TEMP_KELVIN, min(MAX_COLOR_TEMP_KELVIN, kelvin))
             self._color_temp_kelvin = kelvin
 
-            # Convert color temperature to RGB
-            rgb = color_temperature_to_rgb(kelvin)
-            LOGGER.debug("Color temp %dK -> RGB %s", kelvin, rgb)
+            # For high color temperatures (>= 5000K), use native white mode
+            # This gives the best daylight therapy light quality
+            if kelvin >= WHITE_MODE_THRESHOLD_KELVIN:
+                LOGGER.debug(
+                    "Color temp %dK >= %dK, using native white mode",
+                    kelvin, WHITE_MODE_THRESHOLD_KELVIN
+                )
+                await self._instance.set_white(
+                    brightness if has_brightness else self._instance.white_brightness
+                )
+            else:
+                # For lower color temperatures, simulate via RGB
+                rgb = color_temperature_to_rgb(kelvin)
+                LOGGER.debug("Color temp %dK -> RGB %s", kelvin, rgb)
 
-            # Use combined method to set color + brightness atomically
-            await self._instance.set_color_with_brightness(
-                rgb,
-                brightness if has_brightness else self._instance.color_brightness,
-            )
+                # Use combined method to set color + brightness atomically
+                await self._instance.set_color_with_brightness(
+                    rgb,
+                    brightness if has_brightness else self._instance.color_brightness,
+                )
 
         elif has_color:
             # RGB color mode - clear color temp tracking

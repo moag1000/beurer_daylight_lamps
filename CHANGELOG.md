@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.1] - 2025-12-17
+
+### Added
+- **HomeKit/Siri Weiß-Modus Unterstützung**: Farbtemperaturen >= 5000K aktivieren jetzt den nativen Weiß-Modus
+  - In Apple Home: Farbtemperatur-Slider ganz nach "kalt" (rechts) schieben → Weiß-Modus
+  - Mit Siri: "Hey Siri, stelle die Beurer Lampe auf kaltweiß" → Weiß-Modus
+  - Der native Weiß-Modus bietet optimiertes 5300K Tageslicht für die Lichttherapie
+- **Threshold konfigurierbar**: `WHITE_MODE_THRESHOLD_KELVIN = 5000` (kann bei Bedarf angepasst werden)
+
+### Changed
+- **Verbesserte color_mode Property**: Gibt jetzt korrekt WHITE zurück wenn der native Modus aktiv ist
+
 ## [1.9.0] - 2025-12-17
 
 ### Fixed
