@@ -4,30 +4,30 @@ blueprint:
     ## Prepare for restful sleep with gradual dimming
 
     This blueprint helps you wind down in the evening by gradually reducing
-    brightness and shifting to warm, sleep-friendly light. Blue light is
+    brightness while maintaining warm, sleep-friendly light. Blue light is
     minimized to support your natural sleep rhythm.
 
     ### Features
-    - Gradual dimming over your chosen duration
+    - Gradual dimming with smooth transitions
     - Warm light only (2700K) to avoid blue light
     - Trigger at sunset or a fixed time
     - Support for multiple lights
+    - Automatic abort if lights are turned off manually
     - Option to only run if lights are already on
 
     ### How It Works
     1. Starts at your chosen brightness with warm 2700K light
-    2. Gradually dims every 2 minutes
+    2. Gradually dims with smooth 30-second transitions
     3. Ends at your target brightness (or turns off if set to 0%)
 
     > **Tip**: Start 1-2 hours before bedtime for best results.
   domain: automation
   source_url: https://github.com/moag1000/beurer_daylight_lamps/blob/main/blueprints/automation/beurer_daylight_lamps/evening_wind_down.yaml
   author: moag1000
+  homeassistant:
+    min_version: "2023.9.0"
 
   input:
-    # ═══════════════════════════════════════════════════════════════════════════
-    # LIGHTS SECTION
-    # ═══════════════════════════════════════════════════════════════════════════
     beurer_light:
       name: "Primary Beurer Lamp"
       description: "Select your main Beurer daylight therapy lamp"
@@ -62,11 +62,7 @@ blueprint:
               value: "brightness_only"
             - label: "On/Off only - Use their default settings"
               value: "on_off_only"
-          mode: dropdown
 
-    # ═══════════════════════════════════════════════════════════════════════════
-    # TRIGGER SECTION
-    # ═══════════════════════════════════════════════════════════════════════════
     trigger_type:
       name: "When to Start"
       description: "Choose what triggers the wind-down routine"
@@ -78,7 +74,6 @@ blueprint:
               value: "sunset"
             - label: "At a fixed time"
               value: "fixed"
-          mode: dropdown
 
     fixed_time:
       name: "Fixed Time"
@@ -99,16 +94,11 @@ blueprint:
           max: 120
           step: 15
           unit_of_measurement: "min"
-          mode: slider
 
-    # ═══════════════════════════════════════════════════════════════════════════
-    # DIMMING SETTINGS
-    # ═══════════════════════════════════════════════════════════════════════════
     wind_down_duration:
       name: "Wind-down Duration"
       description: |
         How long should the dimming process take?
-
         Tip: 30-60 minutes gives a gentle transition.
       default: 60
       selector:
@@ -117,7 +107,6 @@ blueprint:
           max: 120
           step: 15
           unit_of_measurement: "min"
-          mode: slider
 
     start_brightness:
       name: "Starting Brightness"
@@ -129,7 +118,6 @@ blueprint:
           max: 100
           step: 10
           unit_of_measurement: "%"
-          mode: slider
 
     end_brightness:
       name: "Ending Brightness"
@@ -143,11 +131,7 @@ blueprint:
           max: 50
           step: 5
           unit_of_measurement: "%"
-          mode: slider
 
-    # ═══════════════════════════════════════════════════════════════════════════
-    # BEHAVIOR OPTIONS
-    # ═══════════════════════════════════════════════════════════════════════════
     only_if_on:
       name: "Only If Already On"
       description: |
@@ -157,9 +141,6 @@ blueprint:
       selector:
         boolean:
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# VARIABLES
-# ═══════════════════════════════════════════════════════════════════════════════
 variables:
   beurer: !input beurer_light
   extras: !input additional_lights
@@ -170,21 +151,16 @@ variables:
   brightness_end: !input end_brightness
   check_state: !input only_if_on
 
-  # Helper: all lights combined
-  all_lights: >
-    {{ [beurer] + (extras if extras else []) }}
-
-  # Helper: has additional lights?
-  has_extras: >
-    {{ extras is defined and extras | length > 0 }}
-
-  # Calculate dimming steps (one every 2 minutes)
-  total_steps: "{{ (duration_mins / 2) | int }}"
+  # Calculate steps (one every minute for smoother dimming)
+  total_steps: "{{ duration_mins | int }}"
   brightness_per_step: "{{ ((brightness_start - brightness_end) / total_steps) | float }}"
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# TRIGGERS
-# ═══════════════════════════════════════════════════════════════════════════════
+  # All lights for turning off
+  all_lights: "{{ [beurer] + (extras if extras else []) }}"
+
+  # Check if we have extras
+  has_extras: "{{ extras is defined and extras | length > 0 }}"
+
 trigger:
   - platform: sun
     event: sunset
@@ -194,9 +170,6 @@ trigger:
     at: !input fixed_time
     id: time_trigger
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# CONDITIONS
-# ═══════════════════════════════════════════════════════════════════════════════
 condition:
   # Match trigger type
   - condition: or
@@ -223,19 +196,17 @@ condition:
         entity_id: !input beurer_light
         state: "on"
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# ACTIONS
-# ═══════════════════════════════════════════════════════════════════════════════
 action:
-  # ─────────────────────────────────────────────────────────────────────────────
+  # =========================================================================
   # INITIAL STATE: Set warm light at starting brightness
-  # ─────────────────────────────────────────────────────────────────────────────
+  # =========================================================================
   - service: light.turn_on
     target:
       entity_id: "{{ beurer }}"
     data:
       brightness_pct: "{{ brightness_start }}"
       color_temp_kelvin: 2700
+      transition: 3
 
   - if:
       - condition: template
@@ -250,6 +221,7 @@ action:
                 data:
                   brightness_pct: "{{ brightness_start }}"
                   color_temp_kelvin: 2700
+                  transition: 3
           - conditions: "{{ sync == 'brightness_only' }}"
             sequence:
               - service: light.turn_on
@@ -257,29 +229,40 @@ action:
                   entity_id: "{{ extras }}"
                 data:
                   brightness_pct: "{{ brightness_start }}"
+                  transition: 3
         default:
           - service: light.turn_on
             target:
               entity_id: "{{ extras }}"
 
-  # ─────────────────────────────────────────────────────────────────────────────
+  # Wait for initial setup
+  - delay:
+      seconds: 5
+
+  # =========================================================================
   # GRADUAL DIMMING
-  # ─────────────────────────────────────────────────────────────────────────────
+  # =========================================================================
   - repeat:
       count: "{{ total_steps }}"
       sequence:
-        - delay:
-            minutes: 2
-        - variables:
-            current_brightness: "{{ (brightness_start - (brightness_per_step * repeat.index)) | int | max(brightness_end) }}"
+        # Check if lamp was turned off manually - abort if so
+        - condition: state
+          entity_id: !input beurer_light
+          state: "on"
 
-        # Update Beurer lamp
+        # Calculate current brightness
+        - variables:
+            step: "{{ repeat.index }}"
+            current_brightness: "{{ (brightness_start - (brightness_per_step * step)) | round(0) | int | max(brightness_end) }}"
+
+        # Update Beurer lamp with smooth transition
         - service: light.turn_on
           target:
             entity_id: "{{ beurer }}"
           data:
             brightness_pct: "{{ current_brightness }}"
             color_temp_kelvin: 2700
+            transition: 30
 
         # Update additional lights
         - if:
@@ -295,6 +278,7 @@ action:
                       data:
                         brightness_pct: "{{ current_brightness }}"
                         color_temp_kelvin: 2700
+                        transition: 30
                 - conditions: "{{ sync == 'brightness_only' }}"
                   sequence:
                     - service: light.turn_on
@@ -302,10 +286,19 @@ action:
                         entity_id: "{{ extras }}"
                       data:
                         brightness_pct: "{{ current_brightness }}"
+                        transition: 30
 
-  # ─────────────────────────────────────────────────────────────────────────────
+        # Wait for next step (1 minute)
+        - delay:
+            minutes: 1
+
+  # =========================================================================
   # FINAL ACTION: Turn off if end brightness is 0
-  # ─────────────────────────────────────────────────────────────────────────────
+  # =========================================================================
+  - condition: state
+    entity_id: !input beurer_light
+    state: "on"
+
   - if:
       - condition: template
         value_template: "{{ brightness_end == 0 }}"
@@ -313,6 +306,8 @@ action:
       - service: light.turn_off
         target:
           entity_id: "{{ all_lights }}"
+        data:
+          transition: 10
 
 mode: single
 max_exceeded: silent

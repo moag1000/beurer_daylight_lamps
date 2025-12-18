@@ -9,10 +9,11 @@ blueprint:
 
     ### Features
     - Gradual sunrise simulation (warm to cool light)
+    - Smooth transitions between brightness levels
     - Configurable therapy duration at full brightness
     - Support for multiple lights (sync additional lamps)
     - Flexible scheduling (workdays, weekends, or daily)
-    - Multiple end behaviors (off, stay on, or reading mode)
+    - Automatic abort if lights are turned off manually
 
     ### Recommended Settings
     - **Sunrise**: 15-20 minutes for a natural wake-up
@@ -22,11 +23,10 @@ blueprint:
   domain: automation
   source_url: https://github.com/moag1000/beurer_daylight_lamps/blob/main/blueprints/automation/beurer_daylight_lamps/morning_light_therapy.yaml
   author: moag1000
+  homeassistant:
+    min_version: "2023.9.0"
 
   input:
-    # ═══════════════════════════════════════════════════════════════════════════
-    # LIGHTS SECTION
-    # ═══════════════════════════════════════════════════════════════════════════
     beurer_light:
       name: "Primary Beurer Lamp"
       description: "Select your main Beurer daylight therapy lamp"
@@ -61,11 +61,7 @@ blueprint:
               value: "brightness_only"
             - label: "On/Off only - Use their default settings"
               value: "on_off_only"
-          mode: dropdown
 
-    # ═══════════════════════════════════════════════════════════════════════════
-    # SCHEDULE SECTION
-    # ═══════════════════════════════════════════════════════════════════════════
     wake_time:
       name: "Wake-up Time"
       description: "When should the sunrise begin? (Light starts dim at this time)"
@@ -86,17 +82,12 @@ blueprint:
               value: "weekends"
             - label: "Every day"
               value: "daily"
-          mode: dropdown
 
-    # ═══════════════════════════════════════════════════════════════════════════
-    # SUNRISE SIMULATION
-    # ═══════════════════════════════════════════════════════════════════════════
     sunrise_duration:
       name: "Sunrise Duration"
       description: |
         How long should the sunrise simulation take?
         Set to 0 to skip sunrise and start directly at full brightness.
-
         Tip: 15-20 minutes feels most natural.
       default: 15
       selector:
@@ -105,16 +96,11 @@ blueprint:
           max: 30
           step: 5
           unit_of_measurement: "min"
-          mode: slider
 
-    # ═══════════════════════════════════════════════════════════════════════════
-    # THERAPY SESSION
-    # ═══════════════════════════════════════════════════════════════════════════
     therapy_duration:
       name: "Therapy Duration"
       description: |
         How long to maintain full brightness (5300K) after sunrise?
-
         Typical sessions are 20-30 minutes.
       default: 30
       selector:
@@ -123,11 +109,7 @@ blueprint:
           max: 60
           step: 5
           unit_of_measurement: "min"
-          mode: slider
 
-    # ═══════════════════════════════════════════════════════════════════════════
-    # END BEHAVIOR
-    # ═══════════════════════════════════════════════════════════════════════════
     end_action:
       name: "After Session Ends"
       description: "What should happen when the therapy session is complete?"
@@ -141,11 +123,7 @@ blueprint:
               value: "stay_on"
             - label: "Switch to comfortable reading light (4000K, 80%)"
               value: "reading"
-          mode: dropdown
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# VARIABLES
-# ═══════════════════════════════════════════════════════════════════════════════
 variables:
   beurer: !input beurer_light
   extras: !input additional_lights
@@ -155,24 +133,19 @@ variables:
   schedule: !input schedule_days
   end_behavior: !input end_action
 
-  # Helper: all lights combined
-  all_lights: >
-    {{ [beurer] + (extras if extras else []) }}
+  # Calculate steps: one update every 30 seconds
+  total_steps: "{{ (sunrise_mins * 2) | int if sunrise_mins > 0 else 0 }}"
 
-  # Helper: has additional lights?
-  has_extras: >
-    {{ extras is defined and extras | length > 0 }}
+  # All lights for turning off
+  all_lights: "{{ [beurer] + (extras if extras else []) }}"
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# TRIGGER
-# ═══════════════════════════════════════════════════════════════════════════════
+  # Check if we have extras
+  has_extras: "{{ extras is defined and extras | length > 0 }}"
+
 trigger:
   - platform: time
     at: !input wake_time
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# CONDITIONS
-# ═══════════════════════════════════════════════════════════════════════════════
 condition:
   - condition: template
     value_template: >
@@ -181,102 +154,127 @@ condition:
          (schedule == 'workdays' and day < 5) or
          (schedule == 'weekends' and day >= 5) }}
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# ACTIONS
-# ═══════════════════════════════════════════════════════════════════════════════
 action:
-  # ─────────────────────────────────────────────────────────────────────────────
-  # PHASE 1: SUNRISE SIMULATION
-  # ─────────────────────────────────────────────────────────────────────────────
-  - choose:
-      - conditions:
-          - condition: template
-            value_template: "{{ sunrise_mins > 0 }}"
-        sequence:
-          # Start: Very dim, warm light (like dawn)
-          - service: light.turn_on
-            target:
-              entity_id: "{{ beurer }}"
-            data:
-              brightness_pct: 5
-              color_temp_kelvin: 2700
+  # =========================================================================
+  # PHASE 1: SUNRISE SIMULATION (gradual increase over sunrise_mins)
+  # =========================================================================
+  - if:
+      - condition: template
+        value_template: "{{ sunrise_mins > 0 }}"
+    then:
+      # Start very dim and warm
+      - service: light.turn_on
+        target:
+          entity_id: "{{ beurer }}"
+        data:
+          brightness_pct: 1
+          color_temp_kelvin: 2700
+          transition: 2
 
-          # Additional lights: initial state
-          - if:
-              - condition: template
-                value_template: "{{ has_extras }}"
-            then:
-              - choose:
-                  - conditions: "{{ sync == 'full_sync' }}"
-                    sequence:
-                      - service: light.turn_on
-                        target:
-                          entity_id: "{{ extras }}"
-                        data:
-                          brightness_pct: 5
-                          color_temp_kelvin: 2700
-                  - conditions: "{{ sync == 'brightness_only' }}"
-                    sequence:
-                      - service: light.turn_on
-                        target:
-                          entity_id: "{{ extras }}"
-                        data:
-                          brightness_pct: 5
-                default:
+      # Additional lights: initial dim state
+      - if:
+          - condition: template
+            value_template: "{{ has_extras }}"
+        then:
+          - choose:
+              - conditions: "{{ sync == 'full_sync' }}"
+                sequence:
                   - service: light.turn_on
                     target:
                       entity_id: "{{ extras }}"
+                    data:
+                      brightness_pct: 1
+                      color_temp_kelvin: 2700
+                      transition: 2
+              - conditions: "{{ sync == 'brightness_only' }}"
+                sequence:
+                  - service: light.turn_on
+                    target:
+                      entity_id: "{{ extras }}"
+                    data:
+                      brightness_pct: 1
+                      transition: 2
+            default:
+              - service: light.turn_on
+                target:
+                  entity_id: "{{ extras }}"
 
-          # Gradual transition: dim warm -> bright cool
-          - repeat:
-              count: "{{ (sunrise_mins * 2) | int }}"
-              sequence:
-                - delay:
-                    seconds: 30
-                - variables:
-                    progress: "{{ repeat.index / (sunrise_mins * 2) }}"
-                    current_brightness: "{{ (5 + (95 * progress)) | int }}"
-                    current_temp: "{{ (2700 + (2600 * progress)) | int }}"
+      # Wait for initial turn on
+      - delay:
+          seconds: 3
 
-                # Update Beurer lamp
-                - service: light.turn_on
-                  target:
-                    entity_id: "{{ beurer }}"
-                  data:
-                    brightness_pct: "{{ current_brightness }}"
-                    color_temp_kelvin: "{{ current_temp }}"
+      # Gradual sunrise loop
+      - repeat:
+          count: "{{ total_steps }}"
+          sequence:
+            # Check if lamp was turned off manually - abort if so
+            - condition: state
+              entity_id: !input beurer_light
+              state: "on"
 
-                # Update additional lights
-                - if:
-                    - condition: template
-                      value_template: "{{ has_extras }}"
-                  then:
-                    - choose:
-                        - conditions: "{{ sync == 'full_sync' }}"
-                          sequence:
-                            - service: light.turn_on
-                              target:
-                                entity_id: "{{ extras }}"
-                              data:
-                                brightness_pct: "{{ current_brightness }}"
-                                color_temp_kelvin: "{{ current_temp }}"
-                        - conditions: "{{ sync == 'brightness_only' }}"
-                          sequence:
-                            - service: light.turn_on
-                              target:
-                                entity_id: "{{ extras }}"
-                              data:
-                                brightness_pct: "{{ current_brightness }}"
+            # Calculate current values based on progress
+            # Progress goes from 1/total_steps to total_steps/total_steps (1.0)
+            - variables:
+                step: "{{ repeat.index }}"
+                progress: "{{ step / total_steps }}"
+                # Brightness: 1% -> 100% (exponential feels more natural)
+                target_brightness: "{{ (1 + (99 * (progress ** 1.5))) | round(0) | int }}"
+                # Color temp: 2700K -> 5300K (linear)
+                target_temp: "{{ (2700 + (2600 * progress)) | round(0) | int }}"
 
-  # ─────────────────────────────────────────────────────────────────────────────
+            # Update Beurer lamp with smooth transition
+            - service: light.turn_on
+              target:
+                entity_id: "{{ beurer }}"
+              data:
+                brightness_pct: "{{ target_brightness }}"
+                color_temp_kelvin: "{{ target_temp }}"
+                transition: 25
+
+            # Update additional lights
+            - if:
+                - condition: template
+                  value_template: "{{ has_extras }}"
+              then:
+                - choose:
+                    - conditions: "{{ sync == 'full_sync' }}"
+                      sequence:
+                        - service: light.turn_on
+                          target:
+                            entity_id: "{{ extras }}"
+                          data:
+                            brightness_pct: "{{ target_brightness }}"
+                            color_temp_kelvin: "{{ target_temp }}"
+                            transition: 25
+                    - conditions: "{{ sync == 'brightness_only' }}"
+                      sequence:
+                        - service: light.turn_on
+                          target:
+                            entity_id: "{{ extras }}"
+                          data:
+                            brightness_pct: "{{ target_brightness }}"
+                            transition: 25
+
+            # Wait before next step (30 seconds minus transition overlap)
+            - delay:
+                seconds: 30
+
+  # =========================================================================
   # PHASE 2: FULL THERAPY BRIGHTNESS
-  # ─────────────────────────────────────────────────────────────────────────────
+  # =========================================================================
+  # Only continue if lamp is still on
+  - condition: state
+    entity_id: !input beurer_light
+    state: "on"
+
+  # Set full therapy brightness
   - service: light.turn_on
     target:
       entity_id: "{{ beurer }}"
     data:
       brightness_pct: 100
       color_temp_kelvin: 5300
+      transition: 5
 
   - if:
       - condition: template
@@ -291,6 +289,7 @@ action:
                 data:
                   brightness_pct: 100
                   color_temp_kelvin: 5300
+                  transition: 5
           - conditions: "{{ sync == 'brightness_only' }}"
             sequence:
               - service: light.turn_on
@@ -298,23 +297,31 @@ action:
                   entity_id: "{{ extras }}"
                 data:
                   brightness_pct: 100
+                  transition: 5
 
-  # Wait for therapy session
+  # Wait for therapy duration
   - delay:
       minutes: "{{ therapy_mins }}"
 
-  # ─────────────────────────────────────────────────────────────────────────────
+  # =========================================================================
   # PHASE 3: END ACTION
-  # ─────────────────────────────────────────────────────────────────────────────
+  # =========================================================================
+  # Only execute end action if lamp is still on
+  - condition: state
+    entity_id: !input beurer_light
+    state: "on"
+
   - choose:
-      # Option: Turn off
+      # Turn off all lights
       - conditions: "{{ end_behavior == 'off' }}"
         sequence:
           - service: light.turn_off
             target:
               entity_id: "{{ all_lights }}"
+            data:
+              transition: 5
 
-      # Option: Switch to reading light
+      # Switch to reading light
       - conditions: "{{ end_behavior == 'reading' }}"
         sequence:
           - service: light.turn_on
@@ -323,6 +330,7 @@ action:
             data:
               brightness_pct: 80
               color_temp_kelvin: 4000
+              transition: 10
           - if:
               - condition: template
                 value_template: "{{ has_extras }}"
@@ -336,6 +344,7 @@ action:
                         data:
                           brightness_pct: 80
                           color_temp_kelvin: 4000
+                          transition: 10
                   - conditions: "{{ sync == 'brightness_only' }}"
                     sequence:
                       - service: light.turn_on
@@ -343,8 +352,9 @@ action:
                           entity_id: "{{ extras }}"
                         data:
                           brightness_pct: 80
+                          transition: 10
 
-      # Option: Stay on (do nothing - lights remain at therapy brightness)
+      # Stay on: do nothing (lights remain at therapy brightness)
 
 mode: single
 max_exceeded: silent

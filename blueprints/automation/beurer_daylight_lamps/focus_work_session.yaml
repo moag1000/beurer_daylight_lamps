@@ -13,6 +13,7 @@ blueprint:
     - Support for multiple lights
     - Configurable session duration
     - Multiple end behaviors
+    - Automatic abort if lights are turned off manually
 
     ### How Pomodoro Breaks Work
     When enabled, the lights briefly dim and warm up every N minutes as a
@@ -24,6 +25,8 @@ blueprint:
   domain: automation
   source_url: https://github.com/moag1000/beurer_daylight_lamps/blob/main/blueprints/automation/beurer_daylight_lamps/focus_work_session.yaml
   author: moag1000
+  homeassistant:
+    min_version: "2023.9.0"
 
   input:
     # ═══════════════════════════════════════════════════════════════════════════
@@ -209,7 +212,12 @@ variables:
     {{ extras is defined and extras | length > 0 }}
 
   # Calculate number of breaks in session
-  total_breaks: "{{ ((session_mins / break_mins) | int) - 1 }}"
+  # For 60 min session with 25 min intervals: 60/25 = 2.4 -> 2 full intervals = 2 breaks
+  # (We take a break AFTER each work interval, except the last one ends the session)
+  total_breaks: "{{ (session_mins / break_mins) | int }}"
+
+  # Minutes in the final work period (after the last break)
+  final_period_mins: "{{ session_mins - (total_breaks * break_mins) }}"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # TRIGGERS
@@ -255,6 +263,7 @@ action:
     data:
       brightness_pct: "{{ focus_bright }}"
       color_temp_kelvin: "{{ focus_temp }}"
+      transition: 3
 
   - if:
       - condition: template
@@ -269,6 +278,7 @@ action:
                 data:
                   brightness_pct: "{{ focus_bright }}"
                   color_temp_kelvin: "{{ focus_temp }}"
+                  transition: 3
           - conditions: "{{ sync == 'brightness_only' }}"
             sequence:
               - service: light.turn_on
@@ -276,10 +286,15 @@ action:
                   entity_id: "{{ extras }}"
                 data:
                   brightness_pct: "{{ focus_bright }}"
+                  transition: 3
         default:
           - service: light.turn_on
             target:
               entity_id: "{{ extras }}"
+
+  # Wait for initial setup
+  - delay:
+      seconds: 5
 
   # ─────────────────────────────────────────────────────────────────────────────
   # MAIN SESSION (with optional breaks)
@@ -293,17 +308,28 @@ action:
           - repeat:
               count: "{{ total_breaks }}"
               sequence:
+                # Check if lamp was turned off manually - abort if so
+                - condition: state
+                  entity_id: !input beurer_light
+                  state: "on"
+
                 # Work period
                 - delay:
                     minutes: "{{ break_mins }}"
 
-                # Break reminder: dim and warm briefly
+                # Check again before break reminder
+                - condition: state
+                  entity_id: !input beurer_light
+                  state: "on"
+
+                # Break reminder: dim and warm briefly with smooth transition
                 - service: light.turn_on
                   target:
                     entity_id: "{{ beurer }}"
                   data:
                     brightness_pct: 30
                     color_temp_kelvin: 3500
+                    transition: 2
 
                 - if:
                     - condition: template
@@ -315,18 +341,20 @@ action:
                       data:
                         brightness_pct: 30
                         color_temp_kelvin: "{{ 3500 if sync == 'full_sync' else focus_temp }}"
+                        transition: 2
 
-                # Brief pause for break
+                # Brief pause for break (10 seconds)
                 - delay:
                     seconds: 10
 
-                # Back to focus light
+                # Back to focus light with smooth transition
                 - service: light.turn_on
                   target:
                     entity_id: "{{ beurer }}"
                   data:
                     brightness_pct: "{{ focus_bright }}"
                     color_temp_kelvin: "{{ focus_temp }}"
+                    transition: 2
 
                 - if:
                     - condition: template
@@ -341,6 +369,7 @@ action:
                               data:
                                 brightness_pct: "{{ focus_bright }}"
                                 color_temp_kelvin: "{{ focus_temp }}"
+                                transition: 2
                         - conditions: "{{ sync == 'brightness_only' }}"
                           sequence:
                             - service: light.turn_on
@@ -348,10 +377,20 @@ action:
                                 entity_id: "{{ extras }}"
                               data:
                                 brightness_pct: "{{ focus_bright }}"
+                                transition: 2
+
+          # Check before final work period
+          - condition: state
+            entity_id: !input beurer_light
+            state: "on"
 
           # Final work period (remaining time after last break)
-          - delay:
-              minutes: "{{ session_mins - (total_breaks * break_mins) }}"
+          - if:
+              - condition: template
+                value_template: "{{ final_period_mins > 0 }}"
+            then:
+              - delay:
+                  minutes: "{{ final_period_mins }}"
 
     # WITHOUT BREAKS - just wait for session duration
     default:
@@ -361,6 +400,11 @@ action:
   # ─────────────────────────────────────────────────────────────────────────────
   # END ACTION
   # ─────────────────────────────────────────────────────────────────────────────
+  # Only execute end action if lamp is still on
+  - condition: state
+    entity_id: !input beurer_light
+    state: "on"
+
   - choose:
       # Turn off
       - conditions: "{{ end_behavior == 'off' }}"
@@ -368,6 +412,8 @@ action:
           - service: light.turn_off
             target:
               entity_id: "{{ all_lights }}"
+            data:
+              transition: 5
 
       # Switch to relaxing light
       - conditions: "{{ end_behavior == 'relax' }}"
@@ -378,6 +424,7 @@ action:
             data:
               brightness_pct: 50
               color_temp_kelvin: 2700
+              transition: 10
 
           - if:
               - condition: template
@@ -392,6 +439,7 @@ action:
                         data:
                           brightness_pct: 50
                           color_temp_kelvin: 2700
+                          transition: 10
                   - conditions: "{{ sync == 'brightness_only' }}"
                     sequence:
                       - service: light.turn_on
@@ -399,6 +447,7 @@ action:
                           entity_id: "{{ extras }}"
                         data:
                           brightness_pct: 50
+                          transition: 10
 
       # Stay on (do nothing)
 
