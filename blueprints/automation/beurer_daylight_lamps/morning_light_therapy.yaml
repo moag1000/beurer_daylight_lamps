@@ -142,6 +142,11 @@ variables:
   # Check if we have extras
   has_extras: "{{ extras is defined and extras | length > 0 }}"
 
+  # Helper to check light capabilities (used in templates)
+  # supported_color_modes can include: onoff, brightness, color_temp, hs, rgb, rgbw, rgbww, white, xy
+  ct_modes: "{{ ['color_temp', 'rgbww', 'white'] }}"
+  brightness_modes: "{{ ['brightness', 'color_temp', 'hs', 'rgb', 'rgbw', 'rgbww', 'white', 'xy'] }}"
+
 trigger:
   - platform: time
     at: !input wake_time
@@ -171,33 +176,53 @@ action:
           color_temp_kelvin: 2700
           transition: 2
 
-      # Additional lights: initial dim state
+      # Additional lights: initial dim state (with capability detection)
       - if:
           - condition: template
             value_template: "{{ has_extras }}"
         then:
-          - choose:
-              - conditions: "{{ sync == 'full_sync' }}"
-                sequence:
-                  - service: light.turn_on
-                    target:
-                      entity_id: "{{ extras }}"
-                    data:
-                      brightness_pct: 1
-                      color_temp_kelvin: 2700
-                      transition: 2
-              - conditions: "{{ sync == 'brightness_only' }}"
-                sequence:
-                  - service: light.turn_on
-                    target:
-                      entity_id: "{{ extras }}"
-                    data:
-                      brightness_pct: 1
-                      transition: 2
-            default:
-              - service: light.turn_on
-                target:
-                  entity_id: "{{ extras }}"
+          - repeat:
+              for_each: "{{ extras }}"
+              sequence:
+                - variables:
+                    light_entity: "{{ repeat.item }}"
+                    light_modes: "{{ state_attr(light_entity, 'supported_color_modes') or [] }}"
+                    supports_brightness: "{{ light_modes | select('in', brightness_modes) | list | length > 0 }}"
+                    supports_ct: "{{ light_modes | select('in', ct_modes) | list | length > 0 }}"
+                - choose:
+                    # Full sync with color temp support
+                    - conditions: "{{ sync == 'full_sync' and supports_ct and supports_brightness }}"
+                      sequence:
+                        - service: light.turn_on
+                          target:
+                            entity_id: "{{ light_entity }}"
+                          data:
+                            brightness_pct: 1
+                            color_temp_kelvin: 2700
+                            transition: 2
+                    # Full sync but no CT - just brightness
+                    - conditions: "{{ sync == 'full_sync' and supports_brightness }}"
+                      sequence:
+                        - service: light.turn_on
+                          target:
+                            entity_id: "{{ light_entity }}"
+                          data:
+                            brightness_pct: 1
+                            transition: 2
+                    # Brightness only mode
+                    - conditions: "{{ sync == 'brightness_only' and supports_brightness }}"
+                      sequence:
+                        - service: light.turn_on
+                          target:
+                            entity_id: "{{ light_entity }}"
+                          data:
+                            brightness_pct: 1
+                            transition: 2
+                  # Default: on/off only or no brightness support
+                  default:
+                    - service: light.turn_on
+                      target:
+                        entity_id: "{{ light_entity }}"
 
       # Wait for initial turn on
       - delay:
@@ -231,29 +256,49 @@ action:
                 color_temp_kelvin: "{{ target_temp }}"
                 transition: 25
 
-            # Update additional lights
+            # Update additional lights (with capability detection)
             - if:
                 - condition: template
                   value_template: "{{ has_extras }}"
               then:
-                - choose:
-                    - conditions: "{{ sync == 'full_sync' }}"
-                      sequence:
-                        - service: light.turn_on
-                          target:
-                            entity_id: "{{ extras }}"
-                          data:
-                            brightness_pct: "{{ target_brightness }}"
-                            color_temp_kelvin: "{{ target_temp }}"
-                            transition: 25
-                    - conditions: "{{ sync == 'brightness_only' }}"
-                      sequence:
-                        - service: light.turn_on
-                          target:
-                            entity_id: "{{ extras }}"
-                          data:
-                            brightness_pct: "{{ target_brightness }}"
-                            transition: 25
+                - repeat:
+                    for_each: "{{ extras }}"
+                    sequence:
+                      - variables:
+                          light_entity: "{{ repeat.item }}"
+                          light_modes: "{{ state_attr(light_entity, 'supported_color_modes') or [] }}"
+                          supports_brightness: "{{ light_modes | select('in', brightness_modes) | list | length > 0 }}"
+                          supports_ct: "{{ light_modes | select('in', ct_modes) | list | length > 0 }}"
+                      - choose:
+                          # Full sync with color temp support
+                          - conditions: "{{ sync == 'full_sync' and supports_ct and supports_brightness }}"
+                            sequence:
+                              - service: light.turn_on
+                                target:
+                                  entity_id: "{{ light_entity }}"
+                                data:
+                                  brightness_pct: "{{ target_brightness }}"
+                                  color_temp_kelvin: "{{ target_temp }}"
+                                  transition: 25
+                          # Full sync but no CT - just brightness
+                          - conditions: "{{ sync == 'full_sync' and supports_brightness }}"
+                            sequence:
+                              - service: light.turn_on
+                                target:
+                                  entity_id: "{{ light_entity }}"
+                                data:
+                                  brightness_pct: "{{ target_brightness }}"
+                                  transition: 25
+                          # Brightness only mode
+                          - conditions: "{{ sync == 'brightness_only' and supports_brightness }}"
+                            sequence:
+                              - service: light.turn_on
+                                target:
+                                  entity_id: "{{ light_entity }}"
+                                data:
+                                  brightness_pct: "{{ target_brightness }}"
+                                  transition: 25
+                        # Default: on/off only - light is already on, no action needed
 
             # Wait before next step (30 seconds minus transition overlap)
             - delay:
@@ -276,28 +321,49 @@ action:
       color_temp_kelvin: 5300
       transition: 5
 
+  # Additional lights: therapy brightness (with capability detection)
   - if:
       - condition: template
         value_template: "{{ has_extras }}"
     then:
-      - choose:
-          - conditions: "{{ sync == 'full_sync' }}"
-            sequence:
-              - service: light.turn_on
-                target:
-                  entity_id: "{{ extras }}"
-                data:
-                  brightness_pct: 100
-                  color_temp_kelvin: 5300
-                  transition: 5
-          - conditions: "{{ sync == 'brightness_only' }}"
-            sequence:
-              - service: light.turn_on
-                target:
-                  entity_id: "{{ extras }}"
-                data:
-                  brightness_pct: 100
-                  transition: 5
+      - repeat:
+          for_each: "{{ extras }}"
+          sequence:
+            - variables:
+                light_entity: "{{ repeat.item }}"
+                light_modes: "{{ state_attr(light_entity, 'supported_color_modes') or [] }}"
+                supports_brightness: "{{ light_modes | select('in', brightness_modes) | list | length > 0 }}"
+                supports_ct: "{{ light_modes | select('in', ct_modes) | list | length > 0 }}"
+            - choose:
+                # Full sync with color temp support
+                - conditions: "{{ sync == 'full_sync' and supports_ct and supports_brightness }}"
+                  sequence:
+                    - service: light.turn_on
+                      target:
+                        entity_id: "{{ light_entity }}"
+                      data:
+                        brightness_pct: 100
+                        color_temp_kelvin: 5300
+                        transition: 5
+                # Full sync but no CT - just brightness
+                - conditions: "{{ sync == 'full_sync' and supports_brightness }}"
+                  sequence:
+                    - service: light.turn_on
+                      target:
+                        entity_id: "{{ light_entity }}"
+                      data:
+                        brightness_pct: 100
+                        transition: 5
+                # Brightness only mode
+                - conditions: "{{ sync == 'brightness_only' and supports_brightness }}"
+                  sequence:
+                    - service: light.turn_on
+                      target:
+                        entity_id: "{{ light_entity }}"
+                      data:
+                        brightness_pct: 100
+                        transition: 5
+              # Default: on/off only - light is already on
 
   # Wait for therapy duration
   - delay:
@@ -331,28 +397,49 @@ action:
               brightness_pct: 80
               color_temp_kelvin: 4000
               transition: 10
+          # Additional lights: reading mode (with capability detection)
           - if:
               - condition: template
                 value_template: "{{ has_extras }}"
             then:
-              - choose:
-                  - conditions: "{{ sync == 'full_sync' }}"
-                    sequence:
-                      - service: light.turn_on
-                        target:
-                          entity_id: "{{ extras }}"
-                        data:
-                          brightness_pct: 80
-                          color_temp_kelvin: 4000
-                          transition: 10
-                  - conditions: "{{ sync == 'brightness_only' }}"
-                    sequence:
-                      - service: light.turn_on
-                        target:
-                          entity_id: "{{ extras }}"
-                        data:
-                          brightness_pct: 80
-                          transition: 10
+              - repeat:
+                  for_each: "{{ extras }}"
+                  sequence:
+                    - variables:
+                        light_entity: "{{ repeat.item }}"
+                        light_modes: "{{ state_attr(light_entity, 'supported_color_modes') or [] }}"
+                        supports_brightness: "{{ light_modes | select('in', brightness_modes) | list | length > 0 }}"
+                        supports_ct: "{{ light_modes | select('in', ct_modes) | list | length > 0 }}"
+                    - choose:
+                        # Full sync with color temp support
+                        - conditions: "{{ sync == 'full_sync' and supports_ct and supports_brightness }}"
+                          sequence:
+                            - service: light.turn_on
+                              target:
+                                entity_id: "{{ light_entity }}"
+                              data:
+                                brightness_pct: 80
+                                color_temp_kelvin: 4000
+                                transition: 10
+                        # Full sync but no CT - just brightness
+                        - conditions: "{{ sync == 'full_sync' and supports_brightness }}"
+                          sequence:
+                            - service: light.turn_on
+                              target:
+                                entity_id: "{{ light_entity }}"
+                              data:
+                                brightness_pct: 80
+                                transition: 10
+                        # Brightness only mode
+                        - conditions: "{{ sync == 'brightness_only' and supports_brightness }}"
+                          sequence:
+                            - service: light.turn_on
+                              target:
+                                entity_id: "{{ light_entity }}"
+                              data:
+                                brightness_pct: 80
+                                transition: 10
+                      # Default: on/off only - light stays as is
 
       # Stay on: do nothing (lights remain at therapy brightness)
 
