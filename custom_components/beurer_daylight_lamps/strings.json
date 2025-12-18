@@ -168,6 +168,11 @@
             "therapy_goal_reached": {
                 "name": "Daily goal reached"
             }
+        },
+        "switch": {
+            "adaptive_lighting": {
+                "name": "Adaptive Lighting"
+            }
         }
     },
     "services": {

@@ -63,6 +63,15 @@
       "therapy_goal": {
         "default": "mdi:target"
       }
+    },
+    "switch": {
+      "adaptive_lighting": {
+        "default": "mdi:brightness-auto",
+        "state": {
+          "on": "mdi:brightness-auto",
+          "off": "mdi:brightness-5"
+        }
+      }
     }
   },
   "services": {

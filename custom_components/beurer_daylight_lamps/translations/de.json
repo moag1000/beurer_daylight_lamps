@@ -95,9 +95,61 @@
         }
     },
     "entity": {
+        "button": {
+            "identify": {
+                "name": "Identifizieren"
+            },
+            "reconnect": {
+                "name": "Neu verbinden"
+            }
+        },
+        "select": {
+            "effect": {
+                "name": "Effekt"
+            }
+        },
+        "number": {
+            "white_brightness": {
+                "name": "Weiss Helligkeit"
+            },
+            "color_brightness": {
+                "name": "Farb Helligkeit"
+            },
+            "timer": {
+                "name": "Timer"
+            },
+            "therapy_goal": {
+                "name": "Taegliches Lichtziel"
+            }
+        },
         "sensor": {
             "rssi": {
-                "name": "Signalstärke"
+                "name": "Signalstaerke"
+            },
+            "therapy_today": {
+                "name": "Lichtexposition heute"
+            },
+            "therapy_week": {
+                "name": "Lichtexposition diese Woche"
+            },
+            "therapy_progress": {
+                "name": "Tagesfortschritt"
+            }
+        },
+        "binary_sensor": {
+            "connected": {
+                "name": "Verbunden"
+            },
+            "ble_available": {
+                "name": "Bluetooth erreichbar"
+            },
+            "therapy_goal_reached": {
+                "name": "Tagesziel erreicht"
+            }
+        },
+        "switch": {
+            "adaptive_lighting": {
+                "name": "Adaptive Beleuchtung"
             }
         }
     }

@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.14.0] - 2025-12-18
+
+### Added - Adaptive Lighting Integration
+
+#### New Entities
+- **Switch**: `Adaptive Lighting` - Control whether Adaptive Lighting (HACS) can adjust this lamp
+  - State persists across Home Assistant restarts via RestoreEntity
+  - Automatically blocks Adaptive Lighting when:
+    - Switch is turned off (user preference)
+    - An effect is active (effects shouldn't be overridden)
+    - Therapy mode is running (consistent light needed)
+  - Extra state attributes show therapy mode status and current effect
+
+#### Improvements
+- Added German translations for all entity types (button, select, number, sensor, binary_sensor, switch)
+- Added switch icons with state-dependent icons (brightness-auto/brightness-5)
+- Platform.SWITCH added to integration platforms
+
+### Changed
+- Version bumped to 1.14.0
+
 ## [1.12.0] - 2025-12-17
 
 ### Added - Lifestyle Wellness Features

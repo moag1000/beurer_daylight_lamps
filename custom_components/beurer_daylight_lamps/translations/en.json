@@ -99,6 +99,11 @@
             "rssi": {
                 "name": "Signal strength"
             }
+        },
+        "switch": {
+            "adaptive_lighting": {
+                "name": "Adaptive Lighting"
+            }
         }
     }
 }
