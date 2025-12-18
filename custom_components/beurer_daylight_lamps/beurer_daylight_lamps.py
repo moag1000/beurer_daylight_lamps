@@ -879,8 +879,117 @@ class BeurerInstance:
         if trigger_update:
             await self._trigger_update()
 
+    def _is_gatt_capable_source(self, source: str) -> bool:
+        """Check if a Bluetooth source is capable of GATT connections.
+
+        Shelly devices with Bluetooth are only passive scanners and cannot
+        establish GATT connections. We need to filter them out.
+
+        GATT-capable sources:
+        - ESPHome Bluetooth Proxies (active: true)
+        - Local Bluetooth adapters (hci0, bcm43438, etc.)
+
+        Non-GATT sources (passive only):
+        - Shelly Plug S Gen3 (and other Shelly devices with BLE)
+        - Other passive-only scanners
+
+        Args:
+            source: The Bluetooth source identifier
+
+        Returns:
+            True if the source is likely capable of GATT connections
+        """
+        source_lower = source.lower()
+
+        # Known non-GATT sources (Shelly devices are passive only)
+        non_gatt_patterns = [
+            "shelly",
+            "shellyplug",
+            "shellypm",
+            "shelly1",
+            "shelly2",
+        ]
+
+        for pattern in non_gatt_patterns:
+            if pattern in source_lower:
+                LOGGER.debug("Source '%s' is not GATT-capable (passive scanner)", source)
+                return False
+
+        # ESPHome proxies with "btproxy" in name are GATT-capable
+        if "btproxy" in source_lower or "proxy" in source_lower:
+            LOGGER.debug("Source '%s' is GATT-capable (BT Proxy)", source)
+            return True
+
+        # Local adapters are always GATT-capable
+        if source_lower.startswith("hci") or "bcm" in source_lower or "brcm" in source_lower:
+            LOGGER.debug("Source '%s' is GATT-capable (local adapter)", source)
+            return True
+
+        # Default: assume capable (might be a renamed proxy or other adapter)
+        LOGGER.debug("Source '%s' assumed GATT-capable (unknown type)", source)
+        return True
+
+    def _get_gatt_capable_device(self) -> BLEDevice | None:
+        """Get a BLE device from a GATT-capable adapter.
+
+        This method filters out passive-only Bluetooth sources (like Shelly plugs)
+        and prefers GATT-capable adapters (ESPHome Proxies, local adapters).
+
+        Returns:
+            BLEDevice from a GATT-capable source, or None if not found
+        """
+        if not self._hass:
+            return self._ble_device
+
+        from homeassistant.components import bluetooth
+
+        # Get all service infos for this device from all adapters
+        # We need to find one from a GATT-capable source
+        all_service_infos = bluetooth.async_scanner_devices_by_address(
+            self._hass, self._mac, connectable=True
+        )
+
+        gatt_capable_infos = []
+        non_gatt_infos = []
+
+        for scanner_device in all_service_infos:
+            source = scanner_device.scanner.source
+            if self._is_gatt_capable_source(source):
+                gatt_capable_infos.append((scanner_device, source))
+            else:
+                non_gatt_infos.append((scanner_device, source))
+
+        if gatt_capable_infos:
+            # Pick the one with best RSSI from GATT-capable sources
+            best = max(gatt_capable_infos, key=lambda x: x[0].advertisement.rssi or -100)
+            LOGGER.info(
+                "Selected GATT-capable adapter '%s' for %s (RSSI: %s, skipped %d non-GATT sources)",
+                best[1],
+                self._mac,
+                best[0].advertisement.rssi,
+                len(non_gatt_infos),
+            )
+            return best[0].ble_device
+
+        if non_gatt_infos:
+            LOGGER.warning(
+                "No GATT-capable adapters found for %s! "
+                "Only passive scanners available: %s. "
+                "Consider adding an ESPHome Bluetooth Proxy with 'active: true'.",
+                self._mac,
+                [src for _, src in non_gatt_infos],
+            )
+
+        # Fallback to HA's default selection
+        return bluetooth.async_ble_device_from_address(
+            self._hass, self._mac, connectable=True
+        )
+
     async def connect(self) -> bool:
         """Connect to the device using Home Assistant's Bluetooth stack.
+
+        This method preferentially selects GATT-capable adapters (ESPHome Proxies,
+        local Bluetooth) over passive-only scanners (Shelly devices).
 
         Home Assistant automatically selects the best available adapter with
         free connection slots. We use ble_device_callback to get a fresh
@@ -898,20 +1007,17 @@ class BeurerInstance:
                 getattr(self._ble_device, "name", "Unknown") if self._ble_device else "None",
             )
 
-            # Get initial device from HA - it picks the best adapter with free slots
+            # Get initial device from HA - prefer GATT-capable adapters
             if self._hass:
                 from homeassistant.components import bluetooth
 
-                # HA's async_ble_device_from_address returns the best available adapter
-                # considering signal strength AND available connection slots
-                fresh_device = bluetooth.async_ble_device_from_address(
-                    self._hass, self._mac, connectable=True
-                )
+                # Try to get device from GATT-capable adapter first
+                fresh_device = self._get_gatt_capable_device()
 
                 if fresh_device:
                     self._ble_device = fresh_device
                     LOGGER.info(
-                        "HA selected adapter for %s (device name: %s)",
+                        "Selected adapter for %s (device name: %s)",
                         self._mac,
                         getattr(fresh_device, "name", "unknown"),
                     )
@@ -943,25 +1049,18 @@ class BeurerInstance:
                 """Get fresh device from HA on each retry.
 
                 This is the KEY for multi-adapter support: on each retry,
-                HA re-evaluates which adapter to use. If the previous adapter
-                had no slots, HA will pick a different one.
+                we re-evaluate which GATT-capable adapter to use. If the previous
+                adapter failed, we try the next GATT-capable one.
                 """
                 if self._hass:
-                    from homeassistant.components import bluetooth
-                    # Ask HA for the best device again - it may pick a different adapter!
-                    fresh = bluetooth.async_ble_device_from_address(
-                        self._hass, self._mac, connectable=True
-                    )
-                    if not fresh:
-                        fresh = bluetooth.async_ble_device_from_address(
-                            self._hass, self._mac, connectable=False
-                        )
+                    # Use our GATT-capable filter instead of HA's default
+                    fresh = self._get_gatt_capable_device()
                     if fresh:
                         old_name = getattr(self._ble_device, "name", "?")
                         new_name = getattr(fresh, "name", "?")
                         if old_name != new_name:
                             LOGGER.debug(
-                                "HA switched adapter: %s -> %s",
+                                "Switched adapter: %s -> %s",
                                 old_name,
                                 new_name,
                             )
@@ -970,8 +1069,7 @@ class BeurerInstance:
                 return self._ble_device
 
             # Use establish_connection with ble_device_callback
-            # On each retry, get_fresh_device asks HA for the best adapter
-            # If one adapter has no slots, HA should pick another one
+            # On each retry, get_fresh_device selects the best GATT-capable adapter
             LOGGER.debug(
                 "Establishing connection with bleak-retry-connector (max 5 attempts)..."
             )
