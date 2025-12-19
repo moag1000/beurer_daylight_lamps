@@ -1350,7 +1350,7 @@ class TestBeurerTimerMethod:
 
     @pytest.mark.asyncio
     async def test_set_timer_invalid_high(self, mock_device):
-        """Test set_timer rejects values above 240."""
+        """Test set_timer rejects values above 120."""
         from custom_components.beurer_daylight_lamps.beurer_daylight_lamps import (
             BeurerInstance,
         )
@@ -1361,7 +1361,7 @@ class TestBeurerTimerMethod:
         instance._client.write_gatt_char = AsyncMock()
         instance._write_uuid = "test-uuid"
 
-        result = await instance.set_timer(300)
+        result = await instance.set_timer(121)
 
         assert result is False
 
@@ -1384,7 +1384,7 @@ class TestBeurerTimerMethod:
 
     @pytest.mark.asyncio
     async def test_set_timer_boundary_max(self, mock_device):
-        """Test set_timer at maximum boundary (240)."""
+        """Test set_timer at maximum boundary (120)."""
         from custom_components.beurer_daylight_lamps.beurer_daylight_lamps import (
             BeurerInstance,
         )
@@ -1395,7 +1395,7 @@ class TestBeurerTimerMethod:
         instance._client.write_gatt_char = AsyncMock()
         instance._write_uuid = "test-uuid"
 
-        result = await instance.set_timer(240)
+        result = await instance.set_timer(120)
 
         assert result is True
 

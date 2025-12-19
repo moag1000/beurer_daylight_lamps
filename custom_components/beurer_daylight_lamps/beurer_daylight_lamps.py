@@ -52,7 +52,9 @@ from .const import (
     CMD_EFFECT,
     CMD_OFF,
     CMD_MODE,
-    CMD_TIMER,
+    CMD_TIMER_VALUE,
+    CMD_TIMER_TOGGLE,
+    CMD_TIMER_CANCEL,
     # Timing constants
     COMMAND_DELAY,
     MODE_CHANGE_DELAY,
@@ -454,9 +456,23 @@ class BeurerInstance:
             await asyncio.sleep(MIN_COMMAND_INTERVAL - elapsed)
 
         length = len(message)
-        checksum = self._calculate_checksum(length + 2, message)
+        plen = length + 2  # payload_len includes command bytes + checksum
+
+        # Calculate checksum: plen XOR all command bytes
+        checksum = plen
+        for byte in message:
+            checksum ^= byte
+
+        # Packet format from btsnoop analysis:
+        # - Header: FE EF 0A
+        # - outer_len = command_len + 7
+        # - Magic: AB AA
+        # - payload_len = command_len + 2 (includes checksum)
+        # - Command bytes
+        # - Checksum: plen XOR cmd_bytes
+        # - Trailer: 55 0D 0A
         packet = bytearray(
-            [0xFE, 0xEF, 0x0A, length + 7, 0xAB, 0xAA, length + 2]
+            [0xFE, 0xEF, 0x0A, length + 7, 0xAB, 0xAA, plen]
             + message
             + [checksum, 0x55, 0x0D, 0x0A]
         )
@@ -646,23 +662,65 @@ class BeurerInstance:
         await self._request_status()
 
     async def set_timer(self, minutes: int) -> bool:
-        """Set auto-off timer.
+        """Set auto-off timer to specified duration.
 
-        Timer only works when the lamp is in RGB mode.
+        Timer works in both WHITE and RGB mode. Uses two commands:
+        1. 0x33 MODE MINUTES - Set timer duration (slider value)
+        2. 0x38 MODE - Toggle timer on
 
         Args:
-            minutes: Timer duration in minutes (1-240)
+            minutes: Timer duration in minutes (1-120)
 
         Returns:
             True if timer command was sent successfully, False otherwise.
         """
-        if not 1 <= minutes <= 240:
-            LOGGER.error("Timer minutes must be between 1 and 240, got %d", minutes)
+        if not 1 <= minutes <= 120:
+            LOGGER.error("Timer minutes must be between 1 and 120, got %d", minutes)
             return False
 
-        LOGGER.debug("Setting timer to %d minutes for %s", minutes, self._mac)
-        result = await self._send_packet([CMD_TIMER, minutes])
+        # Determine current mode from color_mode (more reliable than _color_on)
+        mode_byte = MODE_RGB if self._mode == ColorMode.RGB else MODE_WHITE
+
+        LOGGER.info(
+            "Setting timer to %d min for %s (mode=0x%02X, color_mode=%s)",
+            minutes, self._mac, mode_byte, self._mode
+        )
+
+        # First toggle timer on: 0x38 MODE
+        result = await self._send_packet([CMD_TIMER_TOGGLE, mode_byte])
+        if not result:
+            return False
+
+        await asyncio.sleep(COMMAND_DELAY)
+
+        # Then set the timer duration: 0x33 MODE MINUTES
+        result = await self._send_packet([CMD_TIMER_VALUE, mode_byte, minutes])
         if result:
+            self._timer_active = True
+            self._timer_minutes = minutes
+            await asyncio.sleep(COMMAND_DELAY)
+            await self._request_status()
+        return result
+
+    async def cancel_timer(self) -> bool:
+        """Cancel the auto-off timer.
+
+        Command format: 0x36 MODE (2 bytes).
+
+        Returns:
+            True if cancel command was sent successfully, False otherwise.
+        """
+        mode_byte = MODE_RGB if self._mode == ColorMode.RGB else MODE_WHITE
+
+        LOGGER.info(
+            "Cancelling timer for %s (mode=0x%02X, color_mode=%s)",
+            self._mac, mode_byte, self._mode
+        )
+
+        result = await self._send_packet([CMD_TIMER_CANCEL, mode_byte])
+        if result:
+            self._timer_active = False
+            self._timer_minutes = 0
             await asyncio.sleep(COMMAND_DELAY)
             await self._request_status()
         return result

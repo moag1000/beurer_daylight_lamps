@@ -148,6 +148,9 @@
             "rssi": {
                 "name": "Signal strength"
             },
+            "last_notification": {
+                "name": "Last BLE notification"
+            },
             "therapy_today": {
                 "name": "Light exposure today"
             },
@@ -200,13 +203,13 @@
                 },
                 "command": {
                     "name": "Command bytes",
-                    "description": "Hex bytes to send (e.g., '33 01 1E'). Known: 30=status, 31=brightness, 32=color, 34=effect, 35=off, 37=mode, 3E=timer. Unknown: 33, 36, 38, 39"
+                    "description": "Hex bytes to send (e.g., '33 01 1E'). Known: 30=status, 31=brightness, 32=color, 34=effect, 35=off, 36=cancel_timer, 37=mode, 38=timer. Unknown: 33, 39"
                 }
             }
         },
         "set_timer": {
             "name": "Set Timer",
-            "description": "Set an auto-off timer on the lamp. Timer only works in RGB mode.",
+            "description": "Set an auto-off timer on the lamp. Works in both White and RGB mode. Note: Timer is automatically cancelled when switching modes.",
             "fields": {
                 "device_id": {
                     "name": "Device",
@@ -214,7 +217,7 @@
                 },
                 "minutes": {
                     "name": "Minutes",
-                    "description": "Timer duration in minutes (1-240)"
+                    "description": "Timer duration in minutes (1-120)"
                 }
             }
         },

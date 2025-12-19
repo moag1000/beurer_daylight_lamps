@@ -140,14 +140,14 @@ class BeurerBrightnessNumber(NumberEntity):
 class BeurerTimerNumber(NumberEntity):
     """Representation of a Beurer timer number.
 
-    Timer only works when the lamp is in RGB mode.
-    Shows unavailable when in white mode.
+    Timer works in both White and RGB mode.
+    Note: Timer is automatically cancelled when switching modes.
     """
 
     _attr_has_entity_name = True
     _attr_mode = NumberMode.SLIDER
     _attr_native_min_value = 1
-    _attr_native_max_value = 240
+    _attr_native_max_value = 120
     _attr_native_step = 1
     _attr_native_unit_of_measurement = UnitOfTime.MINUTES
     _attr_icon = "mdi:timer-outline"
@@ -163,23 +163,18 @@ class BeurerTimerNumber(NumberEntity):
         self._instance = instance
         self._device_name = device_name
         self._attr_unique_id = f"{format_mac(instance.mac)}_timer"
-        self._last_set_value: float | None = None
 
     @property
     def native_value(self) -> float | None:
-        """Return the last set timer value or None."""
-        return self._last_set_value
+        """Return the current timer value from device state."""
+        if self._instance.timer_active:
+            return self._instance.timer_minutes
+        return None
 
     @property
     def available(self) -> bool:
-        """Return True only when device is available AND in RGB mode.
-
-        Timer command (0x3E) only works in RGB mode per protocol specification.
-        """
-        if not self._instance.available:
-            return False
-        # Timer only works in RGB mode
-        return self._instance.color_mode == ColorMode.RGB
+        """Return True when device is available."""
+        return self._instance.available
 
     @property
     def device_info(self) -> DeviceInfo:

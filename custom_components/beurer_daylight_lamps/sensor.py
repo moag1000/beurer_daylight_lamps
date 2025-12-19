@@ -31,6 +31,13 @@ SENSOR_DESCRIPTIONS: tuple[SensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
     ),
+    SensorEntityDescription(
+        key="last_notification",
+        translation_key="last_notification",
+        icon="mdi:bluetooth-transfer",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=True,
+    ),
 )
 
 # Therapy tracking sensors (lifestyle/wellness feature, NOT medical)
@@ -98,10 +105,12 @@ class BeurerSensor(SensorEntity):
         self._attr_unique_id = f"{format_mac(instance.mac)}_{description.key}"
 
     @property
-    def native_value(self) -> int | None:
+    def native_value(self) -> int | str | None:
         """Return the sensor value."""
         if self.entity_description.key == "rssi":
             return self._instance.rssi
+        elif self.entity_description.key == "last_notification":
+            return self._instance.last_raw_notification
         return None
 
     @property

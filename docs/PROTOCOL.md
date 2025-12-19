@@ -106,51 +106,90 @@ feef0c11abbb0cd0020115007821ff00006c550d
 | 0x30 | Status | `[mode]` | Request status (mode: 0x01=white, 0x02=rgb) |
 | 0x31 | Brightness | `[mode, percent]` | Set brightness 0-100% |
 | 0x32 | Color | `[r, g, b]` | Set RGB color 0-255 |
+| 0x33 | Timer Value | `[mode, minutes]` | Set timer duration (1-120 min) |
 | 0x34 | Effect | `[index]` | Set effect 0-10 |
 | 0x35 | Off | `[mode]` | Turn off |
+| 0x36 | Timer Cancel | `[mode]` | Cancel/disable timer |
 | 0x37 | Mode | `[mode]` | Switch white/rgb mode |
-| 0x3E | Timer | `[minutes]` | Set auto-off timer (1-240 min, RGB mode only) |
+| 0x38 | Timer Toggle | `[mode]` | Toggle timer on (at current/default duration) |
 
-## Timer Command (0x3E)
+**Mode byte**: `0x01` = White mode, `0x02` = RGB mode
 
-The timer command sets an auto-off timer. The lamp will automatically turn off after the specified number of minutes.
+## Timer Commands (0x33, 0x36, 0x38)
 
-**Important**: Timer only works when the lamp is in RGB mode (0x37 0x02).
+The timer functionality uses three commands:
 
-| Payload | Description |
-|---------|-------------|
-| `3E 0F` | 15 minute timer |
-| `3E 1E` | 30 minute timer |
-| `3E 3C` | 60 minute timer |
-| `3E 78` | 120 minute timer |
+| Command | Payload | Description |
+|---------|---------|-------------|
+| `0x38 MODE` | 2 bytes | Toggle timer ON (uses current or default 120 min) |
+| `0x33 MODE MINUTES` | 3 bytes | Set timer duration in minutes (1-120) |
+| `0x36 MODE` | 2 bytes | Cancel/disable timer |
 
-### Example: Set 30-minute Timer
+**Important Notes:**
+- Timer works in BOTH White and RGB mode
+- The MODE byte must match the current lamp mode
+- Timer is automatically cancelled when switching modes (White ↔ RGB)
+- Physical display shows nearest preset (45/90/120), but internal countdown uses exact value
+
+### Example: Set 30-minute Timer (White Mode)
 
 ```yaml
-# First ensure RGB mode
+# Step 1: Toggle timer on
 service: beurer_daylight_lamps.send_raw_command
 data:
   device_id: "abc123..."
-  command: "37 02"
+  command: "38 01"
 
-# Then set timer
+# Step 2: Set duration to 30 minutes
+service: beurer_daylight_lamps.send_raw_command
+data:
+  device_id: "abc123..."
+  command: "33 01 1E"
+```
+
+### Example: Set 60-minute Timer (RGB Mode)
+
+```yaml
+# Step 1: Toggle timer on
+service: beurer_daylight_lamps.send_raw_command
+data:
+  device_id: "abc123..."
+  command: "38 02"
+
+# Step 2: Set duration to 60 minutes
+service: beurer_daylight_lamps.send_raw_command
+data:
+  device_id: "abc123..."
+  command: "33 02 3C"
+```
+
+### Using the set_timer Service
+
+The integration provides a convenient service that handles both commands:
+
+```yaml
 service: beurer_daylight_lamps.set_timer
 data:
   device_id: "abc123..."
-  minutes: 30
+  minutes: 45
+```
+
+### Cancel Timer
+
+```yaml
+service: beurer_daylight_lamps.send_raw_command
+data:
+  device_id: "abc123..."
+  command: "36 01"  # White mode, use "36 02" for RGB mode
 ```
 
 ## Unknown Commands (To Reverse Engineer)
 
 | Cmd | Suspected Feature |
 |-----|-------------------|
-| 0x33 | Unknown |
-| 0x36 | Sunrise/Sunset simulation? |
-| 0x38 | Unknown |
 | 0x39 | Unknown |
-| 0x3F | Timer cancel? |
-
-**Note**: Timer command is `0x3E` (confirmed working). See Timer section above.
+| 0x3E | Unknown (previously thought to be timer) |
+| 0x3F | Unknown |
 
 ## Notification Responses
 
@@ -210,13 +249,14 @@ Notification from AA:BB:CC:DD:EE:FF: feef0a0fabaa...
 
 | Command | Payload Examples | Suspected Feature |
 |---------|------------------|-------------------|
-| `33` | `33 00`, `33 01` | Unknown |
-| `36` | `36 01`, `36 00` | Sunrise/Sunset simulation? |
-| `38` | `38 00`, `38 01` | Unknown |
 | `39` | `39 00`, `39 01` | Unknown |
-| `3F` | `3F 00`, `3F 01` | Timer cancel? |
+| `3E` | `3E 00`, `3E 01` | Unknown |
+| `3F` | `3F 00`, `3F 01` | Unknown |
 
-**Confirmed**: Timer is `0x3E [minutes]` - see Timer section above.
+**Confirmed Commands:**
+- Timer toggle: `0x38 MODE`
+- Timer value: `0x33 MODE MINUTES`
+- Timer cancel: `0x36 MODE`
 
 ### Probing Strategy
 
@@ -228,37 +268,29 @@ Notification from AA:BB:CC:DD:EE:FF: feef0a0fabaa...
 ### Example: Testing Unknown Commands
 
 ```yaml
-# Test unknown command 0x33
+# Test unknown command 0x39
 service: beurer_daylight_lamps.send_raw_command
 data:
   device_id: "abc123..."
-  command: "33 00"
+  command: "39 01"
 ```
 
 ```yaml
-# Test unknown command 0x36 (possible sunrise/sunset?)
+# Test unknown command 0x3E
 service: beurer_daylight_lamps.send_raw_command
 data:
   device_id: "abc123..."
-  command: "36 01"
-```
-
-```yaml
-# Test timer cancel (0x3F)?
-service: beurer_daylight_lamps.send_raw_command
-data:
-  device_id: "abc123..."
-  command: "3F 00"
+  command: "3E 01"
 ```
 
 **For timer functionality, use the dedicated service:**
 
 ```yaml
-# Set 30-minute timer (confirmed working)
+# Set 45-minute timer (works in both White and RGB mode)
 service: beurer_daylight_lamps.set_timer
 data:
   device_id: "abc123..."
-  minutes: 30
+  minutes: 45
 ```
 
 ---

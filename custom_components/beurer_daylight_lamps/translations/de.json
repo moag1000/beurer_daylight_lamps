@@ -126,6 +126,9 @@
             "rssi": {
                 "name": "Signalstaerke"
             },
+            "last_notification": {
+                "name": "Letzte BLE Benachrichtigung"
+            },
             "therapy_today": {
                 "name": "Lichtexposition heute"
             },

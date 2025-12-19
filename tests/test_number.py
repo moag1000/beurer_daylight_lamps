@@ -173,32 +173,26 @@ class TestBeurerTimerNumber:
         assert timer._instance == mock_instance
         assert timer._device_name == "Test Lamp"
         assert "aa:bb:cc:dd:ee:ff_timer" in timer._attr_unique_id
-        assert timer._last_set_value is None
 
-    def test_native_value_initial(self, mock_instance: MagicMock) -> None:
-        """Test native_value returns None initially."""
+    def test_native_value_inactive(self, mock_instance: MagicMock) -> None:
+        """Test native_value returns None when timer inactive."""
+        mock_instance.timer_active = False
         timer = BeurerTimerNumber(mock_instance, "Test Lamp")
         assert timer.native_value is None
 
-    def test_native_value_after_set(self, mock_instance: MagicMock) -> None:
-        """Test native_value returns last set value."""
+    def test_native_value_active(self, mock_instance: MagicMock) -> None:
+        """Test native_value returns timer minutes when active."""
+        mock_instance.timer_active = True
+        mock_instance.timer_minutes = 30
         timer = BeurerTimerNumber(mock_instance, "Test Lamp")
-        timer._last_set_value = 30
         assert timer.native_value == 30
 
-    def test_available_in_rgb_mode(self, mock_instance: MagicMock) -> None:
-        """Test available is True in RGB mode."""
-        mock_instance.color_mode = ColorMode.RGB
+    def test_available_when_device_available(self, mock_instance: MagicMock) -> None:
+        """Test available is True when device is available (timer works in both modes)."""
+        mock_instance.available = True
         timer = BeurerTimerNumber(mock_instance, "Test Lamp")
 
         assert timer.available is True
-
-    def test_available_in_white_mode(self, mock_instance: MagicMock) -> None:
-        """Test available is False in white mode (timer only works in RGB)."""
-        mock_instance.color_mode = ColorMode.WHITE
-        timer = BeurerTimerNumber(mock_instance, "Test Lamp")
-
-        assert timer.available is False
 
     def test_available_when_device_unavailable(self, mock_instance: MagicMock) -> None:
         """Test available is False when device is unavailable."""
@@ -250,7 +244,6 @@ class TestBeurerTimerNumber:
         await timer.async_set_native_value(30)
 
         mock_instance.set_timer.assert_called_once_with(30)
-        assert timer._last_set_value == 30
 
     @pytest.mark.asyncio
     async def test_async_set_native_value_failure(self, mock_instance: MagicMock) -> None:
