@@ -1,6 +1,14 @@
-# Gitignore settings for ESPHome
-# This is an example and may include too much for your use-case.
-# You can modify this file to suit your needs.
+# ESPHome build artifacts
 /.esphome/
-/secrets.yaml
+
+# Private credentials
+secrets.yaml
+
+# Private configs with real credentials (use -example.yaml as template)
 btproxy-beurer.yaml
+btproxy-beurer-s3.yaml
+btproxy-beurer-c6.yaml
+btproxy-beurer-wroom32.yaml
+
+# Keep example configs (btproxy-beurer-example.yaml)
+!*-example.yaml

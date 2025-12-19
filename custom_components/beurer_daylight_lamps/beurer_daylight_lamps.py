@@ -153,7 +153,15 @@ class BeurerInstance:
 
     @property
     def ble_available(self) -> bool:
-        """Return True if device is seen by any Bluetooth adapter."""
+        """Return True if device is reachable via Bluetooth.
+
+        Device is reachable if:
+        - Currently connected (GATT connection active), OR
+        - Seen in BLE advertisements
+        """
+        # If connected, device is definitely reachable
+        if self.is_connected:
+            return True
         return self._ble_available
 
     @property

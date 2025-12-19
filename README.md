@@ -206,6 +206,128 @@ This integration fully supports ESPHome and Shelly Bluetooth Proxies:
 - Seamlessly switches between adapters as signal changes
 - No configuration needed - just set up your proxies in Home Assistant
 
+### ESP32 Bluetooth Proxy Setup (Important!)
+
+> **⚠️ Critical**: The Beurer TL100 does **not** support BLE 5.0 PHY negotiation. Standard ESP32 Bluetooth Proxy configurations will fail with error `0x3e` (BLE_HCI_CONN_FAIL_ESTABLISH).
+
+#### Hardware Compatibility
+
+| ESP32 Variant | Works? | Notes |
+|---------------|--------|-------|
+| **ESP32-S3** | ✅ Yes | **Recommended** - Dual-core Xtensa, best WiFi/BLE coexistence |
+| ESP32-WROOM-32 | ✅ Yes | Dual-core Xtensa, works with BLE 5.0 fix |
+| ESP32-C3 | ❌ No | Single-core RISC-V, WiFi/BLE conflicts |
+| ESP32-C6 | ❌ No | Single-core RISC-V, same issues as C3 |
+
+**Why C3/C6 don't work:** Single-core RISC-V chips cannot handle WiFi and BLE simultaneously when the BLE connection requires frequent packet exchanges (like the TL100 does).
+
+#### Required ESP-IDF Configuration
+
+You **must** disable BLE 5.0 features in your ESPHome configuration:
+
+```yaml
+esp32:
+  board: esp32-s3-devkitc-1
+  variant: esp32s3
+  framework:
+    type: esp-idf
+    version: recommended
+    sdkconfig_options:
+      # CRITICAL: Disable BLE 5.0 - TL100 doesn't support PHY negotiation
+      CONFIG_BT_BLE_50_FEATURES_SUPPORTED: n
+      CONFIG_BT_BLE_42_FEATURES_SUPPORTED: y
+
+      # WiFi/BLE Coexistence
+      CONFIG_SW_COEXIST_ENABLE: y
+      CONFIG_SW_COEXIST_PREFERENCE_BT: y
+```
+
+#### Complete ESPHome Example Configuration
+
+```yaml
+# ESP32-S3 Bluetooth Proxy for Beurer Daylight Lamps
+# BLE 5.0 disabled - TL100 requires BLE 4.2 only
+
+esphome:
+  name: btproxy-beurer
+  friendly_name: BT Proxy Beurer
+
+esp32:
+  board: esp32-s3-devkitc-1
+  variant: esp32s3
+  framework:
+    type: esp-idf
+    version: recommended
+    sdkconfig_options:
+      # CRITICAL: Disable BLE 5.0 for Beurer TL100 compatibility
+      CONFIG_BT_BLE_50_FEATURES_SUPPORTED: n
+      CONFIG_BT_BLE_42_FEATURES_SUPPORTED: y
+
+      # WiFi/BLE Coexistence (Dual-Core)
+      CONFIG_SW_COEXIST_ENABLE: y
+      CONFIG_SW_COEXIST_PREFERENCE_BT: y
+
+      # BLE Connection Parameters
+      CONFIG_BT_ACL_CONNECTIONS: "3"
+      CONFIG_BT_GATT_MAX_SR_PROFILES: "8"
+
+      # Dual-Core: Pin BT to Core 0
+      CONFIG_BT_BLUEDROID_PINNED_TO_CORE: "0"
+
+logger:
+  level: DEBUG
+
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  power_save_mode: none
+
+  ap:
+    ssid: "BT-Proxy-Fallback"
+    password: !secret fallback_password
+
+captive_portal:
+
+esp32_ble:
+
+esp32_ble_tracker:
+  scan_parameters:
+    interval: 60ms
+    window: 30ms
+    active: true
+    continuous: true
+
+bluetooth_proxy:
+  active: true
+  cache_services: false
+```
+
+**Note:** Create a `secrets.yaml` file with your credentials:
+```yaml
+wifi_ssid: "YourWiFiNetwork"
+wifi_password: "YourWiFiPassword"
+api_encryption_key: "your-32-byte-base64-key"
+ota_password: "your-ota-password"
+fallback_password: "fallback-ap-password"
+```
+
+#### Troubleshooting ESP32 Proxy
+
+| Problem | Solution |
+|---------|----------|
+| Error `0x3e` on connect | Missing `CONFIG_BT_BLE_50_FEATURES_SUPPORTED: n` |
+| Connection drops with C3/C6 | Switch to ESP32-S3 or WROOM-32 |
+| Slow response | Enable `CONFIG_SW_COEXIST_PREFERENCE_BT: y` |
+| Device not found | Increase `scan_parameters.window` to 50ms |
+
 ## Light Effects
 
 The following effects are available (matching the Beurer LightUp app):
