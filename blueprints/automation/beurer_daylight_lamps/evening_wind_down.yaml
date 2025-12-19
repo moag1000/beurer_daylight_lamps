@@ -272,10 +272,12 @@ action:
       count: "{{ total_steps }}"
       sequence:
         # Check if lamp was turned off manually - abort if so
-        # Allow "unavailable" state to continue (temporary BLE disconnect)
-        - condition: template
-          value_template: >
-            {{ states(beurer) in ['on', 'unavailable'] }}
+        # Continue if on or unavailable (temporary BLE disconnect)
+        - condition: not
+          conditions:
+            - condition: state
+              entity_id: !input beurer_light
+              state: "off"
 
         # Calculate current brightness
         - variables:
@@ -342,10 +344,12 @@ action:
   # =========================================================================
   # FINAL ACTION: Turn off if end brightness is 0
   # =========================================================================
-  # Only execute if lamp is still on (or temporarily unavailable)
-  - condition: template
-    value_template: >
-      {{ states(beurer) in ['on', 'unavailable'] }}
+  # Only execute if lamp was NOT turned off manually
+  - condition: not
+    conditions:
+      - condition: state
+        entity_id: !input beurer_light
+        state: "off"
 
   - if:
       - condition: template
