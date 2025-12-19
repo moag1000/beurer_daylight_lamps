@@ -233,9 +233,10 @@ action:
           count: "{{ total_steps }}"
           sequence:
             # Check if lamp was turned off manually - abort if so
-            - condition: state
-              entity_id: !input beurer_light
-              state: "on"
+            # Allow "unavailable" state to continue (temporary BLE disconnect)
+            - condition: template
+              value_template: >
+                {{ states(beurer) in ['on', 'unavailable'] }}
 
             # Calculate current values based on progress
             # Progress goes from 1/total_steps to total_steps/total_steps (1.0)
@@ -307,10 +308,10 @@ action:
   # =========================================================================
   # PHASE 2: FULL THERAPY BRIGHTNESS
   # =========================================================================
-  # Only continue if lamp is still on
-  - condition: state
-    entity_id: !input beurer_light
-    state: "on"
+  # Only continue if lamp is still on (or temporarily unavailable)
+  - condition: template
+    value_template: >
+      {{ states(beurer) in ['on', 'unavailable'] }}
 
   # Set full therapy brightness
   - service: light.turn_on
@@ -372,10 +373,10 @@ action:
   # =========================================================================
   # PHASE 3: END ACTION
   # =========================================================================
-  # Only execute end action if lamp is still on
-  - condition: state
-    entity_id: !input beurer_light
-    state: "on"
+  # Only execute end action if lamp is still on (or temporarily unavailable)
+  - condition: template
+    value_template: >
+      {{ states(beurer) in ['on', 'unavailable'] }}
 
   - choose:
       # Turn off all lights

@@ -335,18 +335,20 @@ action:
               count: "{{ total_breaks }}"
               sequence:
                 # Check if lamp was turned off manually - abort if so
-                - condition: state
-                  entity_id: !input beurer_light
-                  state: "on"
+                # Allow "unavailable" state to continue (temporary BLE disconnect)
+                - condition: template
+                  value_template: >
+                    {{ states(beurer) in ['on', 'unavailable'] }}
 
                 # Work period
                 - delay:
                     minutes: "{{ break_mins }}"
 
                 # Check again before break reminder
-                - condition: state
-                  entity_id: !input beurer_light
-                  state: "on"
+                # Allow "unavailable" state to continue (temporary BLE disconnect)
+                - condition: template
+                  value_template: >
+                    {{ states(beurer) in ['on', 'unavailable'] }}
 
                 # Break reminder: dim and warm briefly with smooth transition
                 - service: light.turn_on
@@ -441,9 +443,10 @@ action:
                             # Default: on/off only - no action needed
 
           # Check before final work period
-          - condition: state
-            entity_id: !input beurer_light
-            state: "on"
+          # Allow "unavailable" state to continue (temporary BLE disconnect)
+          - condition: template
+            value_template: >
+              {{ states(beurer) in ['on', 'unavailable'] }}
 
           # Final work period (remaining time after last break)
           - if:
@@ -461,10 +464,10 @@ action:
   # ─────────────────────────────────────────────────────────────────────────────
   # END ACTION
   # ─────────────────────────────────────────────────────────────────────────────
-  # Only execute end action if lamp is still on
-  - condition: state
-    entity_id: !input beurer_light
-    state: "on"
+  # Only execute end action if lamp is still on (or temporarily unavailable)
+  - condition: template
+    value_template: >
+      {{ states(beurer) in ['on', 'unavailable'] }}
 
   - choose:
       # Turn off
