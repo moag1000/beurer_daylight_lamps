@@ -353,10 +353,11 @@ class BeurerInstance:
         """Return True if device is available.
 
         Device is available if:
-        1. It's seen by at least one Bluetooth adapter (ble_available)
+        1. It's reachable via Bluetooth (connected OR seen in advertisements)
         2. We've received status from it (_available)
         """
-        return self._ble_available and self._available
+        # Use ble_available property (not field!) which returns True when connected
+        return self.ble_available and self._available
 
     @property
     def is_connected(self) -> bool:
@@ -660,7 +661,11 @@ class BeurerInstance:
             return False
 
         LOGGER.debug("Setting timer to %d minutes for %s", minutes, self._mac)
-        return await self._send_packet([CMD_TIMER, minutes])
+        result = await self._send_packet([CMD_TIMER, minutes])
+        if result:
+            await asyncio.sleep(COMMAND_DELAY)
+            await self._request_status()
+        return result
 
     async def turn_on(self) -> None:
         """Turn on the lamp.
@@ -873,10 +878,15 @@ class BeurerInstance:
         else:
             # Unknown version - store for reverse engineering
             self._last_unknown_notification = hex_str
-            LOGGER.info(
-                "Unknown notification version %d from %s: %s",
-                version, self._mac, hex_str
+            LOGGER.warning(
+                "Unknown notification version %d from %s: hex=%s len=%d "
+                "bytes=[%s]",
+                version, self._mac, hex_str, len(data),
+                ", ".join(f"0x{b:02x}" for b in data)
             )
+            # Still mark as available - device is communicating
+            if not self._available:
+                self._available = True
             trigger_update = True  # Update sensors to show new unknown data
 
         # Mark as available once we've received any valid status
