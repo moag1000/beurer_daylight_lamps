@@ -118,6 +118,9 @@ class BeurerInstance:
         self._timer_active: bool = False
         self._timer_minutes: int | None = None
 
+        # Reconnection state (prevents multiple parallel reconnect attempts)
+        self._reconnecting: bool = False
+
         # Therapy tracking - sunrise/sunset simulation and exposure tracking
         self._sunrise_simulation: SunriseSimulation | None = None
         self._therapy_tracker: TherapyTracker = TherapyTracker()
@@ -146,8 +149,8 @@ class BeurerInstance:
             self._ble_available = True
             self._safe_create_task(self._trigger_update())
 
-        # Auto-reconnect if device was unavailable
-        if was_unavailable and not self._available:
+        # Auto-reconnect if device was unavailable (but not if already reconnecting)
+        if was_unavailable and not self._available and not self._reconnecting:
             LOGGER.debug("Device %s was unavailable, attempting auto-reconnect", self._mac)
             self._safe_create_task(self._auto_reconnect())
 
@@ -161,6 +164,10 @@ class BeurerInstance:
 
     async def _auto_reconnect(self) -> None:
         """Automatically reconnect when device becomes available again."""
+        if self._reconnecting:
+            return  # Already reconnecting
+
+        self._reconnecting = True
         try:
             # Small delay to let BLE stack settle
             await asyncio.sleep(1)
@@ -179,6 +186,8 @@ class BeurerInstance:
 
         except Exception as err:
             LOGGER.debug("Auto-reconnect to %s failed: %s", self._mac, err)
+        finally:
+            self._reconnecting = False
 
     @property
     def ble_available(self) -> bool:
