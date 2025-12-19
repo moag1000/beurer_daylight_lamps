@@ -180,9 +180,11 @@ action:
           sequence:
             # Check if lamp was turned off manually - abort if so
             # Allow "unavailable" state to continue (temporary BLE disconnect)
-            - condition: template
-              value_template: >
-                {{ states(beurer) in ['on', 'unavailable'] }}
+            - condition: not
+              conditions:
+                - condition: state
+                  entity_id: !input beurer_light
+                  state: "off"
 
             # Calculate current values based on progress
             - variables:
@@ -232,10 +234,12 @@ action:
   # =========================================================================
   # PHASE 2: TRANSITION TO THERAPY MODE
   # =========================================================================
-  # Only continue if lamp is still on (or temporarily unavailable)
-  - condition: template
-    value_template: >
-      {{ states(beurer) in ['on', 'unavailable'] }}
+  # Only continue if lamp was NOT turned off manually
+  - condition: not
+    conditions:
+      - condition: state
+        entity_id: !input beurer_light
+        state: "off"
 
   # Smooth transition: First go to near-white RGB at high brightness
   - service: light.turn_on
@@ -265,9 +269,11 @@ action:
   # =========================================================================
   # PHASE 3: FULL THERAPY BRIGHTNESS (Native White Mode)
   # =========================================================================
-  - condition: template
-    value_template: >
-      {{ states(beurer) in ['on', 'unavailable'] }}
+  - condition: not
+    conditions:
+      - condition: state
+        entity_id: !input beurer_light
+        state: "off"
 
   # Switch Beurer to native white mode - start at 80% to avoid harsh jump
   - service: light.turn_on
@@ -309,10 +315,12 @@ action:
   # =========================================================================
   # PHASE 4: END ACTION
   # =========================================================================
-  # Only execute end action if lamp is still on (or temporarily unavailable)
-  - condition: template
-    value_template: >
-      {{ states(beurer) in ['on', 'unavailable'] }}
+  # Only execute end action if lamp was NOT turned off manually
+  - condition: not
+    conditions:
+      - condition: state
+        entity_id: !input beurer_light
+        state: "off"
 
   - choose:
       # Turn off all lights
