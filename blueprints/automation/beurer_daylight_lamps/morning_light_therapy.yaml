@@ -8,7 +8,7 @@ blueprint:
     sunrise phase, the lamp maintains bright daylight for your therapy session.
 
     ### Features
-    - Gradual sunrise simulation (warm to cool light)
+    - Realistic sunrise colors (deep orange → warm white → daylight)
     - Smooth transitions between brightness levels
     - Configurable therapy duration at full brightness
     - Support for multiple lights (sync additional lamps)
@@ -17,7 +17,7 @@ blueprint:
 
     ### Recommended Settings
     - **Sunrise**: 15-20 minutes for a natural wake-up
-    - **Therapy**: 20-30 minutes at full brightness (5300K)
+    - **Therapy**: 20-30 minutes at full brightness (native white mode)
 
     > **Note**: This is a lifestyle/wellness feature, not a medical device.
   domain: automation
@@ -55,7 +55,7 @@ blueprint:
       selector:
         select:
           options:
-            - label: "Full sync - Match brightness AND color temperature"
+            - label: "Full sync - Match brightness AND color"
               value: "full_sync"
             - label: "Brightness only - Keep their current color"
               value: "brightness_only"
@@ -100,7 +100,8 @@ blueprint:
     therapy_duration:
       name: "Therapy Duration"
       description: |
-        How long to maintain full brightness (5300K) after sunrise?
+        How long to maintain full brightness after sunrise?
+        Uses native white mode (5300K) for optimal therapy.
         Typical sessions are 20-30 minutes.
       default: 30
       selector:
@@ -137,15 +138,21 @@ variables:
   total_steps: "{{ (sunrise_mins * 2) | int if sunrise_mins > 0 else 0 }}"
 
   # All lights for turning off
-  all_lights: "{{ [beurer] + (extras if extras else []) }}"
+  all_lights: "{{ [beurer] + (extras if extras is list else []) }}"
 
-  # Check if we have extras
-  has_extras: "{{ extras is defined and extras | length > 0 }}"
+  # Check if we have extras - more robust check
+  has_extras: "{{ extras is list and extras | length > 0 }}"
 
-  # Helper to check light capabilities (used in templates)
-  # supported_color_modes can include: onoff, brightness, color_temp, hs, rgb, rgbw, rgbww, white, xy
-  ct_modes: "{{ ['color_temp', 'rgbww', 'white'] }}"
-  brightness_modes: "{{ ['brightness', 'color_temp', 'hs', 'rgb', 'rgbw', 'rgbww', 'white', 'xy'] }}"
+  # Sunrise color gradient (RGB values for realistic sunrise)
+  # Progress 0.0 -> 1.0 maps through these colors:
+  # Deep orange -> Orange -> Warm yellow -> Warm white -> Neutral -> Daylight
+  sunrise_colors:
+    - [255, 100, 20]   # 0.0 - Deep orange/red (like early sunrise)
+    - [255, 140, 40]   # 0.2 - Orange
+    - [255, 180, 80]   # 0.4 - Warm yellow/orange
+    - [255, 210, 140]  # 0.6 - Warm white
+    - [255, 235, 200]  # 0.8 - Neutral warm
+    - [255, 250, 240]  # 1.0 - Near white (before switch to native white)
 
 trigger:
   - platform: time
@@ -167,62 +174,27 @@ action:
       - condition: template
         value_template: "{{ sunrise_mins > 0 }}"
     then:
-      # Start very dim and warm
+      # Start very dim with deep orange (like early sunrise)
       - service: light.turn_on
         target:
           entity_id: "{{ beurer }}"
         data:
           brightness_pct: 1
-          color_temp_kelvin: 2700
+          rgb_color: [255, 100, 20]
           transition: 2
 
-      # Additional lights: initial dim state (with capability detection)
+      # Additional lights: initial dim state
       - if:
           - condition: template
             value_template: "{{ has_extras }}"
         then:
-          - repeat:
-              for_each: "{{ extras }}"
-              sequence:
-                - variables:
-                    light_entity: "{{ repeat.item }}"
-                    light_modes: "{{ state_attr(light_entity, 'supported_color_modes') or [] }}"
-                    supports_brightness: "{{ light_modes | select('in', brightness_modes) | list | length > 0 }}"
-                    supports_ct: "{{ light_modes | select('in', ct_modes) | list | length > 0 }}"
-                - choose:
-                    # Full sync with color temp support
-                    - conditions: "{{ sync == 'full_sync' and supports_ct and supports_brightness }}"
-                      sequence:
-                        - service: light.turn_on
-                          target:
-                            entity_id: "{{ light_entity }}"
-                          data:
-                            brightness_pct: 1
-                            color_temp_kelvin: 2700
-                            transition: 2
-                    # Full sync but no CT - just brightness
-                    - conditions: "{{ sync == 'full_sync' and supports_brightness }}"
-                      sequence:
-                        - service: light.turn_on
-                          target:
-                            entity_id: "{{ light_entity }}"
-                          data:
-                            brightness_pct: 1
-                            transition: 2
-                    # Brightness only mode
-                    - conditions: "{{ sync == 'brightness_only' and supports_brightness }}"
-                      sequence:
-                        - service: light.turn_on
-                          target:
-                            entity_id: "{{ light_entity }}"
-                          data:
-                            brightness_pct: 1
-                            transition: 2
-                  # Default: on/off only or no brightness support
-                  default:
-                    - service: light.turn_on
-                      target:
-                        entity_id: "{{ light_entity }}"
+          - service: light.turn_on
+            target:
+              entity_id: "{{ extras }}"
+            data:
+              brightness_pct: 1
+              color_temp_kelvin: 2000
+              transition: 2
 
       # Wait for initial turn on
       - delay:
@@ -239,139 +211,135 @@ action:
                 {{ states(beurer) in ['on', 'unavailable'] }}
 
             # Calculate current values based on progress
-            # Progress goes from 1/total_steps to total_steps/total_steps (1.0)
             - variables:
                 step: "{{ repeat.index }}"
                 progress: "{{ step / total_steps }}"
-                # Brightness: 1% -> 100% (exponential feels more natural)
-                target_brightness: "{{ (1 + (99 * (progress ** 1.5))) | round(0) | int }}"
-                # Color temp: 2700K -> 5300K (linear)
-                target_temp: "{{ (2700 + (2600 * progress)) | round(0) | int }}"
+                # Brightness: 1% -> 95% (exponential feels more natural)
+                # We stop at 95% to leave room for the white mode boost
+                target_brightness: "{{ (1 + (94 * (progress ** 1.5))) | round(0) | int }}"
+                # Color: interpolate through sunrise gradient
+                # Map progress to color index (0-5)
+                color_idx: "{{ (progress * 5) | int }}"
+                color_blend: "{{ (progress * 5) - color_idx }}"
+                # Get colors for interpolation
+                c1: "{{ sunrise_colors[color_idx | int] }}"
+                c2: "{{ sunrise_colors[(color_idx | int + 1) | min(5)] }}"
+                # Interpolate RGB
+                target_r: "{{ (c1[0] + (c2[0] - c1[0]) * color_blend) | round(0) | int }}"
+                target_g: "{{ (c1[1] + (c2[1] - c1[1]) * color_blend) | round(0) | int }}"
+                target_b: "{{ (c1[2] + (c2[2] - c1[2]) * color_blend) | round(0) | int }}"
+                # Color temp for additional lights (2000K -> 5000K)
+                target_temp: "{{ (2000 + (3000 * progress)) | round(0) | int }}"
 
-            # Update Beurer lamp with smooth transition
+            # Update Beurer lamp with RGB color (stays in RGB mode)
             - service: light.turn_on
               target:
                 entity_id: "{{ beurer }}"
               data:
                 brightness_pct: "{{ target_brightness }}"
-                color_temp_kelvin: "{{ target_temp }}"
+                rgb_color:
+                  - "{{ target_r }}"
+                  - "{{ target_g }}"
+                  - "{{ target_b }}"
                 transition: 25
 
-            # Update additional lights (with capability detection)
+            # Update additional lights with color temp
             - if:
                 - condition: template
                   value_template: "{{ has_extras }}"
               then:
-                - repeat:
-                    for_each: "{{ extras }}"
-                    sequence:
-                      - variables:
-                          light_entity: "{{ repeat.item }}"
-                          light_modes: "{{ state_attr(light_entity, 'supported_color_modes') or [] }}"
-                          supports_brightness: "{{ light_modes | select('in', brightness_modes) | list | length > 0 }}"
-                          supports_ct: "{{ light_modes | select('in', ct_modes) | list | length > 0 }}"
-                      - choose:
-                          # Full sync with color temp support
-                          - conditions: "{{ sync == 'full_sync' and supports_ct and supports_brightness }}"
-                            sequence:
-                              - service: light.turn_on
-                                target:
-                                  entity_id: "{{ light_entity }}"
-                                data:
-                                  brightness_pct: "{{ target_brightness }}"
-                                  color_temp_kelvin: "{{ target_temp }}"
-                                  transition: 25
-                          # Full sync but no CT - just brightness
-                          - conditions: "{{ sync == 'full_sync' and supports_brightness }}"
-                            sequence:
-                              - service: light.turn_on
-                                target:
-                                  entity_id: "{{ light_entity }}"
-                                data:
-                                  brightness_pct: "{{ target_brightness }}"
-                                  transition: 25
-                          # Brightness only mode
-                          - conditions: "{{ sync == 'brightness_only' and supports_brightness }}"
-                            sequence:
-                              - service: light.turn_on
-                                target:
-                                  entity_id: "{{ light_entity }}"
-                                data:
-                                  brightness_pct: "{{ target_brightness }}"
-                                  transition: 25
-                        # Default: on/off only - light is already on, no action needed
+                - service: light.turn_on
+                  target:
+                    entity_id: "{{ extras }}"
+                  data:
+                    brightness_pct: "{{ target_brightness }}"
+                    color_temp_kelvin: "{{ target_temp }}"
+                    transition: 25
 
-            # Wait before next step (30 seconds minus transition overlap)
+            # Wait before next step (30 seconds)
             - delay:
                 seconds: 30
 
   # =========================================================================
-  # PHASE 2: FULL THERAPY BRIGHTNESS
+  # PHASE 2: TRANSITION TO THERAPY MODE
   # =========================================================================
   # Only continue if lamp is still on (or temporarily unavailable)
   - condition: template
     value_template: >
       {{ states(beurer) in ['on', 'unavailable'] }}
 
-  # Set full therapy brightness
+  # Smooth transition: First go to near-white RGB at high brightness
+  - service: light.turn_on
+    target:
+      entity_id: "{{ beurer }}"
+    data:
+      brightness_pct: 100
+      rgb_color: [255, 255, 250]
+      transition: 10
+
+  - if:
+      - condition: template
+        value_template: "{{ has_extras }}"
+    then:
+      - service: light.turn_on
+        target:
+          entity_id: "{{ extras }}"
+        data:
+          brightness_pct: 100
+          color_temp_kelvin: 5000
+          transition: 10
+
+  # Wait for transition
+  - delay:
+      seconds: 12
+
+  # =========================================================================
+  # PHASE 3: FULL THERAPY BRIGHTNESS (Native White Mode)
+  # =========================================================================
+  - condition: template
+    value_template: >
+      {{ states(beurer) in ['on', 'unavailable'] }}
+
+  # Switch Beurer to native white mode - start at 80% to avoid harsh jump
+  # (WHITE mode is more intense than RGB mode at same %)
+  - service: light.turn_on
+    target:
+      entity_id: "{{ beurer }}"
+    data:
+      brightness_pct: 80
+      color_temp_kelvin: 5300
+      transition: 5
+
+  - if:
+      - condition: template
+        value_template: "{{ has_extras }}"
+    then:
+      - service: light.turn_on
+        target:
+          entity_id: "{{ extras }}"
+        data:
+          brightness_pct: 100
+          color_temp_kelvin: 5300
+          transition: 5
+
+  # Wait a moment, then gradually increase to full therapy brightness
+  - delay:
+      seconds: 10
+
   - service: light.turn_on
     target:
       entity_id: "{{ beurer }}"
     data:
       brightness_pct: 100
       color_temp_kelvin: 5300
-      transition: 5
-
-  # Additional lights: therapy brightness (with capability detection)
-  - if:
-      - condition: template
-        value_template: "{{ has_extras }}"
-    then:
-      - repeat:
-          for_each: "{{ extras }}"
-          sequence:
-            - variables:
-                light_entity: "{{ repeat.item }}"
-                light_modes: "{{ state_attr(light_entity, 'supported_color_modes') or [] }}"
-                supports_brightness: "{{ light_modes | select('in', brightness_modes) | list | length > 0 }}"
-                supports_ct: "{{ light_modes | select('in', ct_modes) | list | length > 0 }}"
-            - choose:
-                # Full sync with color temp support
-                - conditions: "{{ sync == 'full_sync' and supports_ct and supports_brightness }}"
-                  sequence:
-                    - service: light.turn_on
-                      target:
-                        entity_id: "{{ light_entity }}"
-                      data:
-                        brightness_pct: 100
-                        color_temp_kelvin: 5300
-                        transition: 5
-                # Full sync but no CT - just brightness
-                - conditions: "{{ sync == 'full_sync' and supports_brightness }}"
-                  sequence:
-                    - service: light.turn_on
-                      target:
-                        entity_id: "{{ light_entity }}"
-                      data:
-                        brightness_pct: 100
-                        transition: 5
-                # Brightness only mode
-                - conditions: "{{ sync == 'brightness_only' and supports_brightness }}"
-                  sequence:
-                    - service: light.turn_on
-                      target:
-                        entity_id: "{{ light_entity }}"
-                      data:
-                        brightness_pct: 100
-                        transition: 5
-              # Default: on/off only - light is already on
+      transition: 30
 
   # Wait for therapy duration
   - delay:
       minutes: "{{ therapy_mins }}"
 
   # =========================================================================
-  # PHASE 3: END ACTION
+  # PHASE 4: END ACTION
   # =========================================================================
   # Only execute end action if lamp is still on (or temporarily unavailable)
   - condition: template
@@ -393,54 +361,11 @@ action:
         sequence:
           - service: light.turn_on
             target:
-              entity_id: "{{ beurer }}"
+              entity_id: "{{ all_lights }}"
             data:
               brightness_pct: 80
               color_temp_kelvin: 4000
               transition: 10
-          # Additional lights: reading mode (with capability detection)
-          - if:
-              - condition: template
-                value_template: "{{ has_extras }}"
-            then:
-              - repeat:
-                  for_each: "{{ extras }}"
-                  sequence:
-                    - variables:
-                        light_entity: "{{ repeat.item }}"
-                        light_modes: "{{ state_attr(light_entity, 'supported_color_modes') or [] }}"
-                        supports_brightness: "{{ light_modes | select('in', brightness_modes) | list | length > 0 }}"
-                        supports_ct: "{{ light_modes | select('in', ct_modes) | list | length > 0 }}"
-                    - choose:
-                        # Full sync with color temp support
-                        - conditions: "{{ sync == 'full_sync' and supports_ct and supports_brightness }}"
-                          sequence:
-                            - service: light.turn_on
-                              target:
-                                entity_id: "{{ light_entity }}"
-                              data:
-                                brightness_pct: 80
-                                color_temp_kelvin: 4000
-                                transition: 10
-                        # Full sync but no CT - just brightness
-                        - conditions: "{{ sync == 'full_sync' and supports_brightness }}"
-                          sequence:
-                            - service: light.turn_on
-                              target:
-                                entity_id: "{{ light_entity }}"
-                              data:
-                                brightness_pct: 80
-                                transition: 10
-                        # Brightness only mode
-                        - conditions: "{{ sync == 'brightness_only' and supports_brightness }}"
-                          sequence:
-                            - service: light.turn_on
-                              target:
-                                entity_id: "{{ light_entity }}"
-                              data:
-                                brightness_pct: 80
-                                transition: 10
-                      # Default: on/off only - light stays as is
 
       # Stay on: do nothing (lights remain at therapy brightness)
 
