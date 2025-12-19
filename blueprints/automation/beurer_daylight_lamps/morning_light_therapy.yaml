@@ -48,20 +48,6 @@ blueprint:
           filter:
             - domain: light
 
-    sync_mode:
-      name: "Sync Mode for Additional Lights"
-      description: "How should additional lights follow the Beurer lamp?"
-      default: "full_sync"
-      selector:
-        select:
-          options:
-            - label: "Full sync - Match brightness AND color"
-              value: "full_sync"
-            - label: "Brightness only - Keep their current color"
-              value: "brightness_only"
-            - label: "On/Off only - Use their default settings"
-              value: "on_off_only"
-
     wake_time:
       name: "Wake-up Time"
       description: "When should the sunrise begin? (Light starts dim at this time)"
@@ -128,7 +114,6 @@ blueprint:
 variables:
   beurer: !input beurer_light
   extras: !input additional_lights
-  sync: !input sync_mode
   sunrise_mins: !input sunrise_duration
   therapy_mins: !input therapy_duration
   schedule: !input schedule_days
@@ -140,19 +125,8 @@ variables:
   # All lights for turning off
   all_lights: "{{ [beurer] + (extras if extras is list else []) }}"
 
-  # Check if we have extras - more robust check
+  # Check if we have extras
   has_extras: "{{ extras is list and extras | length > 0 }}"
-
-  # Sunrise color gradient (RGB values for realistic sunrise)
-  # Progress 0.0 -> 1.0 maps through these colors:
-  # Deep orange -> Orange -> Warm yellow -> Warm white -> Neutral -> Daylight
-  sunrise_colors:
-    - [255, 100, 20]   # 0.0 - Deep orange/red (like early sunrise)
-    - [255, 140, 40]   # 0.2 - Orange
-    - [255, 180, 80]   # 0.4 - Warm yellow/orange
-    - [255, 210, 140]  # 0.6 - Warm white
-    - [255, 235, 200]  # 0.8 - Neutral warm
-    - [255, 250, 240]  # 1.0 - Near white (before switch to native white)
 
 trigger:
   - platform: time
@@ -215,23 +189,18 @@ action:
                 step: "{{ repeat.index }}"
                 progress: "{{ step / total_steps }}"
                 # Brightness: 1% -> 95% (exponential feels more natural)
-                # We stop at 95% to leave room for the white mode boost
                 target_brightness: "{{ (1 + (94 * (progress ** 1.5))) | round(0) | int }}"
-                # Color: interpolate through sunrise gradient
-                # Map progress to color index (0-5)
-                color_idx: "{{ (progress * 5) | int }}"
-                color_blend: "{{ (progress * 5) - color_idx }}"
-                # Get colors for interpolation
-                c1: "{{ sunrise_colors[color_idx | int] }}"
-                c2: "{{ sunrise_colors[(color_idx | int + 1) | min(5)] }}"
-                # Interpolate RGB
-                target_r: "{{ (c1[0] + (c2[0] - c1[0]) * color_blend) | round(0) | int }}"
-                target_g: "{{ (c1[1] + (c2[1] - c1[1]) * color_blend) | round(0) | int }}"
-                target_b: "{{ (c1[2] + (c2[2] - c1[2]) * color_blend) | round(0) | int }}"
+                # RGB color: interpolate from orange to near-white
+                # Red stays at 255
+                # Green: 100 -> 250 (increases with progress)
+                # Blue: 20 -> 240 (increases faster with progress)
+                target_r: 255
+                target_g: "{{ (100 + (150 * progress)) | round(0) | int }}"
+                target_b: "{{ (20 + (220 * (progress ** 0.7))) | round(0) | int }}"
                 # Color temp for additional lights (2000K -> 5000K)
                 target_temp: "{{ (2000 + (3000 * progress)) | round(0) | int }}"
 
-            # Update Beurer lamp with RGB color (stays in RGB mode)
+            # Update Beurer lamp with RGB color
             - service: light.turn_on
               target:
                 entity_id: "{{ beurer }}"
@@ -301,7 +270,6 @@ action:
       {{ states(beurer) in ['on', 'unavailable'] }}
 
   # Switch Beurer to native white mode - start at 80% to avoid harsh jump
-  # (WHITE mode is more intense than RGB mode at same %)
   - service: light.turn_on
     target:
       entity_id: "{{ beurer }}"
