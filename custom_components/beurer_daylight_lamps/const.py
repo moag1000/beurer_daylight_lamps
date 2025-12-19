@@ -5,7 +5,7 @@ import logging
 from typing import Final
 
 DOMAIN: Final = "beurer_daylight_lamps"
-VERSION: Final = "1.18.0"
+VERSION: Final = "1.19.0"
 LOGGER = logging.getLogger(__package__)
 
 # BLE Characteristic UUIDs

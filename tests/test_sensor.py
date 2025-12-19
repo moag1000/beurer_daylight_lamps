@@ -16,8 +16,8 @@ from custom_components.beurer_daylight_lamps.sensor import (
 
 def test_sensor_descriptions() -> None:
     """Test diagnostic sensor descriptions are correctly defined."""
-    # Only RSSI sensor in SENSOR_DESCRIPTIONS
-    assert len(SENSOR_DESCRIPTIONS) == 1
+    # RSSI and last_notification sensors in SENSOR_DESCRIPTIONS
+    assert len(SENSOR_DESCRIPTIONS) == 2
 
     # RSSI sensor
     rssi_desc = SENSOR_DESCRIPTIONS[0]
@@ -27,6 +27,11 @@ def test_sensor_descriptions() -> None:
     assert rssi_desc.native_unit_of_measurement == SIGNAL_STRENGTH_DECIBELS_MILLIWATT
     assert rssi_desc.entity_category == EntityCategory.DIAGNOSTIC
     assert rssi_desc.entity_registry_enabled_default is False
+
+    # Last notification sensor
+    notif_desc = SENSOR_DESCRIPTIONS[1]
+    assert notif_desc.key == "last_notification"
+    assert notif_desc.entity_category == EntityCategory.DIAGNOSTIC
 
 
 def test_therapy_sensor_descriptions() -> None:

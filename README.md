@@ -57,7 +57,7 @@ I heavily used claude as I did in other projects but focused on keeping it tight
 | **Select** | Effect | Dropdown for light effects |
 | **Number** | White brightness | Slider 0-100% |
 | **Number** | Color brightness | Slider 0-100% |
-| **Number** | Timer | Auto-off timer 1-240 min (RGB mode only) |
+| **Number** | Timer | Auto-off timer 0-120 min (0 = off, works in both modes) |
 | **Number** | Daily light goal | Configurable daily exposure goal (5-120 min) |
 | **Sensor** | Signal strength | RSSI in dBm (disabled by default) |
 | **Sensor** | Light exposure today | Minutes of bright light today |
@@ -69,7 +69,7 @@ I heavily used claude as I did in other projects but focused on keeping it tight
 
 #### Entity Notes
 
-- **Timer**: Only available in RGB mode (see [Known Limitations](#known-limitations))
+- **Timer**: Works in both White and RGB mode. Set to 0 to disable. Note: Timer is automatically cancelled when switching modes.
 - **Signal Strength**: Disabled by default. RSSI values: -30 to -50 dBm = excellent, -50 to -70 = good, < -80 = poor
 
 ### Services
@@ -100,7 +100,7 @@ data:
 
 #### `beurer_daylight_lamps.set_timer`
 
-Set an auto-off timer (1-240 minutes). The lamp will turn off automatically after the specified time.
+Set an auto-off timer (1-120 minutes). The lamp will turn off automatically after the specified time. Works in both White and RGB mode.
 
 ```yaml
 service: beurer_daylight_lamps.set_timer
@@ -503,7 +503,7 @@ This integration uses **Bluetooth Low Energy (BLE)** for communication:
 
 > **Note**: These are design constraints, not bugs.
 
-1. **Timer only in RGB mode**: The auto-off timer (0x3E command) only functions when the lamp is in RGB/color mode. This is a hardware limitation of the Beurer protocol.
+1. **Timer cancels on mode switch**: The auto-off timer works in both White and RGB mode, but is automatically cancelled when switching between modes. This is hardware behavior.
 
 2. **Bluetooth LED always on**: The small Bluetooth indicator LED on the lamp stays illuminated while connected to Home Assistant. This cannot be disabled.
 

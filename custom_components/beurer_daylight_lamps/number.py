@@ -1,6 +1,8 @@
 """Number platform for Beurer Daylight Lamps."""
 from __future__ import annotations
 
+import asyncio
+
 from homeassistant.components.light import ColorMode
 from homeassistant.components.number import (
     NumberEntity,
@@ -146,7 +148,7 @@ class BeurerTimerNumber(NumberEntity):
 
     _attr_has_entity_name = True
     _attr_mode = NumberMode.SLIDER
-    _attr_native_min_value = 1
+    _attr_native_min_value = 0
     _attr_native_max_value = 120
     _attr_native_step = 1
     _attr_native_unit_of_measurement = UnitOfTime.MINUTES
@@ -169,7 +171,7 @@ class BeurerTimerNumber(NumberEntity):
         """Return the current timer value from device state."""
         if self._instance.timer_active:
             return self._instance.timer_minutes
-        return None
+        return 0  # Timer off = 0
 
     @property
     def available(self) -> bool:
@@ -203,13 +205,41 @@ class BeurerTimerNumber(NumberEntity):
         self.async_write_ha_state()
 
     async def async_set_native_value(self, value: float) -> None:
-        """Set the timer value in minutes."""
+        """Set the timer value in minutes.
+
+        - 0 = cancel/disable timer
+        - 1-120 = set timer duration
+        - When timer was inactive, we send the command twice to ensure activation.
+        """
         minutes = int(value)
-        LOGGER.debug("Setting timer to %d minutes", minutes)
+
+        # 0 = cancel timer
+        if minutes == 0:
+            LOGGER.debug("Cancelling timer")
+            success = await self._instance.cancel_timer()
+            if success:
+                LOGGER.info("Timer cancelled")
+            else:
+                raise HomeAssistantError("Failed to cancel timer")
+            return
+
+        was_inactive = not self._instance.timer_active
+
+        LOGGER.debug(
+            "Setting timer to %d minutes (was_inactive=%s)",
+            minutes, was_inactive
+        )
 
         success = await self._instance.set_timer(minutes)
+
+        # If timer was inactive, send the command a second time
+        # to ensure the value is properly set
+        if success and was_inactive:
+            LOGGER.debug("Timer was inactive, sending value again")
+            await asyncio.sleep(0.3)
+            success = await self._instance.set_timer(minutes)
+
         if success:
-            self._last_set_value = value
             LOGGER.info("Timer set to %d minutes", minutes)
         else:
             raise HomeAssistantError(f"Failed to set timer to {minutes} minutes")

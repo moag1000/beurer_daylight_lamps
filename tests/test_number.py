@@ -175,10 +175,10 @@ class TestBeurerTimerNumber:
         assert "aa:bb:cc:dd:ee:ff_timer" in timer._attr_unique_id
 
     def test_native_value_inactive(self, mock_instance: MagicMock) -> None:
-        """Test native_value returns None when timer inactive."""
+        """Test native_value returns 0 when timer inactive."""
         mock_instance.timer_active = False
         timer = BeurerTimerNumber(mock_instance, "Test Lamp")
-        assert timer.native_value is None
+        assert timer.native_value == 0
 
     def test_native_value_active(self, mock_instance: MagicMock) -> None:
         """Test native_value returns timer minutes when active."""

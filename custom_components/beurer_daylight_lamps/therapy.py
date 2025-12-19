@@ -301,12 +301,57 @@ class SunriseSimulation:
         self._total_steps = 0
         LOGGER.debug("Simulation stopped")
 
+    async def _apply_with_retry(
+        self,
+        action: Any,
+        max_retries: int = 3,
+    ) -> bool:
+        """Apply an action with retry and automatic reconnection.
+
+        Args:
+            action: Async callable to execute
+            max_retries: Maximum number of retry attempts
+
+        Returns:
+            True if action succeeded, False otherwise
+        """
+        for attempt in range(max_retries):
+            try:
+                # Check connection status and reconnect if needed
+                if not self._instance.is_connected:
+                    LOGGER.debug("Not connected, attempting reconnect...")
+                    connected = await self._instance.connect()
+                    if not connected:
+                        LOGGER.warning(
+                            "Reconnect failed (attempt %d/%d)",
+                            attempt + 1, max_retries
+                        )
+                        await asyncio.sleep(1)
+                        continue
+
+                # Execute the action
+                await action()
+                return True
+
+            except Exception as err:
+                LOGGER.warning(
+                    "Action failed (attempt %d/%d): %s",
+                    attempt + 1, max_retries, err
+                )
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(1)
+
+        return False
+
     async def _run_sunrise(
         self,
         duration_minutes: int,
         config: SunriseConfig,
     ) -> None:
-        """Execute sunrise simulation."""
+        """Execute sunrise simulation.
+
+        Resilient to connection issues - will retry and continue on errors.
+        """
         try:
             # Calculate steps (one per minute, minimum 1)
             steps = max(1, duration_minutes)
@@ -315,6 +360,9 @@ class SunriseSimulation:
 
             kelvin_step = (config.end_kelvin - config.start_kelvin) / steps
             brightness_step = (config.end_brightness_pct - config.start_brightness_pct) / steps
+
+            consecutive_failures = 0
+            max_consecutive_failures = 5
 
             for i in range(steps + 1):
                 if not self._running:
@@ -338,8 +386,27 @@ class SunriseSimulation:
                     brightness_pct,
                 )
 
-                # Apply to lamp
-                await self._instance.set_color_with_brightness(rgb, brightness_255)
+                # Apply to lamp with retry logic
+                # Capture values for lambda to avoid late binding issues
+                _rgb, _brightness = rgb, brightness_255
+                success = await self._apply_with_retry(
+                    lambda: self._instance.set_color_with_brightness(_rgb, _brightness)
+                )
+
+                if success:
+                    consecutive_failures = 0
+                else:
+                    consecutive_failures += 1
+                    LOGGER.warning(
+                        "Sunrise step %d failed, continuing... (%d consecutive failures)",
+                        i + 1, consecutive_failures
+                    )
+                    if consecutive_failures >= max_consecutive_failures:
+                        LOGGER.error(
+                            "Too many consecutive failures (%d), stopping sunrise",
+                            consecutive_failures
+                        )
+                        break
 
                 if i < steps:
                     await asyncio.sleep(interval)
@@ -349,8 +416,6 @@ class SunriseSimulation:
         except asyncio.CancelledError:
             LOGGER.debug("Sunrise simulation cancelled")
             raise
-        except Exception as err:
-            LOGGER.error("Error during sunrise: %s", err)
         finally:
             self._running = False
             self._current_step = 0
@@ -361,7 +426,10 @@ class SunriseSimulation:
         duration_minutes: int,
         end_brightness_pct: int,
     ) -> None:
-        """Execute sunset simulation."""
+        """Execute sunset simulation.
+
+        Resilient to connection issues - will retry and continue on errors.
+        """
         try:
             # Get current brightness
             current_brightness = self._instance.color_brightness
@@ -380,6 +448,9 @@ class SunriseSimulation:
             # Use warm light for sunset
             warm_rgb = color_temperature_to_rgb(2700)
 
+            consecutive_failures = 0
+            max_consecutive_failures = 5
+
             for i in range(steps + 1):
                 if not self._running:
                     break
@@ -395,25 +466,45 @@ class SunriseSimulation:
                     brightness_pct,
                 )
 
+                # Apply with retry logic
                 if brightness_pct <= 0:
-                    await self._instance.turn_off()
+                    success = await self._apply_with_retry(
+                        lambda: self._instance.turn_off()
+                    )
                 else:
-                    await self._instance.set_color_with_brightness(warm_rgb, brightness_255)
+                    # Capture values for lambda
+                    _rgb, _brightness = warm_rgb, brightness_255
+                    success = await self._apply_with_retry(
+                        lambda: self._instance.set_color_with_brightness(_rgb, _brightness)
+                    )
+
+                if success:
+                    consecutive_failures = 0
+                else:
+                    consecutive_failures += 1
+                    LOGGER.warning(
+                        "Sunset step %d failed, continuing... (%d consecutive failures)",
+                        i + 1, consecutive_failures
+                    )
+                    if consecutive_failures >= max_consecutive_failures:
+                        LOGGER.error(
+                            "Too many consecutive failures (%d), stopping sunset",
+                            consecutive_failures
+                        )
+                        break
 
                 if i < steps:
                     await asyncio.sleep(interval)
 
             # Final turn off if end_brightness is 0
-            if end_brightness_pct == 0:
-                await self._instance.turn_off()
+            if end_brightness_pct == 0 and self._running:
+                await self._apply_with_retry(lambda: self._instance.turn_off())
 
             LOGGER.info("Sunset simulation completed")
 
         except asyncio.CancelledError:
             LOGGER.debug("Sunset simulation cancelled")
             raise
-        except Exception as err:
-            LOGGER.error("Error during sunset: %s", err)
         finally:
             self._running = False
             self._current_step = 0

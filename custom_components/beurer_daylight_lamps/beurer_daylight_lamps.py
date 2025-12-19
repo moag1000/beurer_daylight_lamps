@@ -140,10 +140,16 @@ class BeurerInstance:
     def mark_seen(self) -> None:
         """Mark the device as seen (received advertisement)."""
         self._last_seen = time.time()
+        was_unavailable = not self._ble_available or not self._available
         if not self._ble_available:
             LOGGER.info("Device %s is now reachable again", self._mac)
             self._ble_available = True
             self._safe_create_task(self._trigger_update())
+
+        # Auto-reconnect if device was unavailable
+        if was_unavailable and not self._available:
+            LOGGER.debug("Device %s was unavailable, attempting auto-reconnect", self._mac)
+            self._safe_create_task(self._auto_reconnect())
 
     def mark_unavailable(self) -> None:
         """Mark the device as unavailable (not seen by any adapter)."""
@@ -152,6 +158,27 @@ class BeurerInstance:
             self._ble_available = False
             self._available = False
             self._safe_create_task(self._trigger_update())
+
+    async def _auto_reconnect(self) -> None:
+        """Automatically reconnect when device becomes available again."""
+        try:
+            # Small delay to let BLE stack settle
+            await asyncio.sleep(1)
+
+            if self._available:
+                # Already available, no need to reconnect
+                return
+
+            LOGGER.info("Auto-reconnecting to %s", self._mac)
+            connected = await self.connect()
+
+            if connected:
+                LOGGER.info("Auto-reconnect to %s successful", self._mac)
+            else:
+                LOGGER.debug("Auto-reconnect to %s failed, will retry on next advertisement", self._mac)
+
+        except Exception as err:
+            LOGGER.debug("Auto-reconnect to %s failed: %s", self._mac, err)
 
     @property
     def ble_available(self) -> bool:
@@ -355,10 +382,13 @@ class BeurerInstance:
         """Return True if device is available.
 
         Device is available if:
-        1. It's reachable via Bluetooth (connected OR seen in advertisements)
-        2. We've received status from it (_available)
+        - Connected via GATT (active connection), OR
+        - Reachable via BLE AND we've received status
         """
-        # Use ble_available property (not field!) which returns True when connected
+        # If actively connected, device is definitely available
+        if self.is_connected:
+            return True
+        # Otherwise, need both BLE reachability and status received
         return self.ble_available and self._available
 
     @property

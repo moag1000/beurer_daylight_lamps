@@ -1,6 +1,7 @@
 """The Beurer Daylight Lamps integration."""
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING, Any
 
 import voluptuous as vol
@@ -322,6 +323,24 @@ async def async_setup_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> bo
 
     # Register services (only once)
     await _async_setup_services(hass)
+
+    # Auto-connect after setup to get initial state
+    # This runs in the background to not block the setup
+    async def _async_initial_connect() -> None:
+        """Try to connect and get initial state."""
+        await asyncio.sleep(2)  # Give BLE stack time to settle
+        if device_initially_available:
+            LOGGER.debug("Attempting initial connection to %s", mac_address)
+            try:
+                connected = await instance.connect()
+                if connected:
+                    LOGGER.info("Initial connection to %s successful", mac_address)
+                else:
+                    LOGGER.debug("Initial connection to %s failed, will retry on demand", mac_address)
+            except Exception as err:
+                LOGGER.debug("Initial connection to %s failed: %s", mac_address, err)
+
+    hass.async_create_task(_async_initial_connect())
 
     return True
 
