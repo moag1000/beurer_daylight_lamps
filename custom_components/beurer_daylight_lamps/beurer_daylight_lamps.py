@@ -143,15 +143,31 @@ class BeurerInstance:
     def mark_seen(self) -> None:
         """Mark the device as seen (received advertisement)."""
         self._last_seen = time.time()
-        was_unavailable = not self._ble_available or not self._available
-        if not self._ble_available:
+        was_ble_unavailable = not self._ble_available
+
+        if was_ble_unavailable:
             LOGGER.info("Device %s is now reachable again", self._mac)
             self._ble_available = True
             self._safe_create_task(self._trigger_update())
 
-        # Auto-reconnect if device was unavailable (but not if already reconnecting)
-        if was_unavailable and not self._available and not self._reconnecting:
-            LOGGER.debug("Device %s was unavailable, attempting auto-reconnect", self._mac)
+        # Auto-reconnect if:
+        # 1. Device was BLE unavailable and we're not connected, OR
+        # 2. Device is BLE available but not connected (stale connection)
+        # But not if already reconnecting
+        should_reconnect = (
+            not self._reconnecting
+            and not self.is_connected
+            and (was_ble_unavailable or not self._available)
+        )
+
+        if should_reconnect:
+            LOGGER.debug(
+                "Device %s needs reconnect (was_ble_unavailable=%s, is_connected=%s, _available=%s)",
+                self._mac,
+                was_ble_unavailable,
+                self.is_connected,
+                self._available,
+            )
             self._safe_create_task(self._auto_reconnect())
 
     def mark_unavailable(self) -> None:
@@ -1245,6 +1261,13 @@ class BeurerInstance:
 
             # Get initial status
             await self._request_status()
+
+            # Mark as available - we have a working connection
+            # (Don't wait for notification response, connection itself proves device is there)
+            if not self._available:
+                self._available = True
+                await self._trigger_update()
+
             return True
 
         except BleakError as err:
