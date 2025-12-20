@@ -127,3 +127,5 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+.ha_token
+SERVER_INFO.md
