@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from homeassistant.components.light import (
+from homeassistant.components.light import (  # type: ignore[attr-defined]
     ATTR_BRIGHTNESS,
     ATTR_COLOR_TEMP_KELVIN,
     ATTR_EFFECT,
@@ -117,9 +117,11 @@ class BeurerLight(CoordinatorEntity[BeurerDataUpdateCoordinator], LightEntity):
     @property
     def rgb_color(self) -> tuple[int, int, int] | None:
         """Return the RGB color value."""
-        if self._instance.rgb_color:
-            return match_max_scale((255,), self._instance.rgb_color)
-        return None
+        # Only return RGB when in color mode
+        if self._instance.color_mode != ColorMode.RGB:
+            return None
+        scaled = match_max_scale((255,), self._instance.rgb_color)
+        return (scaled[0], scaled[1], scaled[2])
 
     @property
     def color_temp_kelvin(self) -> int | None:
@@ -227,12 +229,17 @@ class BeurerLight(CoordinatorEntity[BeurerDataUpdateCoordinator], LightEntity):
                 )
             else:
                 # For lower color temperatures, simulate via RGB
-                rgb = color_temperature_to_rgb(kelvin)
-                LOGGER.debug("Color temp %dK -> RGB %s", kelvin, rgb)
+                ct_rgb_float = color_temperature_to_rgb(kelvin)
+                ct_rgb: tuple[int, int, int] = (
+                    int(ct_rgb_float[0]),
+                    int(ct_rgb_float[1]),
+                    int(ct_rgb_float[2]),
+                )
+                LOGGER.debug("Color temp %dK -> RGB %s", kelvin, ct_rgb)
 
                 # Use combined method to set color + brightness atomically
                 await self._instance.set_color_with_brightness(
-                    rgb,
+                    ct_rgb,
                     brightness if has_brightness else self._instance.color_brightness,
                 )
 

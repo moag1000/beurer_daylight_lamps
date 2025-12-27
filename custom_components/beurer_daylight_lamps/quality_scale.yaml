@@ -180,6 +180,11 @@ rules:
     status: done
     comment: py.typed marker, TYPE_CHECKING imports, dataclass for runtime_data
 
+  # Strict typing (Platinum)
+  strict-typing:
+    status: done
+    comment: mypy strict mode configured in pyproject.toml, all 17 files pass
+
   # === DOCUMENTATION (Gold requirement) ===
 
   # Documentation describes data updates
@@ -221,11 +226,13 @@ rules:
 # Bronze: 4/4 (100%) - config-flow, unique-config-entry, common-modules, brands
 # Silver: 8/8 (100%) - test coverage 86%, options-flow, reauthentication, reconfiguration
 # Gold: 17/17 (100%) - all rules fulfilled including device-triggers, coordinator-entity
-# Platinum: 4/4 partial - coordinator, async-only, background-tasks, type-annotations
+# Platinum: 5/5 partial - coordinator, async-only, background-tasks, type-annotations, strict-typing
 # Documentation: 7/7 (100%)
 #
 # Overall: Gold tier fully achieved, Platinum tier partially achieved
 # Note: dynamic-devices marked as not-applicable (single-device per config entry)
+# Note: inject-websession not applicable (BLE integration, no HTTP)
+# Note: Tests use mocked BLE, no real hardware integration tests
 #
 # Recent improvements (2025-12-27):
 # - CoordinatorEntity pattern in all entity classes
@@ -234,3 +241,4 @@ rules:
 # - Device triggers for automations
 # - German translation (de.json)
 # - Test coverage increased from 53% to 86% (477 tests)
+# - Strict typing with mypy (all 17 source files pass)

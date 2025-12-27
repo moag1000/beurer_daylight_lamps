@@ -10,7 +10,7 @@ from homeassistant.helpers.device_registry import (
     DeviceInfo,
     format_mac,
 )
-from homeassistant.helpers.entity import EntityCategory
+from homeassistant.helpers.entity import EntityCategory  # type: ignore[attr-defined]
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 

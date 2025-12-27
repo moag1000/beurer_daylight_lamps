@@ -43,14 +43,20 @@ class DeviceNotFoundRepairFlow(RepairsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> data_entry_flow.FlowResult:
         """Handle the confirm step."""
+        if self._entry_id is None:
+            return self.async_abort(reason="entry_not_found")
+
         if user_input is not None:
             # Try to find and reconnect to the device
             entry = self.hass.config_entries.async_get_entry(self._entry_id)
             if not entry:
                 return self.async_abort(reason="entry_not_found")
 
-            mac = entry.data.get(CONF_MAC)
-            name = entry.data.get(CONF_NAME, "Beurer Lamp")
+            mac: str = entry.data.get(CONF_MAC, "")
+            name: str = entry.data.get(CONF_NAME, "Beurer Lamp")
+
+            if not mac:
+                return self.async_abort(reason="invalid_config")
 
             # Check if device is now visible
             ble_device = bluetooth.async_ble_device_from_address(self.hass, mac)
@@ -78,7 +84,7 @@ class DeviceNotFoundRepairFlow(RepairsFlow):
         # Get device info for placeholders
         entry = self.hass.config_entries.async_get_entry(self._entry_id)
         name = entry.data.get(CONF_NAME, "Beurer Lamp") if entry else "Unknown"
-        mac = entry.data.get(CONF_MAC, "Unknown") if entry else "Unknown"
+        mac = str(entry.data.get(CONF_MAC, "Unknown")) if entry else "Unknown"
 
         return self.async_show_form(
             step_id="confirm",
@@ -113,6 +119,9 @@ class InitializationFailedRepairFlow(RepairsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> data_entry_flow.FlowResult:
         """Handle the confirm step."""
+        if self._entry_id is None:
+            return self.async_abort(reason="entry_not_found")
+
         if user_input is not None:
             # Try to reload the config entry
             entry = self.hass.config_entries.async_get_entry(self._entry_id)

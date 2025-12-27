@@ -417,7 +417,7 @@ async def _async_get_instances_from_target(
 
         # Avoid duplicate instances when multiple entities target same device
         config_entry_id = entity_entry.config_entry_id
-        if config_entry_id in seen_config_entries:
+        if not config_entry_id or config_entry_id in seen_config_entries:
             continue
         seen_config_entries.add(config_entry_id)
 
@@ -459,7 +459,12 @@ async def _async_setup_services(hass: HomeAssistant) -> None:
             if "rgb" in preset:
                 await instance.set_color(preset["rgb"])
             elif "color_temp_kelvin" in preset:
-                rgb = color_temperature_to_rgb(preset["color_temp_kelvin"])
+                rgb_float = color_temperature_to_rgb(preset["color_temp_kelvin"])
+                rgb: tuple[int, int, int] = (
+                    int(rgb_float[0]),
+                    int(rgb_float[1]),
+                    int(rgb_float[2]),
+                )
                 await instance.set_color(rgb)
 
             if "brightness" in preset:

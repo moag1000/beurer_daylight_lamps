@@ -13,7 +13,7 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
-from homeassistant.components.light import ColorMode
+from homeassistant.components.light import ColorMode  # type: ignore[attr-defined]
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 

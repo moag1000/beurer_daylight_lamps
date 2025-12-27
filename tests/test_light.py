@@ -217,9 +217,10 @@ def test_rgb_color_with_value(mock_coordinator: MagicMock) -> None:
     assert max(result) == 255
 
 
-def test_rgb_color_none(mock_coordinator: MagicMock) -> None:
-    """Test rgb_color returns None when no color set."""
-    mock_coordinator.instance.rgb_color = None
+def test_rgb_color_none_in_white_mode(mock_coordinator: MagicMock) -> None:
+    """Test rgb_color returns None when in white mode."""
+    mock_coordinator.instance.color_mode = ColorMode.WHITE
+    mock_coordinator.instance.rgb_color = (255, 128, 64)
 
     light = BeurerLight(mock_coordinator, "Test", "entry_id")
     assert light.rgb_color is None

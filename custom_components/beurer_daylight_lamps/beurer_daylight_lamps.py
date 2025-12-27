@@ -24,14 +24,15 @@ from __future__ import annotations
 
 import asyncio
 import time
-from collections.abc import Callable
-from typing import TYPE_CHECKING
+from collections.abc import Callable, Coroutine
+from typing import TYPE_CHECKING, Any
 
-from bleak import BleakClient, BleakError
+from bleak import BleakClient
+from bleak.exc import BleakError
 from bleak.backends.device import BLEDevice
 from bleak.backends.characteristic import BleakGATTCharacteristic
 from bleak_retry_connector import establish_connection, BleakClientWithServiceCache
-from homeassistant.components.light import ColorMode
+from homeassistant.components.light import ColorMode  # type: ignore[attr-defined]
 
 from .therapy import SunriseSimulation, SunriseProfile, TherapyTracker
 
@@ -124,6 +125,9 @@ class BeurerInstance:
         # Therapy tracking - sunrise/sunset simulation and exposure tracking
         self._sunrise_simulation: SunriseSimulation | None = None
         self._therapy_tracker: TherapyTracker = TherapyTracker()
+
+        # Reference to adaptive lighting switch (set by switch entity)
+        self.adaptive_lighting_switch: Any = None
 
     def update_ble_device(self, device: BLEDevice) -> None:
         """Update the BLE device reference.
@@ -307,7 +311,9 @@ class BeurerInstance:
         if self._update_callbacks:
             self._safe_create_task(self._trigger_update(), "beurer_disconnect_update")
 
-    def _safe_create_task(self, coro, name: str | None = None) -> None:
+    def _safe_create_task(
+        self, coro: Coroutine[Any, Any, None], name: str | None = None
+    ) -> None:
         """Create an asyncio task with error handling.
 
         This prevents unhandled exceptions in fire-and-forget tasks from
@@ -319,7 +325,7 @@ class BeurerInstance:
         """
         task_name = name or f"beurer_task_{self._mac}"
 
-        async def _wrapped():
+        async def _wrapped() -> None:
             try:
                 await coro
             except Exception as err:
@@ -493,6 +499,10 @@ class BeurerInstance:
             if not await self.connect():
                 LOGGER.debug("Failed to reconnect for write to %s", self._mac)
                 return False
+
+        # Safety check after reconnect (for type checker)
+        if self._client is None:
+            return False
 
         if not self._write_uuid:
             LOGGER.error("Write UUID not available")

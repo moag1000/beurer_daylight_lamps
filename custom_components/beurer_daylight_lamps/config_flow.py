@@ -4,7 +4,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from bleak import BleakError
+from bleak.exc import BleakError
 from bleak.backends.device import BLEDevice
 import voluptuous as vol
 
@@ -100,7 +100,7 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
             data_schema=vol.Schema(
                 {vol.Optional(CONF_NAME, default=self._name): str}
             ),
-            description_placeholders={"name": self._name},
+            description_placeholders={"name": self._name or "Unknown"},
         )
 
     async def async_step_user(
@@ -138,15 +138,15 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
 
         # Get both connectable and non-connectable devices
         # IMPORTANT: We prefer connectable devices as they can actually be connected
-        discovered_connectable = async_discovered_service_info(self.hass, connectable=True)
-        discovered_non_connectable = async_discovered_service_info(self.hass, connectable=False)
+        discovered_connectable = list(async_discovered_service_info(self.hass, connectable=True))
+        discovered_non_connectable = list(async_discovered_service_info(self.hass, connectable=False))
 
         # Track which devices are connectable
         connectable_addresses = {info.address for info in discovered_connectable}
 
         # Combine both lists (use dict to deduplicate by address)
         # PREFER connectable version if both exist
-        all_discovered = {}
+        all_discovered: dict[str, tuple[BluetoothServiceInfoBleak, bool]] = {}
         for info in discovered_connectable:
             all_discovered[info.address] = (info, True)  # (info, is_connectable)
         for info in discovered_non_connectable:
@@ -323,7 +323,7 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="reauth_confirm",
             data_schema=vol.Schema({}),
             errors=errors,
-            description_placeholders={"name": self._name},
+            description_placeholders={"name": self._name or "Unknown"},
         )
 
     async def async_step_reconfigure(
@@ -351,11 +351,15 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
                 }
             ),
             errors=errors,
-            description_placeholders={"mac": self._mac},
+            description_placeholders={"mac": self._mac or "Unknown"},
         )
 
     async def _test_connection(self) -> bool:
         """Test connection by toggling the lamp."""
+        if not self._mac:
+            LOGGER.error("No MAC address configured for connection test")
+            return False
+
         try:
             if not self._instance:
                 # Use cached BLE device if available (faster, no scan needed)

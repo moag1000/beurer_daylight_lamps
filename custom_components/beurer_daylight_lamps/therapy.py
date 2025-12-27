@@ -219,7 +219,7 @@ class SunriseSimulation:
         """Initialize sunrise simulation."""
         self._instance = instance
         self._running = False
-        self._task: asyncio.Task | None = None
+        self._task: asyncio.Task[None] | None = None
         self._current_step = 0
         self._total_steps = 0
 
@@ -375,8 +375,13 @@ class SunriseSimulation:
                 brightness_pct = int(config.start_brightness_pct + brightness_step * i)
                 brightness_255 = int(brightness_pct / 100 * 255)
 
-                # Convert kelvin to RGB
-                rgb = color_temperature_to_rgb(kelvin)
+                # Convert kelvin to RGB (convert floats to ints)
+                rgb_float = color_temperature_to_rgb(kelvin)
+                rgb: tuple[int, int, int] = (
+                    int(rgb_float[0]),
+                    int(rgb_float[1]),
+                    int(rgb_float[2]),
+                )
 
                 LOGGER.debug(
                     "Sunrise step %d/%d: %dK @ %d%%",
@@ -445,8 +450,13 @@ class SunriseSimulation:
 
             brightness_step = (start_brightness_pct - end_brightness_pct) / steps
 
-            # Use warm light for sunset
-            warm_rgb = color_temperature_to_rgb(2700)
+            # Use warm light for sunset (convert floats to ints)
+            warm_rgb_float = color_temperature_to_rgb(2700)
+            warm_rgb: tuple[int, int, int] = (
+                int(warm_rgb_float[0]),
+                int(warm_rgb_float[1]),
+                int(warm_rgb_float[2]),
+            )
 
             consecutive_failures = 0
             max_consecutive_failures = 5
