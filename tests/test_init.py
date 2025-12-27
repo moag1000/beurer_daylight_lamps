@@ -22,11 +22,15 @@ async def test_setup_entry_success(hass: HomeAssistant) -> None:
     mock_instance.set_update_callback = MagicMock()
     mock_instance._ble_available = True
 
+    mock_coordinator = MagicMock()
+    mock_coordinator.async_config_entry_first_refresh = AsyncMock()
+
     entry = MagicMock()
     entry.data = {CONF_MAC: "AA:BB:CC:DD:EE:FF", CONF_NAME: "Test"}
     entry.entry_id = "test_entry_id"
     entry.runtime_data = None
     entry.async_on_unload = MagicMock()
+    entry.async_create_background_task = MagicMock()
 
     with (
         patch(
@@ -49,6 +53,10 @@ async def test_setup_entry_success(hass: HomeAssistant) -> None:
             "custom_components.beurer_daylight_lamps.BeurerInstance",
             return_value=mock_instance,
         ),
+        patch(
+            "custom_components.beurer_daylight_lamps.BeurerDataUpdateCoordinator",
+            return_value=mock_coordinator,
+        ),
         patch.object(
             hass.config_entries, "async_forward_entry_setups", return_value=True
         ),
@@ -58,7 +66,9 @@ async def test_setup_entry_success(hass: HomeAssistant) -> None:
         result = await async_setup_entry(hass, entry)
 
     assert result is True
-    assert entry.runtime_data == mock_instance
+    # runtime_data is now BeurerRuntimeData with instance and coordinator
+    assert entry.runtime_data.instance == mock_instance
+    assert entry.runtime_data.coordinator == mock_coordinator
 
 
 async def test_setup_entry_device_not_found(hass: HomeAssistant) -> None:
@@ -71,11 +81,15 @@ async def test_setup_entry_device_not_found(hass: HomeAssistant) -> None:
     mock_instance.mac = "AA:BB:CC:DD:EE:FF"
     mock_instance._ble_available = False
 
+    mock_coordinator = MagicMock()
+    mock_coordinator.async_config_entry_first_refresh = AsyncMock()
+
     entry = MagicMock()
     entry.data = {CONF_MAC: "AA:BB:CC:DD:EE:FF", CONF_NAME: "Test"}
     entry.entry_id = "test_entry_id"
     entry.runtime_data = None
     entry.async_on_unload = MagicMock()
+    entry.async_create_background_task = MagicMock()
 
     with (
         patch(
@@ -98,6 +112,10 @@ async def test_setup_entry_device_not_found(hass: HomeAssistant) -> None:
             "custom_components.beurer_daylight_lamps.BeurerInstance",
             return_value=mock_instance,
         ),
+        patch(
+            "custom_components.beurer_daylight_lamps.BeurerDataUpdateCoordinator",
+            return_value=mock_coordinator,
+        ),
         patch.object(
             hass.config_entries, "async_forward_entry_setups", return_value=True
         ),
@@ -117,9 +135,16 @@ async def test_unload_entry(hass: HomeAssistant) -> None:
     mock_instance = MagicMock()
     mock_instance.disconnect = AsyncMock()
 
+    mock_coordinator = MagicMock()
+    mock_coordinator.async_shutdown = AsyncMock()
+
+    mock_runtime_data = MagicMock()
+    mock_runtime_data.instance = mock_instance
+    mock_runtime_data.coordinator = mock_coordinator
+
     entry = MagicMock()
     entry.entry_id = "test_entry_id"
-    entry.runtime_data = mock_instance
+    entry.runtime_data = mock_runtime_data
 
     with patch.object(
         hass.config_entries, "async_unload_platforms", return_value=True
@@ -129,4 +154,5 @@ async def test_unload_entry(hass: HomeAssistant) -> None:
         result = await async_unload_entry(hass, entry)
 
     assert result is True
+    mock_coordinator.async_shutdown.assert_called_once()
     mock_instance.disconnect.assert_called_once()

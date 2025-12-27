@@ -16,11 +16,18 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_MAC, CONF_NAME, Platform
 from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.exceptions import ConfigEntryNotReady
-from homeassistant.helpers import device_registry as dr, issue_registry as ir
+from homeassistant.helpers import (
+    device_registry as dr,
+    entity_registry as er,
+    issue_registry as ir,
+)
 import homeassistant.helpers.config_validation as cv
+from homeassistant.helpers.service import async_extract_entity_ids
 
 from .beurer_daylight_lamps import BeurerInstance
 from .const import DOMAIN, LOGGER
+from .coordinator import BeurerDataUpdateCoordinator
+from .exceptions import BeurerInitializationError
 from .therapy import SunriseProfile
 
 # Service constants
@@ -30,7 +37,6 @@ SERVICE_SET_TIMER = "set_timer"
 SERVICE_START_SUNRISE = "start_sunrise"
 SERVICE_START_SUNSET = "start_sunset"
 SERVICE_STOP_SIMULATION = "stop_simulation"
-ATTR_DEVICE_ID = "device_id"
 ATTR_PRESET = "preset"
 ATTR_COMMAND = "command"
 ATTR_MINUTES = "minutes"
@@ -90,21 +96,18 @@ PRESETS: dict[str, dict[str, Any]] = {
 
 SERVICE_SCHEMA = vol.Schema(
     {
-        vol.Required(ATTR_DEVICE_ID): cv.string,
         vol.Required(ATTR_PRESET): vol.In(list(PRESETS.keys())),
     }
 )
 
 SERVICE_RAW_SCHEMA = vol.Schema(
     {
-        vol.Required(ATTR_DEVICE_ID): cv.string,
         vol.Required(ATTR_COMMAND): cv.string,
     }
 )
 
 SERVICE_TIMER_SCHEMA = vol.Schema(
     {
-        vol.Required(ATTR_DEVICE_ID): cv.string,
         vol.Required(ATTR_MINUTES): vol.All(vol.Coerce(int), vol.Range(min=1, max=240)),
     }
 )
@@ -114,7 +117,6 @@ SUNRISE_PROFILES = ["gentle", "natural", "energize", "therapy"]
 
 SERVICE_SUNRISE_SCHEMA = vol.Schema(
     {
-        vol.Required(ATTR_DEVICE_ID): cv.string,
         vol.Optional(ATTR_DURATION, default=15): vol.All(
             vol.Coerce(int), vol.Range(min=1, max=60)
         ),
@@ -124,7 +126,6 @@ SERVICE_SUNRISE_SCHEMA = vol.Schema(
 
 SERVICE_SUNSET_SCHEMA = vol.Schema(
     {
-        vol.Required(ATTR_DEVICE_ID): cv.string,
         vol.Optional(ATTR_DURATION, default=30): vol.All(
             vol.Coerce(int), vol.Range(min=1, max=60)
         ),
@@ -134,16 +135,27 @@ SERVICE_SUNSET_SCHEMA = vol.Schema(
     }
 )
 
-SERVICE_STOP_SIMULATION_SCHEMA = vol.Schema(
-    {
-        vol.Required(ATTR_DEVICE_ID): cv.string,
-    }
-)
+SERVICE_STOP_SIMULATION_SCHEMA = vol.Schema({})
+
+from dataclasses import dataclass
+
+
+@dataclass
+class BeurerRuntimeData:
+    """Runtime data for Beurer integration.
+
+    This dataclass holds all runtime data for a config entry,
+    following the recommended pattern for HA integrations.
+    """
+
+    instance: BeurerInstance
+    coordinator: BeurerDataUpdateCoordinator
+
 
 if TYPE_CHECKING:
     from .beurer_daylight_lamps import BeurerInstance as BeurerInstanceType
     # Type alias only evaluated during type checking
-    BeurerConfigEntry = ConfigEntry[BeurerInstance]
+    BeurerConfigEntry = ConfigEntry[BeurerRuntimeData]
 else:
     BeurerConfigEntry = ConfigEntry
 
@@ -247,7 +259,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> bo
     # Clear any previous initialization issues
     ir.async_delete_issue(hass, DOMAIN, f"initialization_failed_{entry.entry_id}")
 
-    entry.runtime_data = instance
+    # Create coordinator for centralized data management
+    coordinator = BeurerDataUpdateCoordinator(hass, instance, device_name)
+
+    # Store both instance and coordinator in runtime_data
+    entry.runtime_data = BeurerRuntimeData(instance=instance, coordinator=coordinator)
+
+    # Perform initial data fetch
+    await coordinator.async_config_entry_first_refresh()
 
     # Register callback for real-time Bluetooth updates (RSSI, device presence)
     # This enables passive listening - we get notified when the device advertises
@@ -340,44 +359,80 @@ async def async_setup_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> bo
             except Exception as err:
                 LOGGER.debug("Initial connection to %s failed: %s", mac_address, err)
 
-    hass.async_create_task(_async_initial_connect())
+    # Use async_create_background_task for proper task tracking and error handling
+    entry.async_create_background_task(
+        hass,
+        _async_initial_connect(),
+        f"beurer_initial_connect_{mac_address}",
+    )
 
     return True
 
 
-def _get_instance_for_device(
-    hass: HomeAssistant, device_id: str, service_name: str = ""
-) -> BeurerInstance | None:
-    """Get BeurerInstance for a device ID.
+async def _async_get_instances_from_target(
+    hass: HomeAssistant, call: ServiceCall, service_name: str = ""
+) -> list[BeurerInstance]:
+    """Get BeurerInstance objects from service call target.
+
+    Supports targeting by entity_id, device_id, or area_id through the
+    standard Home Assistant target selector.
 
     Args:
         hass: Home Assistant instance
-        device_id: Device ID from service call
+        call: Service call with target information
         service_name: Name of service for logging (optional)
 
     Returns:
-        BeurerInstance if found, None otherwise
+        List of BeurerInstance objects for targeted entities
     """
     log_prefix = f"{service_name}: " if service_name else ""
+    instances: list[BeurerInstance] = []
 
-    device_reg = dr.async_get(hass)
-    device = device_reg.async_get(device_id)
+    # Extract entity IDs from target (handles entity_id, device_id, area_id)
+    entity_ids = await async_extract_entity_ids(hass, call)
 
-    if not device:
-        LOGGER.error("%sDevice %s not found", log_prefix, device_id)
-        return None
+    if not entity_ids:
+        LOGGER.warning("%sNo target entities specified", log_prefix)
+        return instances
 
-    # Find config entry for this device
-    for entry_id in device.config_entries:
-        entry = hass.config_entries.async_get_entry(entry_id)
-        if entry and entry.domain == DOMAIN:
-            if hasattr(entry, "runtime_data"):
-                return entry.runtime_data
-            LOGGER.error("%sConfig entry not ready for device %s", log_prefix, device_id)
-            return None
+    entity_reg = er.async_get(hass)
+    seen_config_entries: set[str] = set()
 
-    LOGGER.error("%sNo Beurer config entry found for device %s", log_prefix, device_id)
-    return None
+    for entity_id in entity_ids:
+        # Only process light entities from our integration
+        if not entity_id.startswith("light."):
+            continue
+
+        entity_entry = entity_reg.async_get(entity_id)
+        if not entity_entry:
+            LOGGER.debug("%sEntity %s not found in registry", log_prefix, entity_id)
+            continue
+
+        if entity_entry.platform != DOMAIN:
+            LOGGER.debug(
+                "%sEntity %s is not a Beurer entity (platform: %s)",
+                log_prefix, entity_id, entity_entry.platform
+            )
+            continue
+
+        # Avoid duplicate instances when multiple entities target same device
+        config_entry_id = entity_entry.config_entry_id
+        if config_entry_id in seen_config_entries:
+            continue
+        seen_config_entries.add(config_entry_id)
+
+        entry = hass.config_entries.async_get_entry(config_entry_id)
+        if entry and hasattr(entry, "runtime_data") and entry.runtime_data:
+            instances.append(entry.runtime_data.instance)
+        else:
+            LOGGER.warning(
+                "%sConfig entry not ready for entity %s", log_prefix, entity_id
+            )
+
+    if not instances:
+        LOGGER.warning("%sNo valid Beurer instances found for target", log_prefix)
+
+    return instances
 
 
 async def _async_setup_services(hass: HomeAssistant) -> None:
@@ -387,29 +442,30 @@ async def _async_setup_services(hass: HomeAssistant) -> None:
 
     async def async_apply_preset(call: ServiceCall) -> None:
         """Apply a preset to a Beurer lamp."""
-        device_id = call.data[ATTR_DEVICE_ID]
         preset_name = call.data[ATTR_PRESET]
 
-        LOGGER.debug("Applying preset '%s' to device %s", preset_name, device_id)
-
-        instance = _get_instance_for_device(hass, device_id, "PRESET")
-        if not instance:
+        instances = await _async_get_instances_from_target(hass, call, "PRESET")
+        if not instances:
             return
+
         preset = PRESETS[preset_name]
 
         # Apply preset settings
         from homeassistant.util.color import color_temperature_to_rgb
 
-        if "rgb" in preset:
-            await instance.set_color(preset["rgb"])
-        elif "color_temp_kelvin" in preset:
-            rgb = color_temperature_to_rgb(preset["color_temp_kelvin"])
-            await instance.set_color(rgb)
+        for instance in instances:
+            LOGGER.debug("Applying preset '%s' to %s", preset_name, instance.mac)
 
-        if "brightness" in preset:
-            await instance.set_color_brightness(preset["brightness"])
+            if "rgb" in preset:
+                await instance.set_color(preset["rgb"])
+            elif "color_temp_kelvin" in preset:
+                rgb = color_temperature_to_rgb(preset["color_temp_kelvin"])
+                await instance.set_color(rgb)
 
-        LOGGER.info("Applied preset '%s' to %s", preset_name, instance.mac)
+            if "brightness" in preset:
+                await instance.set_color_brightness(preset["brightness"])
+
+            LOGGER.info("Applied preset '%s' to %s", preset_name, instance.mac)
 
     hass.services.async_register(
         DOMAIN,
@@ -421,13 +477,10 @@ async def _async_setup_services(hass: HomeAssistant) -> None:
 
     async def async_send_raw_command(call: ServiceCall) -> None:
         """Send a raw BLE command to a Beurer lamp (Expert mode)."""
-        device_id = call.data[ATTR_DEVICE_ID]
         command_str = call.data[ATTR_COMMAND]
 
-        LOGGER.debug("RAW_CMD: Sending '%s' to device %s", command_str, device_id)
-
-        instance = _get_instance_for_device(hass, device_id, "RAW_CMD")
-        if not instance:
+        instances = await _async_get_instances_from_target(hass, call, "RAW_CMD")
+        if not instances:
             return
 
         # Parse hex bytes from command string (e.g., "33 01 1E" or "33011E")
@@ -440,11 +493,12 @@ async def _async_setup_services(hass: HomeAssistant) -> None:
 
         LOGGER.debug("RAW_CMD: Parsed payload: %s", [f"0x{b:02X}" for b in payload])
 
-        success = await instance._send_packet(payload)
-        if success:
-            LOGGER.debug("RAW_CMD: Sent successfully to %s", instance.mac)
-        else:
-            LOGGER.error("RAW_CMD: Failed to send to %s", instance.mac)
+        for instance in instances:
+            success = await instance._send_packet(payload)
+            if success:
+                LOGGER.debug("RAW_CMD: Sent successfully to %s", instance.mac)
+            else:
+                LOGGER.error("RAW_CMD: Failed to send to %s", instance.mac)
 
     hass.services.async_register(
         DOMAIN,
@@ -460,20 +514,19 @@ async def _async_setup_services(hass: HomeAssistant) -> None:
         Timer will turn off the lamp after the specified minutes.
         Note: Timer only works when the lamp is in RGB mode.
         """
-        device_id = call.data[ATTR_DEVICE_ID]
         minutes = call.data[ATTR_MINUTES]
 
-        LOGGER.debug("TIMER: Setting %d minute timer on device %s", minutes, device_id)
-
-        instance = _get_instance_for_device(hass, device_id, "TIMER")
-        if not instance:
+        instances = await _async_get_instances_from_target(hass, call, "TIMER")
+        if not instances:
             return
 
-        success = await instance.set_timer(minutes)
-        if success:
-            LOGGER.debug("TIMER: Set %d minute timer on %s", minutes, instance.mac)
-        else:
-            LOGGER.error("TIMER: Failed to set timer on %s", instance.mac)
+        for instance in instances:
+            LOGGER.debug("TIMER: Setting %d minute timer on %s", minutes, instance.mac)
+            success = await instance.set_timer(minutes)
+            if success:
+                LOGGER.debug("TIMER: Set %d minute timer on %s", minutes, instance.mac)
+            else:
+                LOGGER.error("TIMER: Failed to set timer on %s", instance.mac)
 
     hass.services.async_register(
         DOMAIN,
@@ -490,17 +543,11 @@ async def _async_setup_services(hass: HomeAssistant) -> None:
         Gradually increases brightness and color temperature to simulate
         natural sunrise. This is a lifestyle feature, not a medical device.
         """
-        device_id = call.data[ATTR_DEVICE_ID]
         duration = call.data.get(ATTR_DURATION, 15)
         profile_name = call.data.get(ATTR_PROFILE, "natural")
 
-        LOGGER.info(
-            "SUNRISE: Starting %d min %s sunrise on device %s",
-            duration, profile_name, device_id
-        )
-
-        instance = _get_instance_for_device(hass, device_id, "SUNRISE")
-        if not instance:
+        instances = await _async_get_instances_from_target(hass, call, "SUNRISE")
+        if not instances:
             return
 
         # Convert profile name to enum
@@ -510,8 +557,13 @@ async def _async_setup_services(hass: HomeAssistant) -> None:
             LOGGER.error("SUNRISE: Unknown profile '%s'", profile_name)
             return
 
-        await instance.sunrise_simulation.start_sunrise(duration, profile)
-        LOGGER.info("SUNRISE: Started on %s", instance.mac)
+        for instance in instances:
+            LOGGER.info(
+                "SUNRISE: Starting %d min %s sunrise on %s",
+                duration, profile_name, instance.mac
+            )
+            await instance.sunrise_simulation.start_sunrise(duration, profile)
+            LOGGER.info("SUNRISE: Started on %s", instance.mac)
 
     hass.services.async_register(
         DOMAIN,
@@ -527,21 +579,20 @@ async def _async_setup_services(hass: HomeAssistant) -> None:
         Gradually decreases brightness and shifts to warm light to simulate
         natural sunset. This is a lifestyle feature, not a medical device.
         """
-        device_id = call.data[ATTR_DEVICE_ID]
         duration = call.data.get(ATTR_DURATION, 30)
         end_brightness = call.data.get(ATTR_END_BRIGHTNESS, 0)
 
-        LOGGER.info(
-            "SUNSET: Starting %d min sunset (end: %d%%) on device %s",
-            duration, end_brightness, device_id
-        )
-
-        instance = _get_instance_for_device(hass, device_id, "SUNSET")
-        if not instance:
+        instances = await _async_get_instances_from_target(hass, call, "SUNSET")
+        if not instances:
             return
 
-        await instance.sunrise_simulation.start_sunset(duration, end_brightness)
-        LOGGER.info("SUNSET: Started on %s", instance.mac)
+        for instance in instances:
+            LOGGER.info(
+                "SUNSET: Starting %d min sunset (end: %d%%) on %s",
+                duration, end_brightness, instance.mac
+            )
+            await instance.sunrise_simulation.start_sunset(duration, end_brightness)
+            LOGGER.info("SUNSET: Started on %s", instance.mac)
 
     hass.services.async_register(
         DOMAIN,
@@ -553,16 +604,14 @@ async def _async_setup_services(hass: HomeAssistant) -> None:
 
     async def async_stop_simulation(call: ServiceCall) -> None:
         """Stop any running sunrise/sunset simulation."""
-        device_id = call.data[ATTR_DEVICE_ID]
-
-        LOGGER.debug("STOP_SIM: Stopping simulation on device %s", device_id)
-
-        instance = _get_instance_for_device(hass, device_id, "STOP_SIM")
-        if not instance:
+        instances = await _async_get_instances_from_target(hass, call, "STOP_SIM")
+        if not instances:
             return
 
-        await instance.sunrise_simulation.stop()
-        LOGGER.info("STOP_SIM: Simulation stopped on %s", instance.mac)
+        for instance in instances:
+            LOGGER.debug("STOP_SIM: Stopping simulation on %s", instance.mac)
+            await instance.sunrise_simulation.stop()
+            LOGGER.info("STOP_SIM: Simulation stopped on %s", instance.mac)
 
     hass.services.async_register(
         DOMAIN,
@@ -577,5 +626,32 @@ async def async_unload_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> b
     """Unload a config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
-        await entry.runtime_data.disconnect()
+        # Shutdown coordinator first
+        await entry.runtime_data.coordinator.async_shutdown()
+        # Then disconnect the BLE instance
+        await entry.runtime_data.instance.disconnect()
     return unload_ok
+
+
+async def async_remove_config_entry_device(
+    hass: HomeAssistant,
+    config_entry: BeurerConfigEntry,
+    device_entry: dr.DeviceEntry,
+) -> bool:
+    """Remove a device from the config entry.
+
+    This allows users to manually remove stale devices from the device registry.
+    For single-device integrations like this one, the device is tied to the
+    config entry, so we allow removal which effectively orphans the device
+    until the config entry is also removed.
+
+    Returns True to allow device removal, False to prevent it.
+    """
+    # For this integration, each config entry has exactly one device
+    # We allow removal - the user can re-add via reconfiguration if needed
+    LOGGER.info(
+        "Allowing removal of device %s from config entry %s",
+        device_entry.id,
+        config_entry.entry_id,
+    )
+    return True

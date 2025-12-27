@@ -27,7 +27,7 @@ async def async_get_config_entry_diagnostics(
     This provides comprehensive diagnostic information for troubleshooting
     device connectivity and state issues.
     """
-    instance = entry.runtime_data
+    instance = entry.runtime_data.instance
 
     # Format timestamps as ISO strings
     last_seen_ts = instance.last_seen

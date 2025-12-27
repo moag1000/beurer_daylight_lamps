@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.21.0] - 2025-12-27
+
+### Added
+
+- **Options Flow**: Configure integration settings after setup
+  - Daily therapy goal (5-120 minutes)
+  - Update interval (10-300 seconds)
+  - Adaptive Lighting default state
+- **Device Triggers**: Automation triggers for device events
+  - Light turned on/off
+  - Daily therapy goal reached
+  - Connection lost/restored
+- **German Translation**: Complete German translation for all UI elements
+
+### Changed
+
+- **CoordinatorEntity Pattern**: All entity classes now use CoordinatorEntity for centralized updates
+- **Target-based Services**: Services now use `target` selector instead of `device_id`
+  - Supports entity_id, device_id, and area_id targeting
+  - Multiple lamps can be controlled with a single service call
+- **Test Coverage**: Increased from 53% to 86% (477 tests)
+
+### Improved
+
+- Better separation of concerns between coordinator and entities
+- More consistent code style across entity platforms
+- Updated quality_scale.yaml with new features
+
 ## [1.14.0] - 2025-12-18
 
 ### Added - Adaptive Lighting Integration

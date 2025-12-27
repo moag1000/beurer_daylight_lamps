@@ -85,6 +85,24 @@
             "reconfigure_successful": "Reconfiguration successful"
         }
     },
+    "options": {
+        "step": {
+            "init": {
+                "title": "Configure Beurer lamp",
+                "description": "Adjust settings for the Beurer lamp.",
+                "data": {
+                    "therapy_goal": "Daily light therapy goal (minutes)",
+                    "update_interval": "Update interval (seconds)",
+                    "adaptive_lighting_default": "Enable Adaptive Lighting by default"
+                },
+                "data_description": {
+                    "therapy_goal": "The daily therapy goal in minutes (5-120). Used for tracking progress.",
+                    "update_interval": "How often to poll the device for updates (10-300 seconds).",
+                    "adaptive_lighting_default": "If enabled, Adaptive Lighting can control this lamp's color temperature."
+                }
+            }
+        }
+    },
     "issues": {
         "device_not_found": {
             "title": "Could not find {name}",
@@ -176,6 +194,15 @@
             "adaptive_lighting": {
                 "name": "Adaptive Lighting"
             }
+        }
+    },
+    "device_automation": {
+        "trigger_type": {
+            "turned_on": "Light turned on",
+            "turned_off": "Light turned off",
+            "therapy_goal_reached": "Daily therapy goal reached",
+            "connection_lost": "Connection to lamp lost",
+            "connection_restored": "Connection to lamp restored"
         }
     },
     "services": {

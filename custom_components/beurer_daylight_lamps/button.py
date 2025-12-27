@@ -12,10 +12,11 @@ from homeassistant.helpers.device_registry import (
 )
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import BeurerConfigEntry
-from .beurer_daylight_lamps import BeurerInstance
 from .const import DOMAIN, LOGGER, VERSION, detect_model
+from .coordinator import BeurerDataUpdateCoordinator
 
 BUTTON_DESCRIPTIONS: tuple[ButtonEntityDescription, ...] = (
     ButtonEntityDescription(
@@ -37,32 +38,33 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Beurer buttons from a config entry."""
-    instance = entry.runtime_data
+    coordinator = entry.runtime_data.coordinator
     name = entry.data.get("name", "Beurer Lamp")
 
     entities = [
-        BeurerButton(instance, name, description)
+        BeurerButton(coordinator, name, description)
         for description in BUTTON_DESCRIPTIONS
     ]
     async_add_entities(entities)
 
 
-class BeurerButton(ButtonEntity):
+class BeurerButton(CoordinatorEntity[BeurerDataUpdateCoordinator], ButtonEntity):
     """Representation of a Beurer button."""
 
     _attr_has_entity_name = True
 
     def __init__(
         self,
-        instance: BeurerInstance,
+        coordinator: BeurerDataUpdateCoordinator,
         device_name: str,
         description: ButtonEntityDescription,
     ) -> None:
         """Initialize the button."""
-        self._instance = instance
+        super().__init__(coordinator)
+        self._instance = coordinator.instance
         self._device_name = device_name
         self.entity_description = description
-        self._attr_unique_id = f"{format_mac(instance.mac)}_{description.key}"
+        self._attr_unique_id = f"{format_mac(self._instance.mac)}_{description.key}"
 
     @property
     def available(self) -> bool:

@@ -5,12 +5,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 import voluptuous as vol
 
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, ServiceCall
 
 # Import service constants and schemas from __init__.py
 from custom_components.beurer_daylight_lamps import (
     ATTR_COMMAND,
-    ATTR_DEVICE_ID,
     ATTR_DURATION,
     ATTR_END_BRIGHTNESS,
     ATTR_MINUTES,
@@ -29,7 +28,7 @@ from custom_components.beurer_daylight_lamps import (
     SERVICE_SUNSET_SCHEMA,
     SERVICE_TIMER_SCHEMA,
     SUNRISE_PROFILES,
-    _get_instance_for_device,
+    _async_get_instances_from_target,
 )
 from custom_components.beurer_daylight_lamps.const import DOMAIN
 from custom_components.beurer_daylight_lamps.therapy import SunriseProfile
@@ -50,18 +49,15 @@ class TestServiceSchemas:
     def test_preset_schema_valid(self) -> None:
         """Test preset schema with valid data."""
         data = {
-            ATTR_DEVICE_ID: "abc123",
             ATTR_PRESET: "daylight_therapy",
         }
         result = SERVICE_SCHEMA(data)
-        assert result[ATTR_DEVICE_ID] == "abc123"
         assert result[ATTR_PRESET] == "daylight_therapy"
 
     def test_preset_schema_all_presets(self) -> None:
         """Test all preset names are valid in schema."""
         for preset_name in PRESETS:
             data = {
-                ATTR_DEVICE_ID: "abc123",
                 ATTR_PRESET: preset_name,
             }
             result = SERVICE_SCHEMA(data)
@@ -70,25 +66,14 @@ class TestServiceSchemas:
     def test_preset_schema_invalid_preset(self) -> None:
         """Test preset schema rejects invalid preset name."""
         data = {
-            ATTR_DEVICE_ID: "abc123",
             ATTR_PRESET: "invalid_preset_name",
         }
         with pytest.raises(vol.Invalid):
             SERVICE_SCHEMA(data)
 
-    def test_preset_schema_missing_device_id(self) -> None:
-        """Test preset schema requires device_id."""
-        data = {
-            ATTR_PRESET: "daylight_therapy",
-        }
-        with pytest.raises(vol.MultipleInvalid):
-            SERVICE_SCHEMA(data)
-
     def test_preset_schema_missing_preset(self) -> None:
         """Test preset schema requires preset."""
-        data = {
-            ATTR_DEVICE_ID: "abc123",
-        }
+        data = {}
         with pytest.raises(vol.MultipleInvalid):
             SERVICE_SCHEMA(data)
 
@@ -99,17 +84,14 @@ class TestServiceSchemas:
     def test_raw_schema_valid(self) -> None:
         """Test raw command schema with valid data."""
         data = {
-            ATTR_DEVICE_ID: "abc123",
             ATTR_COMMAND: "3E 1E",
         }
         result = SERVICE_RAW_SCHEMA(data)
-        assert result[ATTR_DEVICE_ID] == "abc123"
         assert result[ATTR_COMMAND] == "3E 1E"
 
     def test_raw_schema_hex_no_spaces(self) -> None:
         """Test raw command accepts hex without spaces."""
         data = {
-            ATTR_DEVICE_ID: "abc123",
             ATTR_COMMAND: "3E1E",
         }
         result = SERVICE_RAW_SCHEMA(data)
@@ -117,9 +99,7 @@ class TestServiceSchemas:
 
     def test_raw_schema_missing_command(self) -> None:
         """Test raw command schema requires command."""
-        data = {
-            ATTR_DEVICE_ID: "abc123",
-        }
+        data = {}
         with pytest.raises(vol.MultipleInvalid):
             SERVICE_RAW_SCHEMA(data)
 
@@ -130,17 +110,14 @@ class TestServiceSchemas:
     def test_timer_schema_valid(self) -> None:
         """Test timer schema with valid data."""
         data = {
-            ATTR_DEVICE_ID: "abc123",
             ATTR_MINUTES: 30,
         }
         result = SERVICE_TIMER_SCHEMA(data)
-        assert result[ATTR_DEVICE_ID] == "abc123"
         assert result[ATTR_MINUTES] == 30
 
     def test_timer_schema_string_minutes(self) -> None:
         """Test timer schema coerces string to int."""
         data = {
-            ATTR_DEVICE_ID: "abc123",
             ATTR_MINUTES: "30",
         }
         result = SERVICE_TIMER_SCHEMA(data)
@@ -149,7 +126,6 @@ class TestServiceSchemas:
     def test_timer_schema_min_value(self) -> None:
         """Test timer schema accepts minimum value (1)."""
         data = {
-            ATTR_DEVICE_ID: "abc123",
             ATTR_MINUTES: 1,
         }
         result = SERVICE_TIMER_SCHEMA(data)
@@ -158,7 +134,6 @@ class TestServiceSchemas:
     def test_timer_schema_max_value(self) -> None:
         """Test timer schema accepts maximum value (240)."""
         data = {
-            ATTR_DEVICE_ID: "abc123",
             ATTR_MINUTES: 240,
         }
         result = SERVICE_TIMER_SCHEMA(data)
@@ -167,7 +142,6 @@ class TestServiceSchemas:
     def test_timer_schema_below_min(self) -> None:
         """Test timer schema rejects value below minimum."""
         data = {
-            ATTR_DEVICE_ID: "abc123",
             ATTR_MINUTES: 0,
         }
         with pytest.raises(vol.Invalid):
@@ -176,7 +150,6 @@ class TestServiceSchemas:
     def test_timer_schema_above_max(self) -> None:
         """Test timer schema rejects value above maximum."""
         data = {
-            ATTR_DEVICE_ID: "abc123",
             ATTR_MINUTES: 241,
         }
         with pytest.raises(vol.Invalid):
@@ -187,19 +160,15 @@ class TestServiceSchemas:
     # -------------------------------------------------------------------------
 
     def test_sunrise_schema_valid_minimal(self) -> None:
-        """Test sunrise schema with minimal required data."""
-        data = {
-            ATTR_DEVICE_ID: "abc123",
-        }
+        """Test sunrise schema with minimal required data (empty is ok)."""
+        data = {}
         result = SERVICE_SUNRISE_SCHEMA(data)
-        assert result[ATTR_DEVICE_ID] == "abc123"
         assert result[ATTR_DURATION] == 15  # default
         assert result[ATTR_PROFILE] == "natural"  # default
 
     def test_sunrise_schema_valid_full(self) -> None:
         """Test sunrise schema with all optional data."""
         data = {
-            ATTR_DEVICE_ID: "abc123",
             ATTR_DURATION: 30,
             ATTR_PROFILE: "gentle",
         }
@@ -211,7 +180,6 @@ class TestServiceSchemas:
         """Test all sunrise profiles are valid."""
         for profile in SUNRISE_PROFILES:
             data = {
-                ATTR_DEVICE_ID: "abc123",
                 ATTR_PROFILE: profile,
             }
             result = SERVICE_SUNRISE_SCHEMA(data)
@@ -220,7 +188,6 @@ class TestServiceSchemas:
     def test_sunrise_schema_invalid_profile(self) -> None:
         """Test sunrise schema rejects invalid profile."""
         data = {
-            ATTR_DEVICE_ID: "abc123",
             ATTR_PROFILE: "invalid_profile",
         }
         with pytest.raises(vol.Invalid):
@@ -229,7 +196,6 @@ class TestServiceSchemas:
     def test_sunrise_schema_duration_min(self) -> None:
         """Test sunrise schema accepts minimum duration (1)."""
         data = {
-            ATTR_DEVICE_ID: "abc123",
             ATTR_DURATION: 1,
         }
         result = SERVICE_SUNRISE_SCHEMA(data)
@@ -238,7 +204,6 @@ class TestServiceSchemas:
     def test_sunrise_schema_duration_max(self) -> None:
         """Test sunrise schema accepts maximum duration (60)."""
         data = {
-            ATTR_DEVICE_ID: "abc123",
             ATTR_DURATION: 60,
         }
         result = SERVICE_SUNRISE_SCHEMA(data)
@@ -247,7 +212,6 @@ class TestServiceSchemas:
     def test_sunrise_schema_duration_below_min(self) -> None:
         """Test sunrise schema rejects duration below minimum."""
         data = {
-            ATTR_DEVICE_ID: "abc123",
             ATTR_DURATION: 0,
         }
         with pytest.raises(vol.Invalid):
@@ -256,7 +220,6 @@ class TestServiceSchemas:
     def test_sunrise_schema_duration_above_max(self) -> None:
         """Test sunrise schema rejects duration above maximum."""
         data = {
-            ATTR_DEVICE_ID: "abc123",
             ATTR_DURATION: 61,
         }
         with pytest.raises(vol.Invalid):
@@ -267,19 +230,15 @@ class TestServiceSchemas:
     # -------------------------------------------------------------------------
 
     def test_sunset_schema_valid_minimal(self) -> None:
-        """Test sunset schema with minimal required data."""
-        data = {
-            ATTR_DEVICE_ID: "abc123",
-        }
+        """Test sunset schema with minimal required data (empty is ok)."""
+        data = {}
         result = SERVICE_SUNSET_SCHEMA(data)
-        assert result[ATTR_DEVICE_ID] == "abc123"
         assert result[ATTR_DURATION] == 30  # default
         assert result[ATTR_END_BRIGHTNESS] == 0  # default
 
     def test_sunset_schema_valid_full(self) -> None:
         """Test sunset schema with all optional data."""
         data = {
-            ATTR_DEVICE_ID: "abc123",
             ATTR_DURATION: 45,
             ATTR_END_BRIGHTNESS: 20,
         }
@@ -290,7 +249,6 @@ class TestServiceSchemas:
     def test_sunset_schema_end_brightness_zero(self) -> None:
         """Test sunset schema accepts 0% brightness (turn off)."""
         data = {
-            ATTR_DEVICE_ID: "abc123",
             ATTR_END_BRIGHTNESS: 0,
         }
         result = SERVICE_SUNSET_SCHEMA(data)
@@ -299,7 +257,6 @@ class TestServiceSchemas:
     def test_sunset_schema_end_brightness_max(self) -> None:
         """Test sunset schema accepts 100% brightness."""
         data = {
-            ATTR_DEVICE_ID: "abc123",
             ATTR_END_BRIGHTNESS: 100,
         }
         result = SERVICE_SUNSET_SCHEMA(data)
@@ -308,7 +265,6 @@ class TestServiceSchemas:
     def test_sunset_schema_end_brightness_above_max(self) -> None:
         """Test sunset schema rejects brightness above maximum."""
         data = {
-            ATTR_DEVICE_ID: "abc123",
             ATTR_END_BRIGHTNESS: 101,
         }
         with pytest.raises(vol.Invalid):
@@ -376,84 +332,113 @@ class TestPresetDefinitions:
 # =============================================================================
 
 
-class TestGetInstanceForDevice:
-    """Test _get_instance_for_device helper function."""
+class TestGetInstancesFromTarget:
+    """Test _async_get_instances_from_target helper function."""
 
     @pytest.mark.asyncio
-    async def test_device_not_found(self, hass: HomeAssistant) -> None:
-        """Test returns None when device not found."""
-        with patch(
-            "custom_components.beurer_daylight_lamps.dr.async_get"
-        ) as mock_dr:
-            mock_registry = MagicMock()
-            mock_registry.async_get.return_value = None
-            mock_dr.return_value = mock_registry
+    async def test_no_targets_specified(self, hass: HomeAssistant) -> None:
+        """Test returns empty list when no targets specified."""
+        mock_call = MagicMock(spec=ServiceCall)
 
-            result = _get_instance_for_device(hass, "nonexistent_device", "TEST")
-            assert result is None
+        with patch(
+            "custom_components.beurer_daylight_lamps.async_extract_entity_ids",
+            return_value=set(),
+        ):
+            result = await _async_get_instances_from_target(hass, mock_call, "TEST")
+            assert result == []
 
     @pytest.mark.asyncio
-    async def test_no_beurer_config_entry(self, hass: HomeAssistant) -> None:
-        """Test returns None when no Beurer config entry found."""
+    async def test_non_light_entities_filtered(self, hass: HomeAssistant) -> None:
+        """Test non-light entities are filtered out."""
+        mock_call = MagicMock(spec=ServiceCall)
+
         with patch(
-            "custom_components.beurer_daylight_lamps.dr.async_get"
-        ) as mock_dr:
-            mock_registry = MagicMock()
-            mock_device = MagicMock()
-            mock_device.config_entries = {"other_entry_id"}
-            mock_registry.async_get.return_value = mock_device
-            mock_dr.return_value = mock_registry
-
-            # Mock config entries
-            mock_entry = MagicMock()
-            mock_entry.domain = "other_integration"
-            hass.config_entries.async_get_entry = MagicMock(return_value=mock_entry)
-
-            result = _get_instance_for_device(hass, "device_id", "TEST")
-            assert result is None
+            "custom_components.beurer_daylight_lamps.async_extract_entity_ids",
+            return_value={"sensor.beurer_brightness", "binary_sensor.beurer_connected"},
+        ):
+            result = await _async_get_instances_from_target(hass, mock_call, "TEST")
+            assert result == []
 
     @pytest.mark.asyncio
-    async def test_config_entry_not_ready(self, hass: HomeAssistant) -> None:
-        """Test returns None when config entry has no runtime_data."""
+    async def test_non_beurer_light_filtered(self, hass: HomeAssistant) -> None:
+        """Test light entities from other integrations are filtered."""
+        mock_call = MagicMock(spec=ServiceCall)
+        mock_entity_entry = MagicMock()
+        mock_entity_entry.platform = "hue"
+
         with patch(
-            "custom_components.beurer_daylight_lamps.dr.async_get"
-        ) as mock_dr:
+            "custom_components.beurer_daylight_lamps.async_extract_entity_ids",
+            return_value={"light.living_room"},
+        ), patch(
+            "custom_components.beurer_daylight_lamps.er.async_get"
+        ) as mock_er:
             mock_registry = MagicMock()
-            mock_device = MagicMock()
-            mock_device.config_entries = {"beurer_entry_id"}
-            mock_registry.async_get.return_value = mock_device
-            mock_dr.return_value = mock_registry
+            mock_registry.async_get.return_value = mock_entity_entry
+            mock_er.return_value = mock_registry
 
-            # Mock config entry without runtime_data
-            mock_entry = MagicMock()
-            mock_entry.domain = DOMAIN
-            del mock_entry.runtime_data  # Remove attribute
-            hass.config_entries.async_get_entry = MagicMock(return_value=mock_entry)
-
-            result = _get_instance_for_device(hass, "device_id", "TEST")
-            assert result is None
+            result = await _async_get_instances_from_target(hass, mock_call, "TEST")
+            assert result == []
 
     @pytest.mark.asyncio
-    async def test_returns_instance_when_found(self, hass: HomeAssistant) -> None:
-        """Test returns BeurerInstance when properly configured."""
+    async def test_returns_instance_for_beurer_light(self, hass: HomeAssistant) -> None:
+        """Test returns instance for Beurer light entity."""
+        mock_call = MagicMock(spec=ServiceCall)
+        mock_entity_entry = MagicMock()
+        mock_entity_entry.platform = DOMAIN
+        mock_entity_entry.config_entry_id = "beurer_entry_id"
+
+        mock_instance = MagicMock()
+        mock_runtime_data = MagicMock()
+        mock_runtime_data.instance = mock_instance
+        mock_config_entry = MagicMock()
+        mock_config_entry.runtime_data = mock_runtime_data
+
         with patch(
-            "custom_components.beurer_daylight_lamps.dr.async_get"
-        ) as mock_dr:
+            "custom_components.beurer_daylight_lamps.async_extract_entity_ids",
+            return_value={"light.beurer_lamp"},
+        ), patch(
+            "custom_components.beurer_daylight_lamps.er.async_get"
+        ) as mock_er:
             mock_registry = MagicMock()
-            mock_device = MagicMock()
-            mock_device.config_entries = {"beurer_entry_id"}
-            mock_registry.async_get.return_value = mock_device
-            mock_dr.return_value = mock_registry
+            mock_registry.async_get.return_value = mock_entity_entry
+            mock_er.return_value = mock_registry
 
-            # Mock config entry with runtime_data
-            mock_instance = MagicMock()
-            mock_entry = MagicMock()
-            mock_entry.domain = DOMAIN
-            mock_entry.runtime_data = mock_instance
-            hass.config_entries.async_get_entry = MagicMock(return_value=mock_entry)
+            hass.config_entries.async_get_entry = MagicMock(return_value=mock_config_entry)
 
-            result = _get_instance_for_device(hass, "device_id", "TEST")
-            assert result is mock_instance
+            result = await _async_get_instances_from_target(hass, mock_call, "TEST")
+            assert len(result) == 1
+            assert result[0] is mock_instance
+
+    @pytest.mark.asyncio
+    async def test_deduplicates_instances(self, hass: HomeAssistant) -> None:
+        """Test same instance is not returned multiple times."""
+        mock_call = MagicMock(spec=ServiceCall)
+        mock_entity_entry = MagicMock()
+        mock_entity_entry.platform = DOMAIN
+        mock_entity_entry.config_entry_id = "beurer_entry_id"
+
+        mock_instance = MagicMock()
+        mock_runtime_data = MagicMock()
+        mock_runtime_data.instance = mock_instance
+        mock_config_entry = MagicMock()
+        mock_config_entry.runtime_data = mock_runtime_data
+
+        # Multiple light entities from same config entry
+        with patch(
+            "custom_components.beurer_daylight_lamps.async_extract_entity_ids",
+            return_value={"light.beurer_lamp_1", "light.beurer_lamp_2"},
+        ), patch(
+            "custom_components.beurer_daylight_lamps.er.async_get"
+        ) as mock_er:
+            mock_registry = MagicMock()
+            mock_registry.async_get.return_value = mock_entity_entry
+            mock_er.return_value = mock_registry
+
+            hass.config_entries.async_get_entry = MagicMock(return_value=mock_config_entry)
+
+            result = await _async_get_instances_from_target(hass, mock_call, "TEST")
+            # Should only have one instance even with two entities
+            assert len(result) == 1
 
 
 # =============================================================================
@@ -472,21 +457,18 @@ class TestApplyPresetService:
         mock_instance.set_color = AsyncMock()
         mock_instance.set_color_brightness = AsyncMock()
 
-        # Import handler locally to get fresh import
         from custom_components.beurer_daylight_lamps import _async_setup_services
 
         with patch(
-            "custom_components.beurer_daylight_lamps._get_instance_for_device",
-            return_value=mock_instance,
+            "custom_components.beurer_daylight_lamps._async_get_instances_from_target",
+            return_value=[mock_instance],
         ):
-            # Setup services
             await _async_setup_services(hass)
 
-            # Call service using hass.services.async_call
             await hass.services.async_call(
                 DOMAIN,
                 SERVICE_APPLY_PRESET,
-                {ATTR_DEVICE_ID: "device123", ATTR_PRESET: "daylight_therapy"},
+                {ATTR_PRESET: "daylight_therapy"},
                 blocking=True,
             )
 
@@ -505,15 +487,15 @@ class TestApplyPresetService:
         from custom_components.beurer_daylight_lamps import _async_setup_services
 
         with patch(
-            "custom_components.beurer_daylight_lamps._get_instance_for_device",
-            return_value=mock_instance,
+            "custom_components.beurer_daylight_lamps._async_get_instances_from_target",
+            return_value=[mock_instance],
         ):
             await _async_setup_services(hass)
 
             await hass.services.async_call(
                 DOMAIN,
                 SERVICE_APPLY_PRESET,
-                {ATTR_DEVICE_ID: "device123", ATTR_PRESET: "sunset"},
+                {ATTR_PRESET: "sunset"},
                 blocking=True,
             )
 
@@ -522,13 +504,13 @@ class TestApplyPresetService:
             mock_instance.set_color_brightness.assert_called_once_with(180)
 
     @pytest.mark.asyncio
-    async def test_apply_preset_device_not_found(self, hass: HomeAssistant) -> None:
-        """Test apply preset when device not found."""
+    async def test_apply_preset_no_targets(self, hass: HomeAssistant) -> None:
+        """Test apply preset when no targets found."""
         from custom_components.beurer_daylight_lamps import _async_setup_services
 
         with patch(
-            "custom_components.beurer_daylight_lamps._get_instance_for_device",
-            return_value=None,
+            "custom_components.beurer_daylight_lamps._async_get_instances_from_target",
+            return_value=[],
         ):
             await _async_setup_services(hass)
 
@@ -536,9 +518,43 @@ class TestApplyPresetService:
             await hass.services.async_call(
                 DOMAIN,
                 SERVICE_APPLY_PRESET,
-                {ATTR_DEVICE_ID: "device123", ATTR_PRESET: "daylight_therapy"},
+                {ATTR_PRESET: "daylight_therapy"},
                 blocking=True,
             )
+
+    @pytest.mark.asyncio
+    async def test_apply_preset_multiple_targets(self, hass: HomeAssistant) -> None:
+        """Test apply preset to multiple targets."""
+        mock_instance1 = MagicMock()
+        mock_instance1.mac = "AA:BB:CC:DD:EE:FF"
+        mock_instance1.set_color = AsyncMock()
+        mock_instance1.set_color_brightness = AsyncMock()
+
+        mock_instance2 = MagicMock()
+        mock_instance2.mac = "11:22:33:44:55:66"
+        mock_instance2.set_color = AsyncMock()
+        mock_instance2.set_color_brightness = AsyncMock()
+
+        from custom_components.beurer_daylight_lamps import _async_setup_services
+
+        with patch(
+            "custom_components.beurer_daylight_lamps._async_get_instances_from_target",
+            return_value=[mock_instance1, mock_instance2],
+        ):
+            await _async_setup_services(hass)
+
+            await hass.services.async_call(
+                DOMAIN,
+                SERVICE_APPLY_PRESET,
+                {ATTR_PRESET: "relax"},
+                blocking=True,
+            )
+
+            # Both instances should be called
+            mock_instance1.set_color.assert_called_once()
+            mock_instance1.set_color_brightness.assert_called_once_with(100)
+            mock_instance2.set_color.assert_called_once()
+            mock_instance2.set_color_brightness.assert_called_once_with(100)
 
 
 class TestSendRawCommandService:
@@ -554,15 +570,15 @@ class TestSendRawCommandService:
         from custom_components.beurer_daylight_lamps import _async_setup_services
 
         with patch(
-            "custom_components.beurer_daylight_lamps._get_instance_for_device",
-            return_value=mock_instance,
+            "custom_components.beurer_daylight_lamps._async_get_instances_from_target",
+            return_value=[mock_instance],
         ):
             await _async_setup_services(hass)
 
             await hass.services.async_call(
                 DOMAIN,
                 SERVICE_SEND_RAW,
-                {ATTR_DEVICE_ID: "device123", ATTR_COMMAND: "3E 1E"},
+                {ATTR_COMMAND: "3E 1E"},
                 blocking=True,
             )
 
@@ -579,15 +595,15 @@ class TestSendRawCommandService:
         from custom_components.beurer_daylight_lamps import _async_setup_services
 
         with patch(
-            "custom_components.beurer_daylight_lamps._get_instance_for_device",
-            return_value=mock_instance,
+            "custom_components.beurer_daylight_lamps._async_get_instances_from_target",
+            return_value=[mock_instance],
         ):
             await _async_setup_services(hass)
 
             await hass.services.async_call(
                 DOMAIN,
                 SERVICE_SEND_RAW,
-                {ATTR_DEVICE_ID: "device123", ATTR_COMMAND: "3E1E"},
+                {ATTR_COMMAND: "3E1E"},
                 blocking=True,
             )
 
@@ -603,15 +619,15 @@ class TestSendRawCommandService:
         from custom_components.beurer_daylight_lamps import _async_setup_services
 
         with patch(
-            "custom_components.beurer_daylight_lamps._get_instance_for_device",
-            return_value=mock_instance,
+            "custom_components.beurer_daylight_lamps._async_get_instances_from_target",
+            return_value=[mock_instance],
         ):
             await _async_setup_services(hass)
 
             await hass.services.async_call(
                 DOMAIN,
                 SERVICE_SEND_RAW,
-                {ATTR_DEVICE_ID: "device123", ATTR_COMMAND: "0x3E 0x1E"},
+                {ATTR_COMMAND: "0x3E 0x1E"},
                 blocking=True,
             )
 
@@ -627,8 +643,8 @@ class TestSendRawCommandService:
         from custom_components.beurer_daylight_lamps import _async_setup_services
 
         with patch(
-            "custom_components.beurer_daylight_lamps._get_instance_for_device",
-            return_value=mock_instance,
+            "custom_components.beurer_daylight_lamps._async_get_instances_from_target",
+            return_value=[mock_instance],
         ):
             await _async_setup_services(hass)
 
@@ -636,7 +652,7 @@ class TestSendRawCommandService:
             await hass.services.async_call(
                 DOMAIN,
                 SERVICE_SEND_RAW,
-                {ATTR_DEVICE_ID: "device123", ATTR_COMMAND: "GG HH"},  # Invalid
+                {ATTR_COMMAND: "GG HH"},  # Invalid
                 blocking=True,
             )
 
@@ -656,15 +672,15 @@ class TestSetTimerService:
         from custom_components.beurer_daylight_lamps import _async_setup_services
 
         with patch(
-            "custom_components.beurer_daylight_lamps._get_instance_for_device",
-            return_value=mock_instance,
+            "custom_components.beurer_daylight_lamps._async_get_instances_from_target",
+            return_value=[mock_instance],
         ):
             await _async_setup_services(hass)
 
             await hass.services.async_call(
                 DOMAIN,
                 SERVICE_SET_TIMER,
-                {ATTR_DEVICE_ID: "device123", ATTR_MINUTES: 30},
+                {ATTR_MINUTES: 30},
                 blocking=True,
             )
 
@@ -680,8 +696,8 @@ class TestSetTimerService:
         from custom_components.beurer_daylight_lamps import _async_setup_services
 
         with patch(
-            "custom_components.beurer_daylight_lamps._get_instance_for_device",
-            return_value=mock_instance,
+            "custom_components.beurer_daylight_lamps._async_get_instances_from_target",
+            return_value=[mock_instance],
         ):
             await _async_setup_services(hass)
 
@@ -689,7 +705,7 @@ class TestSetTimerService:
             await hass.services.async_call(
                 DOMAIN,
                 SERVICE_SET_TIMER,
-                {ATTR_DEVICE_ID: "device123", ATTR_MINUTES: 30},
+                {ATTR_MINUTES: 30},
                 blocking=True,
             )
 
@@ -710,15 +726,15 @@ class TestSunriseService:
         from custom_components.beurer_daylight_lamps import _async_setup_services
 
         with patch(
-            "custom_components.beurer_daylight_lamps._get_instance_for_device",
-            return_value=mock_instance,
+            "custom_components.beurer_daylight_lamps._async_get_instances_from_target",
+            return_value=[mock_instance],
         ):
             await _async_setup_services(hass)
 
             await hass.services.async_call(
                 DOMAIN,
                 SERVICE_START_SUNRISE,
-                {ATTR_DEVICE_ID: "device123"},
+                {},
                 blocking=True,
             )
 
@@ -737,8 +753,8 @@ class TestSunriseService:
         from custom_components.beurer_daylight_lamps import _async_setup_services
 
         with patch(
-            "custom_components.beurer_daylight_lamps._get_instance_for_device",
-            return_value=mock_instance,
+            "custom_components.beurer_daylight_lamps._async_get_instances_from_target",
+            return_value=[mock_instance],
         ):
             await _async_setup_services(hass)
 
@@ -746,7 +762,6 @@ class TestSunriseService:
                 DOMAIN,
                 SERVICE_START_SUNRISE,
                 {
-                    ATTR_DEVICE_ID: "device123",
                     ATTR_DURATION: 30,
                     ATTR_PROFILE: "therapy",
                 },
@@ -779,14 +794,13 @@ class TestSunriseService:
             mock_instance.sunrise_simulation = mock_simulation
 
             with patch(
-                "custom_components.beurer_daylight_lamps._get_instance_for_device",
-                return_value=mock_instance,
+                "custom_components.beurer_daylight_lamps._async_get_instances_from_target",
+                return_value=[mock_instance],
             ):
                 await hass.services.async_call(
                     DOMAIN,
                     SERVICE_START_SUNRISE,
                     {
-                        ATTR_DEVICE_ID: "device123",
                         ATTR_PROFILE: profile_name,
                     },
                     blocking=True,
@@ -811,15 +825,15 @@ class TestSunsetService:
         from custom_components.beurer_daylight_lamps import _async_setup_services
 
         with patch(
-            "custom_components.beurer_daylight_lamps._get_instance_for_device",
-            return_value=mock_instance,
+            "custom_components.beurer_daylight_lamps._async_get_instances_from_target",
+            return_value=[mock_instance],
         ):
             await _async_setup_services(hass)
 
             await hass.services.async_call(
                 DOMAIN,
                 SERVICE_START_SUNSET,
-                {ATTR_DEVICE_ID: "device123"},
+                {},
                 blocking=True,
             )
 
@@ -838,8 +852,8 @@ class TestSunsetService:
         from custom_components.beurer_daylight_lamps import _async_setup_services
 
         with patch(
-            "custom_components.beurer_daylight_lamps._get_instance_for_device",
-            return_value=mock_instance,
+            "custom_components.beurer_daylight_lamps._async_get_instances_from_target",
+            return_value=[mock_instance],
         ):
             await _async_setup_services(hass)
 
@@ -847,7 +861,6 @@ class TestSunsetService:
                 DOMAIN,
                 SERVICE_START_SUNSET,
                 {
-                    ATTR_DEVICE_ID: "device123",
                     ATTR_DURATION: 45,
                     ATTR_END_BRIGHTNESS: 20,
                 },
@@ -873,15 +886,15 @@ class TestStopSimulationService:
         from custom_components.beurer_daylight_lamps import _async_setup_services
 
         with patch(
-            "custom_components.beurer_daylight_lamps._get_instance_for_device",
-            return_value=mock_instance,
+            "custom_components.beurer_daylight_lamps._async_get_instances_from_target",
+            return_value=[mock_instance],
         ):
             await _async_setup_services(hass)
 
             await hass.services.async_call(
                 DOMAIN,
                 SERVICE_STOP_SIMULATION,
-                {ATTR_DEVICE_ID: "device123"},
+                {},
                 blocking=True,
             )
 

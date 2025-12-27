@@ -1,7 +1,6 @@
 """Light platform for Beurer Daylight Lamps."""
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 
 from homeassistant.components.light import (
@@ -13,21 +12,22 @@ from homeassistant.components.light import (
     LightEntity,
     LightEntityFeature,
 )
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import (
     CONNECTION_BLUETOOTH,
     DeviceInfo,
     format_mac,
 )
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util.color import (
     color_temperature_to_rgb,
     match_max_scale,
 )
 
 from . import BeurerConfigEntry
-from .beurer_daylight_lamps import BeurerInstance
 from .const import DOMAIN, LOGGER, VERSION, detect_model
+from .coordinator import BeurerDataUpdateCoordinator
 
 # Limit parallel updates to 1 per device to prevent BLE command conflicts
 PARALLEL_UPDATES = 1
@@ -50,12 +50,12 @@ async def async_setup_entry(
 ) -> None:
     """Set up Beurer Daylight Lamp from a config entry."""
     LOGGER.debug("Setting up Beurer light entity")
-    instance = entry.runtime_data
+    coordinator = entry.runtime_data.coordinator
     name = entry.data.get("name", "Beurer Lamp")
-    async_add_entities([BeurerLight(instance, name, entry.entry_id)])
+    async_add_entities([BeurerLight(coordinator, name, entry.entry_id)])
 
 
-class BeurerLight(LightEntity):
+class BeurerLight(CoordinatorEntity[BeurerDataUpdateCoordinator], LightEntity):
     """Representation of a Beurer Daylight Lamp."""
 
     _attr_has_entity_name: bool = True
@@ -71,12 +71,13 @@ class BeurerLight(LightEntity):
 
     def __init__(
         self,
-        beurer_instance: BeurerInstance,
+        coordinator: BeurerDataUpdateCoordinator,
         name: str,
         entry_id: str,
     ) -> None:
         """Initialize the Beurer light."""
-        self._instance = beurer_instance
+        super().__init__(coordinator)
+        self._instance = coordinator.instance
         self._entry_id = entry_id
         self._device_name = name
         self._attr_unique_id = format_mac(self._instance.mac)
@@ -84,17 +85,8 @@ class BeurerLight(LightEntity):
 
     async def async_added_to_hass(self) -> None:
         """Run when entity about to be added to hass."""
-        self._instance.set_update_callback(self._handle_update)
+        await super().async_added_to_hass()
         await self._instance.update()
-
-    async def async_will_remove_from_hass(self) -> None:
-        """Run when entity will be removed from hass."""
-        self._instance.remove_update_callback(self._handle_update)
-
-    @callback
-    def _handle_update(self) -> None:
-        """Handle device state update."""
-        self.async_write_ha_state()
 
     @property
     def available(self) -> bool:
@@ -267,8 +259,8 @@ class BeurerLight(LightEntity):
             if self._color_temp_kelvin is not None:
                 # We're in color temp mode (simulated via RGB)
                 await self._instance.set_color_brightness(brightness)
-            elif self._instance.color_mode == ColorMode.RGB or self._instance._color_on:
-                # In RGB mode
+            elif self._instance.color_mode == ColorMode.RGB or self._instance.color_on:
+                # In RGB mode (use public property instead of private _color_on)
                 await self._instance.set_color_brightness(brightness)
             else:
                 # In White mode

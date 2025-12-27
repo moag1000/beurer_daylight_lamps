@@ -17,8 +17,19 @@ from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow,
     ConfigFlowResult,
+    OptionsFlow,
 )
 from homeassistant.const import CONF_MAC, CONF_NAME
+from homeassistant.core import callback
+
+# Option constants
+CONF_THERAPY_GOAL = "therapy_goal"
+CONF_UPDATE_INTERVAL = "update_interval"
+CONF_ADAPTIVE_LIGHTING_DEFAULT = "adaptive_lighting_default"
+
+DEFAULT_THERAPY_GOAL = 30
+DEFAULT_UPDATE_INTERVAL = 60
+DEFAULT_ADAPTIVE_LIGHTING = True
 from homeassistant.helpers.device_registry import format_mac
 
 from .beurer_daylight_lamps import BeurerInstance
@@ -31,6 +42,14 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Beurer Daylight Lamps."""
 
     VERSION = 1
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(
+        config_entry: ConfigEntry,
+    ) -> OptionsFlow:
+        """Create the options flow."""
+        return BeurerOptionsFlowHandler(config_entry)
 
     def __init__(self) -> None:
         """Initialize the config flow."""
@@ -458,3 +477,47 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
             return True
         except ValueError:
             return False
+
+
+class BeurerOptionsFlowHandler(OptionsFlow):
+    """Handle options flow for Beurer Daylight Lamps."""
+
+    def __init__(self, config_entry: ConfigEntry) -> None:
+        """Initialize options flow."""
+        self._config_entry = config_entry
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Manage the options."""
+        if user_input is not None:
+            # Update options
+            return self.async_create_entry(title="", data=user_input)
+
+        # Get current options with defaults
+        current_options = self._config_entry.options
+        therapy_goal = current_options.get(CONF_THERAPY_GOAL, DEFAULT_THERAPY_GOAL)
+        update_interval = current_options.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL)
+        adaptive_lighting = current_options.get(
+            CONF_ADAPTIVE_LIGHTING_DEFAULT, DEFAULT_ADAPTIVE_LIGHTING
+        )
+
+        return self.async_show_form(
+            step_id="init",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(
+                        CONF_THERAPY_GOAL,
+                        default=therapy_goal,
+                    ): vol.All(vol.Coerce(int), vol.Range(min=5, max=120)),
+                    vol.Optional(
+                        CONF_UPDATE_INTERVAL,
+                        default=update_interval,
+                    ): vol.All(vol.Coerce(int), vol.Range(min=10, max=300)),
+                    vol.Optional(
+                        CONF_ADAPTIVE_LIGHTING_DEFAULT,
+                        default=adaptive_lighting,
+                    ): bool,
+                }
+            ),
+        )

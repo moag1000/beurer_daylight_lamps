@@ -9,6 +9,8 @@ from custom_components.beurer_daylight_lamps.diagnostics import (
     async_get_config_entry_diagnostics,
 )
 
+from .conftest import MockRuntimeData
+
 
 async def test_diagnostics_redacts_mac(hass: HomeAssistant) -> None:
     """Test that MAC address is redacted in diagnostics."""
@@ -29,7 +31,7 @@ async def test_diagnostics_redacts_mac(hass: HomeAssistant) -> None:
     entry = MagicMock()
     entry.entry_id = "test_entry"
     entry.data = {CONF_MAC: "AA:BB:CC:DD:EE:FF", CONF_NAME: "Test Lamp"}
-    entry.runtime_data = mock_instance
+    entry.runtime_data = MockRuntimeData(instance=mock_instance)
     entry.as_dict = MagicMock(return_value={
         "data": {CONF_MAC: "AA:BB:CC:DD:EE:FF", CONF_NAME: "Test Lamp"},
         "entry_id": "test_entry",
@@ -61,7 +63,7 @@ async def test_diagnostics_device_state(hass: HomeAssistant) -> None:
 
     entry = MagicMock()
     entry.entry_id = "test_entry"
-    entry.runtime_data = mock_instance
+    entry.runtime_data = MockRuntimeData(instance=mock_instance)
     entry.as_dict = MagicMock(return_value={"data": {}, "entry_id": "test_entry"})
 
     result = await async_get_config_entry_diagnostics(hass, entry)
@@ -94,7 +96,7 @@ async def test_diagnostics_connection_info(hass: HomeAssistant) -> None:
 
     entry = MagicMock()
     entry.entry_id = "test_entry"
-    entry.runtime_data = mock_instance
+    entry.runtime_data = MockRuntimeData(instance=mock_instance)
     entry.as_dict = MagicMock(return_value={"data": {}, "entry_id": "test_entry"})
 
     result = await async_get_config_entry_diagnostics(hass, entry)
@@ -123,7 +125,7 @@ async def test_diagnostics_no_client(hass: HomeAssistant) -> None:
 
     entry = MagicMock()
     entry.entry_id = "test_entry"
-    entry.runtime_data = mock_instance
+    entry.runtime_data = MockRuntimeData(instance=mock_instance)
     entry.as_dict = MagicMock(return_value={"data": {}, "entry_id": "test_entry"})
 
     result = await async_get_config_entry_diagnostics(hass, entry)
@@ -162,7 +164,7 @@ async def test_diagnostics_therapy_tracking(hass: HomeAssistant) -> None:
 
     entry = MagicMock()
     entry.entry_id = "test_entry"
-    entry.runtime_data = mock_instance
+    entry.runtime_data = MockRuntimeData(instance=mock_instance)
     entry.as_dict = MagicMock(return_value={"data": {}, "entry_id": "test_entry"})
 
     result = await async_get_config_entry_diagnostics(hass, entry)
@@ -200,7 +202,7 @@ async def test_diagnostics_missing_therapy_attributes(hass: HomeAssistant) -> No
 
     entry = MagicMock()
     entry.entry_id = "test_entry"
-    entry.runtime_data = mock_instance
+    entry.runtime_data = MockRuntimeData(instance=mock_instance)
     entry.as_dict = MagicMock(return_value={"data": {}, "entry_id": "test_entry"})
 
     result = await async_get_config_entry_diagnostics(hass, entry)

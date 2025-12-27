@@ -148,7 +148,7 @@ class BeurerInstance:
         if was_ble_unavailable:
             LOGGER.info("Device %s is now reachable again", self._mac)
             self._ble_available = True
-            self._safe_create_task(self._trigger_update())
+            self._safe_create_task(self._trigger_update(), "beurer_ble_reachable_update")
 
         # Auto-reconnect if:
         # 1. Device was BLE unavailable and we're not connected, OR
@@ -168,7 +168,7 @@ class BeurerInstance:
                 self.is_connected,
                 self._available,
             )
-            self._safe_create_task(self._auto_reconnect())
+            self._safe_create_task(self._auto_reconnect(), "beurer_auto_reconnect")
 
     def mark_unavailable(self) -> None:
         """Mark the device as unavailable (not seen by any adapter)."""
@@ -176,7 +176,7 @@ class BeurerInstance:
             LOGGER.debug("Device %s marked as unavailable (no BLE advertisements)", self._mac)
             self._ble_available = False
             self._available = False
-            self._safe_create_task(self._trigger_update())
+            self._safe_create_task(self._trigger_update(), "beurer_unavailable_update")
 
     async def _auto_reconnect(self) -> None:
         """Automatically reconnect when device becomes available again."""
@@ -294,7 +294,7 @@ class BeurerInstance:
     def set_therapy_daily_goal(self, minutes: int) -> None:
         """Set the daily therapy goal."""
         self._therapy_tracker.daily_goal_minutes = max(1, min(120, minutes))
-        self._safe_create_task(self._trigger_update())
+        self._safe_create_task(self._trigger_update(), "beurer_therapy_goal_update")
 
     def _on_disconnect(self, client: BleakClient) -> None:
         """Handle disconnection callback."""
@@ -305,26 +305,39 @@ class BeurerInstance:
         self._write_uuid = None
         self._read_uuid = None
         if self._update_callbacks:
-            self._safe_create_task(self._trigger_update())
+            self._safe_create_task(self._trigger_update(), "beurer_disconnect_update")
 
-    def _safe_create_task(self, coro) -> None:
+    def _safe_create_task(self, coro, name: str | None = None) -> None:
         """Create an asyncio task with error handling.
 
         This prevents unhandled exceptions in fire-and-forget tasks from
-        being silently lost.
+        being silently lost. Uses Home Assistant's task creation when available.
+
+        Args:
+            coro: The coroutine to run
+            name: Optional name for the task (for debugging)
         """
+        task_name = name or f"beurer_task_{self._mac}"
 
         async def _wrapped():
             try:
                 await coro
             except Exception as err:
-                LOGGER.error("Error in background task for %s: %s", self._mac, err)
+                LOGGER.error("Error in background task '%s' for %s: %s", task_name, self._mac, err)
 
         try:
-            asyncio.create_task(_wrapped())
+            # Prefer Home Assistant's task creation if available
+            if self._hass is not None:
+                self._hass.async_create_background_task(
+                    _wrapped(),
+                    task_name,
+                )
+            else:
+                # Fallback for standalone usage
+                asyncio.create_task(_wrapped(), name=task_name)
         except RuntimeError:
             # No event loop running (e.g., during shutdown)
-            LOGGER.debug("Could not create task - no event loop running")
+            LOGGER.debug("Could not create task '%s' - no event loop running", task_name)
 
     def set_update_callback(self, callback: Callable[[], None] | None) -> None:
         """Register or unregister a callback for state updates."""
@@ -390,6 +403,24 @@ class BeurerInstance:
     def supported_effects(self) -> list[str]:
         """Return list of supported effects."""
         return self._supported_effects
+
+    @property
+    def color_on(self) -> bool:
+        """Return True if color/RGB mode is active.
+
+        This property exposes the internal color state for use by
+        the light platform when determining which mode is active.
+        """
+        return self._color_on
+
+    @property
+    def white_on(self) -> bool:
+        """Return True if white mode is active.
+
+        This property exposes the internal white state for use by
+        the light platform when determining which mode is active.
+        """
+        return self._light_on
 
     @property
     def rssi(self) -> int | None:

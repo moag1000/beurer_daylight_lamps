@@ -93,8 +93,9 @@ Apply predefined lighting presets:
 Example usage:
 ```yaml
 service: beurer_daylight_lamps.apply_preset
+target:
+  entity_id: light.beurer_tl100
 data:
-  device_id: "abc123..."
   preset: daylight_therapy
 ```
 
@@ -104,8 +105,9 @@ Set an auto-off timer (1-120 minutes). The lamp will turn off automatically afte
 
 ```yaml
 service: beurer_daylight_lamps.set_timer
+target:
+  entity_id: light.beurer_tl100
 data:
-  device_id: "abc123..."
   minutes: 30
 ```
 
@@ -117,8 +119,9 @@ Start a sunrise simulation with gradual brightness and color temperature increas
 
 ```yaml
 service: beurer_daylight_lamps.start_sunrise
+target:
+  entity_id: light.beurer_tl100
 data:
-  device_id: "abc123..."
   duration: 15  # minutes (1-60)
   profile: natural  # gentle, natural, energize, or therapy
 ```
@@ -137,8 +140,9 @@ Start a sunset simulation with gradual brightness decrease and warm color shift.
 
 ```yaml
 service: beurer_daylight_lamps.start_sunset
+target:
+  entity_id: light.beurer_tl100
 data:
-  device_id: "abc123..."
   duration: 30  # minutes (1-60)
   end_brightness: 0  # 0-100%, 0 = turn off at end
 ```
@@ -149,8 +153,8 @@ Stop any running sunrise or sunset simulation.
 
 ```yaml
 service: beurer_daylight_lamps.stop_simulation
-data:
-  device_id: "abc123..."
+target:
+  entity_id: light.beurer_tl100
 ```
 
 ## Installation
@@ -407,8 +411,9 @@ automation:
         country: DE
     action:
       - service: beurer_daylight_lamps.apply_preset
+        target:
+          entity_id: light.beurer_tl100
         data:
-          device_id: !input beurer_device
           preset: energize
 ```
 
@@ -453,8 +458,9 @@ automation:
         event: sunset
     action:
       - service: beurer_daylight_lamps.apply_preset
+        target:
+          entity_id: light.beurer_tl100
         data:
-          device_id: !input beurer_device
           preset: sunset
 ```
 
@@ -468,8 +474,9 @@ automation:
         at: "07:00:00"
     action:
       - service: beurer_daylight_lamps.apply_preset
+        target:
+          entity_id: light.beurer_tl100
         data:
-          device_id: !input beurer_device
           preset: daylight_therapy
       - delay: "00:30:00"
       - service: light.turn_off

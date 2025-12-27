@@ -3,14 +3,11 @@
 apply_preset:
   name: Apply preset
   description: Apply a predefined lighting preset to the lamp
+  target:
+    entity:
+      integration: beurer_daylight_lamps
+      domain: light
   fields:
-    device_id:
-      name: Device
-      description: The Beurer lamp device to control
-      required: true
-      selector:
-        device:
-          integration: beurer_daylight_lamps
     preset:
       name: Preset
       description: The preset to apply
@@ -31,14 +28,11 @@ apply_preset:
 send_raw_command:
   name: Send raw command (Expert)
   description: "Send a raw BLE command to the lamp. For reverse engineering and testing. Format: hex bytes separated by spaces (e.g., '3E 1E' for 30-min timer)"
+  target:
+    entity:
+      integration: beurer_daylight_lamps
+      domain: light
   fields:
-    device_id:
-      name: Device
-      description: The Beurer lamp device to control
-      required: true
-      selector:
-        device:
-          integration: beurer_daylight_lamps
     command:
       name: Command bytes
       description: "Hex bytes to send (e.g., '3E 1E' for timer). Known: 30=status, 31=brightness, 32=color, 34=effect, 35=off, 37=mode, 3E=timer. Unknown: 33, 36, 38, 39"
@@ -50,14 +44,11 @@ send_raw_command:
 set_timer:
   name: Set Timer
   description: "Set an auto-off timer on the lamp. Timer only works in RGB mode - the lamp will automatically switch to RGB mode if needed. Range: 1-240 minutes."
+  target:
+    entity:
+      integration: beurer_daylight_lamps
+      domain: light
   fields:
-    device_id:
-      name: Device
-      description: The Beurer lamp device to control
-      required: true
-      selector:
-        device:
-          integration: beurer_daylight_lamps
     minutes:
       name: Minutes
       description: "Timer duration in minutes (1-240). Popular values: 15, 21, 30, 60 minutes for therapy sessions."
@@ -73,14 +64,11 @@ set_timer:
 start_sunrise:
   name: Start Sunrise Simulation
   description: "Start a gradual sunrise simulation. The light slowly increases brightness and shifts from warm to cool white, mimicking natural sunrise. NOTE: This is a lifestyle/wellness feature, not a medical device."
+  target:
+    entity:
+      integration: beurer_daylight_lamps
+      domain: light
   fields:
-    device_id:
-      name: Device
-      description: The Beurer lamp device to control
-      required: true
-      selector:
-        device:
-          integration: beurer_daylight_lamps
     duration:
       name: Duration
       description: "Duration of the sunrise in minutes (1-60)"
@@ -111,14 +99,11 @@ start_sunrise:
 start_sunset:
   name: Start Sunset Simulation
   description: "Start a gradual sunset simulation. The light slowly decreases brightness and shifts to warm tones, helping prepare for sleep. NOTE: This is a lifestyle/wellness feature, not a medical device."
+  target:
+    entity:
+      integration: beurer_daylight_lamps
+      domain: light
   fields:
-    device_id:
-      name: Device
-      description: The Beurer lamp device to control
-      required: true
-      selector:
-        device:
-          integration: beurer_daylight_lamps
     duration:
       name: Duration
       description: "Duration of the sunset in minutes (1-60)"
@@ -145,11 +130,7 @@ start_sunset:
 stop_simulation:
   name: Stop Simulation
   description: "Stop any running sunrise or sunset simulation. The light will remain at its current state."
-  fields:
-    device_id:
-      name: Device
-      description: The Beurer lamp device to control
-      required: true
-      selector:
-        device:
-          integration: beurer_daylight_lamps
+  target:
+    entity:
+      integration: beurer_daylight_lamps
+      domain: light

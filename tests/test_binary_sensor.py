@@ -1,7 +1,7 @@
 """Test Beurer Daylight Lamps binary sensor platform."""
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -14,6 +14,7 @@ from custom_components.beurer_daylight_lamps.binary_sensor import (
     BeurerBinarySensor,
     BeurerTherapyBinarySensor,
 )
+from tests.conftest import create_mock_coordinator
 
 
 # =============================================================================
@@ -70,139 +71,109 @@ class TestBeurerBinarySensor:
         instance.remove_update_callback = MagicMock()
         return instance
 
-    def test_initialization_connected(self, mock_instance: MagicMock) -> None:
+    @pytest.fixture
+    def mock_coordinator(self, mock_instance: MagicMock) -> MagicMock:
+        """Create a mock coordinator."""
+        return create_mock_coordinator(mock_instance)
+
+    def test_initialization_connected(self, mock_coordinator: MagicMock) -> None:
         """Test initialization for connected sensor."""
         description = next(
             d for d in BINARY_SENSOR_DESCRIPTIONS if d.key == "connected"
         )
-        sensor = BeurerBinarySensor(mock_instance, "Test Lamp", description)
+        sensor = BeurerBinarySensor(mock_coordinator, "Test Lamp", description)
 
-        assert sensor._instance == mock_instance
+        assert sensor._instance == mock_coordinator.instance
         assert sensor._device_name == "Test Lamp"
         assert sensor.entity_description == description
         assert "aa:bb:cc:dd:ee:ff_connected" in sensor._attr_unique_id
 
-    def test_initialization_ble_available(self, mock_instance: MagicMock) -> None:
+    def test_initialization_ble_available(self, mock_coordinator: MagicMock) -> None:
         """Test initialization for BLE available sensor."""
         description = next(
             d for d in BINARY_SENSOR_DESCRIPTIONS if d.key == "ble_available"
         )
-        sensor = BeurerBinarySensor(mock_instance, "Test Lamp", description)
+        sensor = BeurerBinarySensor(mock_coordinator, "Test Lamp", description)
 
         assert "aa:bb:cc:dd:ee:ff_ble_available" in sensor._attr_unique_id
 
-    def test_is_on_connected_true(self, mock_instance: MagicMock) -> None:
+    def test_is_on_connected_true(self, mock_coordinator: MagicMock) -> None:
         """Test is_on returns True when connected."""
         description = next(
             d for d in BINARY_SENSOR_DESCRIPTIONS if d.key == "connected"
         )
-        mock_instance.is_connected = True
-        sensor = BeurerBinarySensor(mock_instance, "Test Lamp", description)
+        mock_coordinator.instance.is_connected = True
+        sensor = BeurerBinarySensor(mock_coordinator, "Test Lamp", description)
 
         assert sensor.is_on is True
 
-    def test_is_on_connected_false(self, mock_instance: MagicMock) -> None:
+    def test_is_on_connected_false(self, mock_coordinator: MagicMock) -> None:
         """Test is_on returns False when not connected."""
         description = next(
             d for d in BINARY_SENSOR_DESCRIPTIONS if d.key == "connected"
         )
-        mock_instance.is_connected = False
-        sensor = BeurerBinarySensor(mock_instance, "Test Lamp", description)
+        mock_coordinator.instance.is_connected = False
+        sensor = BeurerBinarySensor(mock_coordinator, "Test Lamp", description)
 
         assert sensor.is_on is False
 
-    def test_is_on_ble_available_true(self, mock_instance: MagicMock) -> None:
+    def test_is_on_ble_available_true(self, mock_coordinator: MagicMock) -> None:
         """Test is_on returns True when BLE is available."""
         description = next(
             d for d in BINARY_SENSOR_DESCRIPTIONS if d.key == "ble_available"
         )
-        mock_instance.ble_available = True
-        sensor = BeurerBinarySensor(mock_instance, "Test Lamp", description)
+        mock_coordinator.instance.ble_available = True
+        sensor = BeurerBinarySensor(mock_coordinator, "Test Lamp", description)
 
         assert sensor.is_on is True
 
-    def test_is_on_ble_available_false(self, mock_instance: MagicMock) -> None:
+    def test_is_on_ble_available_false(self, mock_coordinator: MagicMock) -> None:
         """Test is_on returns False when BLE is not available."""
         description = next(
             d for d in BINARY_SENSOR_DESCRIPTIONS if d.key == "ble_available"
         )
-        mock_instance.ble_available = False
-        sensor = BeurerBinarySensor(mock_instance, "Test Lamp", description)
+        mock_coordinator.instance.ble_available = False
+        sensor = BeurerBinarySensor(mock_coordinator, "Test Lamp", description)
 
         assert sensor.is_on is False
 
-    def test_is_on_unknown_key(self, mock_instance: MagicMock) -> None:
+    def test_is_on_unknown_key(self, mock_coordinator: MagicMock) -> None:
         """Test is_on returns None for unknown key."""
         from homeassistant.components.binary_sensor import BinarySensorEntityDescription
 
         description = BinarySensorEntityDescription(key="unknown")
-        sensor = BeurerBinarySensor(mock_instance, "Test Lamp", description)
+        sensor = BeurerBinarySensor(mock_coordinator, "Test Lamp", description)
 
         assert sensor.is_on is None
 
-    def test_available_always_true(self, mock_instance: MagicMock) -> None:
+    def test_available_always_true(self, mock_coordinator: MagicMock) -> None:
         """Test available is always True for connectivity sensors."""
         description = next(
             d for d in BINARY_SENSOR_DESCRIPTIONS if d.key == "connected"
         )
-        sensor = BeurerBinarySensor(mock_instance, "Test Lamp", description)
+        sensor = BeurerBinarySensor(mock_coordinator, "Test Lamp", description)
 
         assert sensor.available is True
 
-    def test_device_info(self, mock_instance: MagicMock) -> None:
+    def test_device_info(self, mock_coordinator: MagicMock) -> None:
         """Test device info is returned correctly."""
         description = next(
             d for d in BINARY_SENSOR_DESCRIPTIONS if d.key == "connected"
         )
-        sensor = BeurerBinarySensor(mock_instance, "TL100 Test", description)
+        sensor = BeurerBinarySensor(mock_coordinator, "TL100 Test", description)
 
         device_info = sensor.device_info
         assert device_info["manufacturer"] == "Beurer"
         assert device_info["name"] == "TL100 Test"
 
-    def test_has_entity_name(self, mock_instance: MagicMock) -> None:
+    def test_has_entity_name(self, mock_coordinator: MagicMock) -> None:
         """Test has_entity_name is True."""
         description = next(
             d for d in BINARY_SENSOR_DESCRIPTIONS if d.key == "connected"
         )
-        sensor = BeurerBinarySensor(mock_instance, "Test Lamp", description)
+        sensor = BeurerBinarySensor(mock_coordinator, "Test Lamp", description)
 
         assert sensor._attr_has_entity_name is True
-
-    @pytest.mark.asyncio
-    async def test_async_added_to_hass(self, mock_instance: MagicMock) -> None:
-        """Test callback is registered when added to hass."""
-        description = next(
-            d for d in BINARY_SENSOR_DESCRIPTIONS if d.key == "connected"
-        )
-        sensor = BeurerBinarySensor(mock_instance, "Test Lamp", description)
-
-        await sensor.async_added_to_hass()
-
-        mock_instance.set_update_callback.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_async_will_remove_from_hass(self, mock_instance: MagicMock) -> None:
-        """Test callback is removed when removed from hass."""
-        description = next(
-            d for d in BINARY_SENSOR_DESCRIPTIONS if d.key == "connected"
-        )
-        sensor = BeurerBinarySensor(mock_instance, "Test Lamp", description)
-
-        await sensor.async_will_remove_from_hass()
-
-        mock_instance.remove_update_callback.assert_called_once()
-
-    def test_handle_update_writes_state(self, mock_instance: MagicMock) -> None:
-        """Test _handle_update writes HA state."""
-        description = next(
-            d for d in BINARY_SENSOR_DESCRIPTIONS if d.key == "connected"
-        )
-        sensor = BeurerBinarySensor(mock_instance, "Test Lamp", description)
-
-        with patch.object(sensor, "async_write_ha_state") as mock_write:
-            sensor._handle_update()
-            mock_write.assert_called_once()
 
 
 # =============================================================================
@@ -223,109 +194,79 @@ class TestBeurerTherapyBinarySensor:
         instance.remove_update_callback = MagicMock()
         return instance
 
-    def test_initialization(self, mock_instance: MagicMock) -> None:
+    @pytest.fixture
+    def mock_coordinator(self, mock_instance: MagicMock) -> MagicMock:
+        """Create a mock coordinator."""
+        return create_mock_coordinator(mock_instance)
+
+    def test_initialization(self, mock_coordinator: MagicMock) -> None:
         """Test initialization for therapy goal sensor."""
         description = next(
             d for d in THERAPY_BINARY_SENSOR_DESCRIPTIONS if d.key == "therapy_goal_reached"
         )
-        sensor = BeurerTherapyBinarySensor(mock_instance, "Test Lamp", description)
+        sensor = BeurerTherapyBinarySensor(mock_coordinator, "Test Lamp", description)
 
-        assert sensor._instance == mock_instance
+        assert sensor._instance == mock_coordinator.instance
         assert sensor._device_name == "Test Lamp"
         assert "aa:bb:cc:dd:ee:ff_therapy_goal_reached" in sensor._attr_unique_id
 
-    def test_is_on_goal_reached(self, mock_instance: MagicMock) -> None:
+    def test_is_on_goal_reached(self, mock_coordinator: MagicMock) -> None:
         """Test is_on returns True when goal is reached."""
         description = next(
             d for d in THERAPY_BINARY_SENSOR_DESCRIPTIONS if d.key == "therapy_goal_reached"
         )
-        mock_instance.therapy_goal_reached = True
-        sensor = BeurerTherapyBinarySensor(mock_instance, "Test Lamp", description)
+        mock_coordinator.instance.therapy_goal_reached = True
+        sensor = BeurerTherapyBinarySensor(mock_coordinator, "Test Lamp", description)
 
         assert sensor.is_on is True
 
-    def test_is_on_goal_not_reached(self, mock_instance: MagicMock) -> None:
+    def test_is_on_goal_not_reached(self, mock_coordinator: MagicMock) -> None:
         """Test is_on returns False when goal is not reached."""
         description = next(
             d for d in THERAPY_BINARY_SENSOR_DESCRIPTIONS if d.key == "therapy_goal_reached"
         )
-        mock_instance.therapy_goal_reached = False
-        sensor = BeurerTherapyBinarySensor(mock_instance, "Test Lamp", description)
+        mock_coordinator.instance.therapy_goal_reached = False
+        sensor = BeurerTherapyBinarySensor(mock_coordinator, "Test Lamp", description)
 
         assert sensor.is_on is False
 
-    def test_is_on_unknown_key(self, mock_instance: MagicMock) -> None:
+    def test_is_on_unknown_key(self, mock_coordinator: MagicMock) -> None:
         """Test is_on returns None for unknown key."""
         from homeassistant.components.binary_sensor import BinarySensorEntityDescription
 
         description = BinarySensorEntityDescription(key="unknown")
-        sensor = BeurerTherapyBinarySensor(mock_instance, "Test Lamp", description)
+        sensor = BeurerTherapyBinarySensor(mock_coordinator, "Test Lamp", description)
 
         assert sensor.is_on is None
 
-    def test_available_always_true(self, mock_instance: MagicMock) -> None:
+    def test_available_always_true(self, mock_coordinator: MagicMock) -> None:
         """Test available is always True for therapy sensor."""
         description = next(
             d for d in THERAPY_BINARY_SENSOR_DESCRIPTIONS if d.key == "therapy_goal_reached"
         )
-        sensor = BeurerTherapyBinarySensor(mock_instance, "Test Lamp", description)
+        sensor = BeurerTherapyBinarySensor(mock_coordinator, "Test Lamp", description)
 
         assert sensor.available is True
 
-    def test_device_info(self, mock_instance: MagicMock) -> None:
+    def test_device_info(self, mock_coordinator: MagicMock) -> None:
         """Test device info is returned correctly."""
         description = next(
             d for d in THERAPY_BINARY_SENSOR_DESCRIPTIONS if d.key == "therapy_goal_reached"
         )
-        sensor = BeurerTherapyBinarySensor(mock_instance, "TL100 Therapy", description)
+        sensor = BeurerTherapyBinarySensor(mock_coordinator, "TL100 Therapy", description)
 
         device_info = sensor.device_info
         assert device_info["manufacturer"] == "Beurer"
         assert device_info["name"] == "TL100 Therapy"
 
-    def test_has_entity_name(self, mock_instance: MagicMock) -> None:
+    def test_has_entity_name(self, mock_coordinator: MagicMock) -> None:
         """Test has_entity_name is True."""
         description = next(
             d for d in THERAPY_BINARY_SENSOR_DESCRIPTIONS if d.key == "therapy_goal_reached"
         )
-        sensor = BeurerTherapyBinarySensor(mock_instance, "Test Lamp", description)
+        sensor = BeurerTherapyBinarySensor(mock_coordinator, "Test Lamp", description)
 
         assert sensor._attr_has_entity_name is True
-
-    @pytest.mark.asyncio
-    async def test_async_added_to_hass(self, mock_instance: MagicMock) -> None:
-        """Test callback is registered when added to hass."""
-        description = next(
-            d for d in THERAPY_BINARY_SENSOR_DESCRIPTIONS if d.key == "therapy_goal_reached"
-        )
-        sensor = BeurerTherapyBinarySensor(mock_instance, "Test Lamp", description)
-
-        await sensor.async_added_to_hass()
-
-        mock_instance.set_update_callback.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_async_will_remove_from_hass(self, mock_instance: MagicMock) -> None:
-        """Test callback is removed when removed from hass."""
-        description = next(
-            d for d in THERAPY_BINARY_SENSOR_DESCRIPTIONS if d.key == "therapy_goal_reached"
-        )
-        sensor = BeurerTherapyBinarySensor(mock_instance, "Test Lamp", description)
-
-        await sensor.async_will_remove_from_hass()
-
-        mock_instance.remove_update_callback.assert_called_once()
-
-    def test_handle_update_writes_state(self, mock_instance: MagicMock) -> None:
-        """Test _handle_update writes HA state."""
-        description = next(
-            d for d in THERAPY_BINARY_SENSOR_DESCRIPTIONS if d.key == "therapy_goal_reached"
-        )
-        sensor = BeurerTherapyBinarySensor(mock_instance, "Test Lamp", description)
-
-        with patch.object(sensor, "async_write_ha_state") as mock_write:
-            sensor._handle_update()
-            mock_write.assert_called_once()
 
 
 # =============================================================================
@@ -348,8 +289,12 @@ class TestAsyncSetupEntry:
         """Test that async_setup_entry creates all expected sensors."""
         from custom_components.beurer_daylight_lamps.binary_sensor import async_setup_entry
 
+        mock_coordinator = create_mock_coordinator(mock_instance)
+        mock_runtime_data = MagicMock()
+        mock_runtime_data.coordinator = mock_coordinator
+
         mock_entry = MagicMock()
-        mock_entry.runtime_data = mock_instance
+        mock_entry.runtime_data = mock_runtime_data
         mock_entry.data = {"name": "Test Lamp"}
 
         mock_hass = MagicMock()
@@ -377,8 +322,12 @@ class TestAsyncSetupEntry:
         """Test that async_setup_entry uses default name when not provided."""
         from custom_components.beurer_daylight_lamps.binary_sensor import async_setup_entry
 
+        mock_coordinator = create_mock_coordinator(mock_instance)
+        mock_runtime_data = MagicMock()
+        mock_runtime_data.coordinator = mock_coordinator
+
         mock_entry = MagicMock()
-        mock_entry.runtime_data = mock_instance
+        mock_entry.runtime_data = mock_runtime_data
         mock_entry.data = {}  # No name provided
 
         mock_hass = MagicMock()

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from collections.abc import Generator
+from dataclasses import dataclass
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -10,6 +11,35 @@ from homeassistant.core import HomeAssistant
 from homeassistant.setup import async_setup_component
 
 from custom_components.beurer_daylight_lamps.const import DOMAIN
+
+
+@dataclass
+class MockRuntimeData:
+    """Mock runtime data matching BeurerRuntimeData structure.
+
+    This mirrors the BeurerRuntimeData dataclass from __init__.py
+    for use in tests without importing the actual integration.
+    """
+
+    instance: MagicMock
+    coordinator: MagicMock = None
+
+    def __post_init__(self):
+        if self.coordinator is None:
+            self.coordinator = MagicMock()
+            # Ensure coordinator.instance points to the same instance
+            self.coordinator.instance = self.instance
+
+
+def create_mock_coordinator(instance: MagicMock) -> MagicMock:
+    """Create a mock coordinator with the given instance."""
+    coordinator = MagicMock()
+    coordinator.instance = instance
+    coordinator.data = {
+        "is_on": instance.is_on if hasattr(instance, "is_on") else True,
+        "available": instance.available if hasattr(instance, "available") else True,
+    }
+    return coordinator
 
 
 @pytest.fixture(autouse=True)

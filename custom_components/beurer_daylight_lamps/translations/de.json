@@ -11,6 +11,21 @@
         },
         "initialization_failed": {
             "message": "Initialisierung von {name} fehlgeschlagen: {error}"
+        },
+        "timer_failed": {
+            "message": "Timer konnte nicht auf {name} gesetzt werden. Timer funktioniert nur im RGB/Farbmodus."
+        },
+        "timer_invalid_range": {
+            "message": "Timer muss zwischen 1 und 240 Minuten sein, erhalten: {minutes}."
+        },
+        "device_unavailable": {
+            "message": "Gerät {name} ist nicht verfügbar. Es ist möglicherweise außer Bluetooth-Reichweite oder ausgeschaltet."
+        },
+        "write_failed": {
+            "message": "Schreiben an {name} fehlgeschlagen. Die Bluetooth-Verbindung wurde möglicherweise unterbrochen."
+        },
+        "reconnect_failed": {
+            "message": "Wiederverbindung zu {name} nach mehreren Versuchen fehlgeschlagen. Versuchen Sie das Gerät näher zu bringen oder prüfen Sie ob es eingeschaltet ist."
         }
     },
     "config": {
@@ -70,6 +85,24 @@
             "reconfigure_successful": "Neukonfiguration erfolgreich"
         }
     },
+    "options": {
+        "step": {
+            "init": {
+                "title": "Beurer Lampe konfigurieren",
+                "description": "Passen Sie die Einstellungen für die Beurer Lampe an.",
+                "data": {
+                    "therapy_goal": "Tägliches Lichttherapie-Ziel (Minuten)",
+                    "update_interval": "Aktualisierungsintervall (Sekunden)",
+                    "adaptive_lighting_default": "Adaptive Beleuchtung standardmäßig aktivieren"
+                },
+                "data_description": {
+                    "therapy_goal": "Das tägliche Therapieziel in Minuten (5-120). Wird für die Fortschrittsverfolgung verwendet.",
+                    "update_interval": "Wie oft das Gerät nach Updates abgefragt wird (10-300 Sekunden).",
+                    "adaptive_lighting_default": "Wenn aktiviert, kann Adaptive Beleuchtung die Farbtemperatur dieser Lampe steuern."
+                }
+            }
+        }
+    },
     "issues": {
         "device_not_found": {
             "title": "{name} konnte nicht gefunden werden",
@@ -90,6 +123,13 @@
                         "title": "Initialisierung fehlgeschlagen",
                         "description": "Die Beurer Lampe **{name}** ({mac}) wurde gefunden, aber die Initialisierung ist fehlgeschlagen.\n\nFehler: {error}\n\nKlicken Sie auf Absenden um es erneut zu versuchen."
                     }
+                },
+                "error": {
+                    "still_not_found": "Gerät ist immer noch nicht erreichbar. Bitte prüfen Sie ob die Lampe eingeschaltet ist und sich in Bluetooth-Reichweite befindet.",
+                    "reload_failed": "Neuladen fehlgeschlagen. Bitte versuchen Sie es erneut oder starten Sie Home Assistant neu."
+                },
+                "abort": {
+                    "entry_not_found": "Konfigurationseintrag nicht gefunden."
                 }
             }
         }
@@ -154,6 +194,79 @@
             "adaptive_lighting": {
                 "name": "Adaptive Beleuchtung"
             }
+        }
+    },
+    "device_automation": {
+        "trigger_type": {
+            "turned_on": "Licht eingeschaltet",
+            "turned_off": "Licht ausgeschaltet",
+            "therapy_goal_reached": "Tägliches Therapieziel erreicht",
+            "connection_lost": "Verbindung zur Lampe verloren",
+            "connection_restored": "Verbindung zur Lampe wiederhergestellt"
+        }
+    },
+    "services": {
+        "apply_preset": {
+            "name": "Voreinstellung anwenden",
+            "description": "Wendet eine vordefinierte Lichtvoreinstellung auf die Lampe an",
+            "fields": {
+                "preset": {
+                    "name": "Voreinstellung",
+                    "description": "Die anzuwendende Voreinstellung (daylight_therapy, relax, focus, reading, warm_cozy, cool_bright, sunset, night_light, energize)"
+                }
+            }
+        },
+        "send_raw_command": {
+            "name": "Rohbefehl senden (Experte)",
+            "description": "Sendet einen rohen BLE-Befehl an die Lampe für Reverse Engineering und Tests",
+            "fields": {
+                "command": {
+                    "name": "Befehlsbytes",
+                    "description": "Hex-Bytes zum Senden (z.B. '33 01 1E'). Bekannt: 30=Status, 31=Helligkeit, 32=Farbe, 34=Effekt, 35=Aus, 36=Timer_abbrechen, 37=Modus, 38=Timer. Unbekannt: 33, 39"
+                }
+            }
+        },
+        "set_timer": {
+            "name": "Timer setzen",
+            "description": "Setzt einen Auto-Aus-Timer auf der Lampe. Funktioniert im Weiss- und RGB-Modus. Hinweis: Timer wird beim Moduswechsel automatisch abgebrochen.",
+            "fields": {
+                "minutes": {
+                    "name": "Minuten",
+                    "description": "Timer-Dauer in Minuten (1-120)"
+                }
+            }
+        },
+        "start_sunrise": {
+            "name": "Sonnenaufgang-Simulation starten",
+            "description": "Erhöht schrittweise Helligkeit und Farbtemperatur um einen natürlichen Sonnenaufgang zu simulieren. Dies ist eine Lifestyle/Wellness-Funktion für persönlichen Gebrauch, KEIN medizinisches Gerät.",
+            "fields": {
+                "duration": {
+                    "name": "Dauer",
+                    "description": "Dauer der Sonnenaufgang-Simulation in Minuten (1-60)"
+                },
+                "profile": {
+                    "name": "Profil",
+                    "description": "Sonnenaufgang-Profil: natural, gentle, energizing oder quick"
+                }
+            }
+        },
+        "start_sunset": {
+            "name": "Sonnenuntergang-Simulation starten",
+            "description": "Verringert schrittweise Helligkeit und Farbtemperatur um einen natürlichen Sonnenuntergang zu simulieren. Dies ist eine Lifestyle/Wellness-Funktion für persönlichen Gebrauch, KEIN medizinisches Gerät.",
+            "fields": {
+                "duration": {
+                    "name": "Dauer",
+                    "description": "Dauer der Sonnenuntergang-Simulation in Minuten (1-60)"
+                },
+                "profile": {
+                    "name": "Profil",
+                    "description": "Sonnenuntergang-Profil: natural, gentle oder quick"
+                }
+            }
+        },
+        "stop_simulation": {
+            "name": "Simulation stoppen",
+            "description": "Stoppt jede laufende Sonnenaufgang- oder Sonnenuntergang-Simulation auf der Lampe."
         }
     }
 }

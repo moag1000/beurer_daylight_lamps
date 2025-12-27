@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Any
 
 from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import (
     CONNECTION_BLUETOOTH,
     DeviceInfo,
@@ -12,10 +12,11 @@ from homeassistant.helpers.device_registry import (
 )
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import BeurerConfigEntry
-from .beurer_daylight_lamps import BeurerInstance
 from .const import DOMAIN, LOGGER, VERSION, detect_model
+from .coordinator import BeurerDataUpdateCoordinator
 
 
 SWITCH_DESCRIPTIONS = [
@@ -34,18 +35,20 @@ async def async_setup_entry(
 ) -> None:
     """Set up Beurer Daylight Lamp switches from a config entry."""
     LOGGER.debug("Setting up Beurer switch entities")
-    instance = entry.runtime_data
+    coordinator = entry.runtime_data.coordinator
     name = entry.data.get("name", "Beurer Lamp")
 
     entities = [
-        BeurerAdaptiveLightingSwitch(instance, name, entry.entry_id, desc)
+        BeurerAdaptiveLightingSwitch(coordinator, name, entry.entry_id, desc)
         for desc in SWITCH_DESCRIPTIONS
     ]
 
     async_add_entities(entities)
 
 
-class BeurerAdaptiveLightingSwitch(SwitchEntity, RestoreEntity):
+class BeurerAdaptiveLightingSwitch(
+    CoordinatorEntity[BeurerDataUpdateCoordinator], SwitchEntity, RestoreEntity
+):
     """Switch to control Adaptive Lighting integration for Beurer lamps.
 
     When enabled, allows the Adaptive Lighting integration (HACS) to control
@@ -62,13 +65,14 @@ class BeurerAdaptiveLightingSwitch(SwitchEntity, RestoreEntity):
 
     def __init__(
         self,
-        beurer_instance: BeurerInstance,
+        coordinator: BeurerDataUpdateCoordinator,
         name: str,
         entry_id: str,
         description: SwitchEntityDescription,
     ) -> None:
         """Initialize the switch."""
-        self._instance = beurer_instance
+        super().__init__(coordinator)
+        self._instance = coordinator.instance
         self._entry_id = entry_id
         self._device_name = name
         self.entity_description = description
@@ -77,6 +81,8 @@ class BeurerAdaptiveLightingSwitch(SwitchEntity, RestoreEntity):
 
     async def async_added_to_hass(self) -> None:
         """Run when entity about to be added to hass."""
+        await super().async_added_to_hass()
+
         # Restore previous state
         if (last_state := await self.async_get_last_state()) is not None:
             self._is_on = last_state.state == "on"
@@ -85,22 +91,14 @@ class BeurerAdaptiveLightingSwitch(SwitchEntity, RestoreEntity):
                 "enabled" if self._is_on else "disabled"
             )
 
-        # Register update callback
-        self._instance.set_update_callback(self._handle_update)
-
         # Store the switch reference in instance for light entity access
         self._instance.adaptive_lighting_switch = self
 
     async def async_will_remove_from_hass(self) -> None:
         """Run when entity will be removed from hass."""
-        self._instance.remove_update_callback(self._handle_update)
+        await super().async_will_remove_from_hass()
         if hasattr(self._instance, 'adaptive_lighting_switch'):
             delattr(self._instance, 'adaptive_lighting_switch')
-
-    @callback
-    def _handle_update(self) -> None:
-        """Handle device state update."""
-        self.async_write_ha_state()
 
     @property
     def available(self) -> bool:

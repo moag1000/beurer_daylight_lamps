@@ -3,14 +3,13 @@ from __future__ import annotations
 
 import asyncio
 
-from homeassistant.components.light import ColorMode
 from homeassistant.components.number import (
     NumberEntity,
     NumberEntityDescription,
     NumberMode,
 )
 from homeassistant.const import EntityCategory, PERCENTAGE, UnitOfTime
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.device_registry import (
     CONNECTION_BLUETOOTH,
@@ -18,10 +17,11 @@ from homeassistant.helpers.device_registry import (
     format_mac,
 )
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import BeurerConfigEntry
-from .beurer_daylight_lamps import BeurerInstance
 from .const import DOMAIN, LOGGER, VERSION, detect_model
+from .coordinator import BeurerDataUpdateCoordinator
 
 NUMBER_DESCRIPTIONS: tuple[NumberEntityDescription, ...] = (
     NumberEntityDescription(
@@ -51,21 +51,21 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Beurer number entities from a config entry."""
-    instance = entry.runtime_data
+    coordinator = entry.runtime_data.coordinator
     name = entry.data.get("name", "Beurer Lamp")
 
     entities: list[NumberEntity] = [
-        BeurerBrightnessNumber(instance, name, description)
+        BeurerBrightnessNumber(coordinator, name, description)
         for description in NUMBER_DESCRIPTIONS
     ]
     # Add timer entity
-    entities.append(BeurerTimerNumber(instance, name))
+    entities.append(BeurerTimerNumber(coordinator, name))
     # Add therapy daily goal entity
-    entities.append(BeurerTherapyGoalNumber(instance, name))
+    entities.append(BeurerTherapyGoalNumber(coordinator, name))
     async_add_entities(entities)
 
 
-class BeurerBrightnessNumber(NumberEntity):
+class BeurerBrightnessNumber(CoordinatorEntity[BeurerDataUpdateCoordinator], NumberEntity):
     """Representation of a Beurer brightness number."""
 
     _attr_has_entity_name = True
@@ -73,15 +73,16 @@ class BeurerBrightnessNumber(NumberEntity):
 
     def __init__(
         self,
-        instance: BeurerInstance,
+        coordinator: BeurerDataUpdateCoordinator,
         device_name: str,
         description: NumberEntityDescription,
     ) -> None:
         """Initialize the number."""
-        self._instance = instance
+        super().__init__(coordinator)
+        self._instance = coordinator.instance
         self._device_name = device_name
         self.entity_description = description
-        self._attr_unique_id = f"{format_mac(instance.mac)}_{description.key}"
+        self._attr_unique_id = f"{format_mac(self._instance.mac)}_{description.key}"
 
     @property
     def native_value(self) -> float | None:
@@ -114,19 +115,6 @@ class BeurerBrightnessNumber(NumberEntity):
             connections={(CONNECTION_BLUETOOTH, mac)},
         )
 
-    async def async_added_to_hass(self) -> None:
-        """Run when entity about to be added to hass."""
-        self._instance.set_update_callback(self._handle_update)
-
-    async def async_will_remove_from_hass(self) -> None:
-        """Run when entity will be removed from hass."""
-        self._instance.remove_update_callback(self._handle_update)
-
-    @callback
-    def _handle_update(self) -> None:
-        """Handle device state update."""
-        self.async_write_ha_state()
-
     async def async_set_native_value(self, value: float) -> None:
         """Set the brightness value."""
         # Convert from 0-100 to 0-255
@@ -139,7 +127,7 @@ class BeurerBrightnessNumber(NumberEntity):
             await self._instance.set_color_brightness(brightness)
 
 
-class BeurerTimerNumber(NumberEntity):
+class BeurerTimerNumber(CoordinatorEntity[BeurerDataUpdateCoordinator], NumberEntity):
     """Representation of a Beurer timer number.
 
     Timer works in both White and RGB mode.
@@ -158,13 +146,14 @@ class BeurerTimerNumber(NumberEntity):
 
     def __init__(
         self,
-        instance: BeurerInstance,
+        coordinator: BeurerDataUpdateCoordinator,
         device_name: str,
     ) -> None:
         """Initialize the timer number."""
-        self._instance = instance
+        super().__init__(coordinator)
+        self._instance = coordinator.instance
         self._device_name = device_name
-        self._attr_unique_id = f"{format_mac(instance.mac)}_timer"
+        self._attr_unique_id = f"{format_mac(self._instance.mac)}_timer"
 
     @property
     def native_value(self) -> float | None:
@@ -190,19 +179,6 @@ class BeurerTimerNumber(NumberEntity):
             sw_version=VERSION,
             connections={(CONNECTION_BLUETOOTH, mac)},
         )
-
-    async def async_added_to_hass(self) -> None:
-        """Run when entity about to be added to hass."""
-        self._instance.set_update_callback(self._handle_update)
-
-    async def async_will_remove_from_hass(self) -> None:
-        """Run when entity will be removed from hass."""
-        self._instance.remove_update_callback(self._handle_update)
-
-    @callback
-    def _handle_update(self) -> None:
-        """Handle device state update."""
-        self.async_write_ha_state()
 
     async def async_set_native_value(self, value: float) -> None:
         """Set the timer value in minutes.
@@ -245,7 +221,7 @@ class BeurerTimerNumber(NumberEntity):
             raise HomeAssistantError(f"Failed to set timer to {minutes} minutes")
 
 
-class BeurerTherapyGoalNumber(NumberEntity):
+class BeurerTherapyGoalNumber(CoordinatorEntity[BeurerDataUpdateCoordinator], NumberEntity):
     """Configurable daily light exposure goal.
 
     This is a lifestyle/wellness feature for personal tracking, NOT a medical device.
@@ -264,13 +240,14 @@ class BeurerTherapyGoalNumber(NumberEntity):
 
     def __init__(
         self,
-        instance: BeurerInstance,
+        coordinator: BeurerDataUpdateCoordinator,
         device_name: str,
     ) -> None:
         """Initialize the therapy goal number."""
-        self._instance = instance
+        super().__init__(coordinator)
+        self._instance = coordinator.instance
         self._device_name = device_name
-        self._attr_unique_id = f"{format_mac(instance.mac)}_therapy_goal"
+        self._attr_unique_id = f"{format_mac(self._instance.mac)}_therapy_goal"
 
     @property
     def native_value(self) -> float | None:
@@ -294,19 +271,6 @@ class BeurerTherapyGoalNumber(NumberEntity):
             sw_version=VERSION,
             connections={(CONNECTION_BLUETOOTH, mac)},
         )
-
-    async def async_added_to_hass(self) -> None:
-        """Run when entity about to be added to hass."""
-        self._instance.set_update_callback(self._handle_update)
-
-    async def async_will_remove_from_hass(self) -> None:
-        """Run when entity will be removed from hass."""
-        self._instance.remove_update_callback(self._handle_update)
-
-    @callback
-    def _handle_update(self) -> None:
-        """Handle device state update."""
-        self.async_write_ha_state()
 
     async def async_set_native_value(self, value: float) -> None:
         """Set the daily therapy goal in minutes."""

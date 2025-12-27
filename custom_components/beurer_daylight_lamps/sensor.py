@@ -8,7 +8,7 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.const import SIGNAL_STRENGTH_DECIBELS_MILLIWATT, UnitOfTime, PERCENTAGE
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import (
     CONNECTION_BLUETOOTH,
     DeviceInfo,
@@ -16,10 +16,11 @@ from homeassistant.helpers.device_registry import (
 )
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import BeurerConfigEntry
-from .beurer_daylight_lamps import BeurerInstance
 from .const import DOMAIN, VERSION, detect_model
+from .coordinator import BeurerDataUpdateCoordinator
 
 SENSOR_DESCRIPTIONS: tuple[SensorEntityDescription, ...] = (
     SensorEntityDescription(
@@ -72,37 +73,38 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Beurer sensors from a config entry."""
-    instance = entry.runtime_data
+    coordinator = entry.runtime_data.coordinator
     name = entry.data.get("name", "Beurer Lamp")
 
     entities: list[SensorEntity] = [
-        BeurerSensor(instance, name, description)
+        BeurerSensor(coordinator, name, description)
         for description in SENSOR_DESCRIPTIONS
     ]
     # Add therapy tracking sensors
     entities.extend([
-        BeurerTherapySensor(instance, name, description)
+        BeurerTherapySensor(coordinator, name, description)
         for description in THERAPY_SENSOR_DESCRIPTIONS
     ])
     async_add_entities(entities)
 
 
-class BeurerSensor(SensorEntity):
+class BeurerSensor(CoordinatorEntity[BeurerDataUpdateCoordinator], SensorEntity):
     """Representation of a Beurer sensor."""
 
     _attr_has_entity_name = True
 
     def __init__(
         self,
-        instance: BeurerInstance,
+        coordinator: BeurerDataUpdateCoordinator,
         device_name: str,
         description: SensorEntityDescription,
     ) -> None:
         """Initialize the sensor."""
-        self._instance = instance
+        super().__init__(coordinator)
+        self._instance = coordinator.instance
         self._device_name = device_name
         self.entity_description = description
-        self._attr_unique_id = f"{format_mac(instance.mac)}_{description.key}"
+        self._attr_unique_id = f"{format_mac(self._instance.mac)}_{description.key}"
 
     @property
     def native_value(self) -> int | str | None:
@@ -134,21 +136,8 @@ class BeurerSensor(SensorEntity):
             connections={(CONNECTION_BLUETOOTH, mac)},
         )
 
-    async def async_added_to_hass(self) -> None:
-        """Run when entity about to be added to hass."""
-        self._instance.set_update_callback(self._handle_update)
 
-    async def async_will_remove_from_hass(self) -> None:
-        """Run when entity will be removed from hass."""
-        self._instance.remove_update_callback(self._handle_update)
-
-    @callback
-    def _handle_update(self) -> None:
-        """Handle device state update."""
-        self.async_write_ha_state()
-
-
-class BeurerTherapySensor(SensorEntity):
+class BeurerTherapySensor(CoordinatorEntity[BeurerDataUpdateCoordinator], SensorEntity):
     """Sensor for tracking light exposure.
 
     NOTE: This is a lifestyle/wellness feature for personal tracking.
@@ -159,15 +148,16 @@ class BeurerTherapySensor(SensorEntity):
 
     def __init__(
         self,
-        instance: BeurerInstance,
+        coordinator: BeurerDataUpdateCoordinator,
         device_name: str,
         description: SensorEntityDescription,
     ) -> None:
         """Initialize the therapy sensor."""
-        self._instance = instance
+        super().__init__(coordinator)
+        self._instance = coordinator.instance
         self._device_name = device_name
         self.entity_description = description
-        self._attr_unique_id = f"{format_mac(instance.mac)}_{description.key}"
+        self._attr_unique_id = f"{format_mac(self._instance.mac)}_{description.key}"
 
     @property
     def native_value(self) -> float | int | None:
@@ -198,16 +188,3 @@ class BeurerTherapySensor(SensorEntity):
             sw_version=VERSION,
             connections={(CONNECTION_BLUETOOTH, mac)},
         )
-
-    async def async_added_to_hass(self) -> None:
-        """Run when entity about to be added to hass."""
-        self._instance.set_update_callback(self._handle_update)
-
-    async def async_will_remove_from_hass(self) -> None:
-        """Run when entity will be removed from hass."""
-        self._instance.remove_update_callback(self._handle_update)
-
-    @callback
-    def _handle_update(self) -> None:
-        """Handle device state update."""
-        self.async_write_ha_state()
