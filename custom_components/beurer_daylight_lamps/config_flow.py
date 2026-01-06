@@ -42,6 +42,7 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Beurer Daylight Lamps."""
 
     VERSION = 1
+    MINOR_VERSION = 1
 
     @staticmethod
     @callback
