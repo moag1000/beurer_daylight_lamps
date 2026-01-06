@@ -1,6 +1,6 @@
 # Beurer Daylight Therapy Lamps
 
-[![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
+[![HACS Default](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://github.com/hacs/integration)
 [![GitHub Release](https://img.shields.io/github/v/release/moag1000/beurer_daylight_lamps)](https://github.com/moag1000/beurer_daylight_lamps/releases)
 [![Validate](https://github.com/moag1000/beurer_daylight_lamps/actions/workflows/validate-hacs-hassfest.yml/badge.svg)](https://github.com/moag1000/beurer_daylight_lamps/actions/workflows/validate-hacs-hassfest.yml)
 [![Tests](https://github.com/moag1000/beurer_daylight_lamps/actions/workflows/tests.yml/badge.svg)](https://github.com/moag1000/beurer_daylight_lamps/actions/workflows/tests.yml)
@@ -165,9 +165,8 @@ target:
 
 1. Open HACS in Home Assistant
 2. Go to "Integrations"
-3. Click the three dots menu → "Custom repositories"
-4. Add `https://github.com/moag1000/beurer_daylight_lamps` as "Integration"
-5. Search for "Beurer Daylight Lamps" and install
+3. Search for "Beurer Daylight Lamps"
+4. Click "Download" and install
 
 ### Manual Installation
 

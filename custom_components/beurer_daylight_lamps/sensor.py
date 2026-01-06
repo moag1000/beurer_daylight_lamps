@@ -93,6 +93,10 @@ class BeurerSensor(CoordinatorEntity[BeurerDataUpdateCoordinator], SensorEntity)
 
     _attr_has_entity_name = True
 
+    # Prevent high-frequency diagnostic data from bloating the database
+    # RSSI changes with every BLE advertisement (multiple times per second)
+    _unrecorded_attributes = frozenset({"last_seen", "raw_value"})
+
     def __init__(
         self,
         coordinator: BeurerDataUpdateCoordinator,

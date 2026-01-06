@@ -69,6 +69,9 @@ class BeurerLight(CoordinatorEntity[BeurerDataUpdateCoordinator], LightEntity):
     _attr_min_color_temp_kelvin: int = MIN_COLOR_TEMP_KELVIN
     _attr_max_color_temp_kelvin: int = MAX_COLOR_TEMP_KELVIN
 
+    # Prevent high-frequency diagnostic data from bloating the database
+    _unrecorded_attributes = frozenset({"last_notification", "ble_rssi"})
+
     def __init__(
         self,
         coordinator: BeurerDataUpdateCoordinator,

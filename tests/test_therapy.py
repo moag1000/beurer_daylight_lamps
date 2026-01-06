@@ -160,8 +160,12 @@ class TestTherapyTracker:
 
         assert tracker.today_minutes == 0
 
-    def test_week_minutes(self) -> None:
+    def test_week_minutes(self, freezer) -> None:
         """Test weekly therapy minutes calculation."""
+        # Freeze time to Thursday so all 3 sessions (today, yesterday, 2 days ago)
+        # fall within the same week (Mon-Sun)
+        freezer.move_to("2026-01-08 12:00:00")  # Thursday
+
         tracker = TherapyTracker()
 
         # Add sessions from this week

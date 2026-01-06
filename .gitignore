@@ -129,3 +129,4 @@ dmypy.json
 .pyre/
 .ha_token
 SERVER_INFO.md
+CLAUDE.md
