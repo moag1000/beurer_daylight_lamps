@@ -302,7 +302,7 @@ class BeurerInstance:
 
     def _on_disconnect(self, client: BleakClient) -> None:
         """Handle disconnection callback."""
-        LOGGER.debug("Disconnected from %s", self._mac)
+        LOGGER.info("Disconnected from %s - will attempt reconnect", self._mac)
         self._available = False
         self._light_on = False
         self._color_on = False
@@ -310,6 +310,10 @@ class BeurerInstance:
         self._read_uuid = None
         if self._update_callbacks:
             self._safe_create_task(self._trigger_update(), "beurer_disconnect_update")
+        # Trigger auto-reconnect after disconnect (if device is still BLE reachable)
+        if self._ble_available and not self._reconnecting:
+            LOGGER.info("Device %s still BLE reachable, scheduling reconnect", self._mac)
+            self._safe_create_task(self._auto_reconnect(), "beurer_disconnect_reconnect")
 
     def _safe_create_task(
         self, coro: Coroutine[Any, Any, None], name: str | None = None
@@ -1174,10 +1178,12 @@ class BeurerInstance:
                 return True
 
             LOGGER.info(
-                "Connecting to %s (current device: %s)",
+                "Connecting to %s (device: %s, RSSI: %s dBm)",
                 self._mac,
                 getattr(self._ble_device, "name", "Unknown") if self._ble_device else "None",
+                self._rssi if self._rssi else "unknown",
             )
+            _connect_start = time.time()
 
             # Get initial device from HA - prefer GATT-capable adapters
             if self._hass:
@@ -1188,18 +1194,18 @@ class BeurerInstance:
 
                 if fresh_device:
                     self._ble_device = fresh_device
-                    LOGGER.info(
-                        "Selected adapter for %s (device name: %s)",
-                        self._mac,
-                        getattr(fresh_device, "name", "unknown"),
-                    )
-
                     # Get RSSI from service info
                     service_info = bluetooth.async_last_service_info(
                         self._hass, self._mac, connectable=True
                     )
                     if service_info and service_info.rssi:
                         self.update_rssi(service_info.rssi)
+                    LOGGER.info(
+                        "Selected adapter for %s (name: %s, RSSI: %s dBm)",
+                        self._mac,
+                        getattr(fresh_device, "name", "unknown"),
+                        service_info.rssi if service_info else "unknown",
+                    )
                 else:
                     # Try non-connectable as fallback
                     fresh_device = bluetooth.async_ble_device_from_address(
@@ -1255,7 +1261,12 @@ class BeurerInstance:
                 ble_device_callback=get_fresh_device,  # HA picks best adapter on each retry!
             )
 
-            LOGGER.info("Connected to %s successfully", self._mac)
+            LOGGER.info(
+                "Connected to %s successfully in %.1fs (RSSI: %s dBm)",
+                self._mac,
+                time.time() - _connect_start,
+                self._rssi if self._rssi else "unknown",
+            )
 
             # Connection successful - continue with setup
 

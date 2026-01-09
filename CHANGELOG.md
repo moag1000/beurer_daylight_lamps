@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.23.0] - 2026-01-09
+
+### Added
+
+- **Automatic Reconnect on Disconnect**: When the lamp disconnects but is still BLE-reachable, the integration now automatically attempts to reconnect
+  - Prevents the lamp from staying "unavailable" when the connection drops temporarily
+  - Especially useful with ESPHome Bluetooth Proxies where connections may be less stable
+
+### Improved
+
+- **Enhanced Diagnostic Logging**: Connection logs now include much more useful information
+  - RSSI (signal strength) shown in connection attempts and success messages
+  - Connection time measurement (e.g., "Connected in 24.9s")
+  - Adapter name shown in connection logs
+- **Better Timeout Error Messages**: Config flow connection timeout now shows:
+  - Device RSSI and adapter information
+  - Numbered troubleshooting steps (power cycle lamp, move closer, check connection slots, add proxy)
+- **Disconnect Visibility**: Disconnect events now logged at INFO level (previously DEBUG) for better visibility
+
 ## [1.22.0] - 2025-12-27
 
 ### Added

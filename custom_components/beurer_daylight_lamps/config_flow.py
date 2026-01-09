@@ -419,7 +419,12 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
                     self._rssi = rssi
                     self._instance = BeurerInstance(ble_device, rssi, self.hass)
 
-            LOGGER.debug("Testing connection to %s", self._mac)
+            LOGGER.info(
+                "Testing connection to %s (RSSI: %s dBm, adapter: %s)",
+                self._mac,
+                self._rssi if self._rssi else "unknown",
+                getattr(self._ble_device, "name", "unknown") if self._ble_device else "unknown",
+            )
             # Add timeout - ESPHome proxies can connect even to "non-connectable" devices
             # but we need a reasonable timeout to prevent hanging forever
             try:
@@ -428,8 +433,14 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
             except asyncio.TimeoutError:
                 LOGGER.error(
                     "Connection test timed out for %s after 45s. "
-                    "If using ESPHome Bluetooth Proxy, ensure the proxy is online and in range.",
+                    "Device RSSI: %s dBm, Adapter: %s. "
+                    "Troubleshooting: (1) Power cycle the lamp (turn off/on at switch), "
+                    "(2) Move lamp closer to Bluetooth adapter, "
+                    "(3) Check if other BLE devices are using connection slots, "
+                    "(4) Consider adding an ESPHome Bluetooth Proxy for better range.",
                     self._mac,
+                    self._rssi if self._rssi else "unknown",
+                    getattr(self._ble_device, "name", "unknown") if self._ble_device else "unknown",
                 )
                 return False
             await asyncio.sleep(0.5)
