@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.24.0] - 2026-01-09
+
+### Fixed
+
+- **BlueZ Notification Workaround**: Added workaround for bleak 2.0.0 regression on Linux/BlueZ
+  - bleak 2.0.0 (shipped with HA 2026.1) switched from `StartNotify` to `AcquireNotify`
+  - This can cause notification issues or disconnects on some BLE devices
+  - Integration now uses `bluez={"use_start_notify": True}` when available (bleak >= 2.1.0)
+  - Backwards compatible: Falls back to default behavior on older bleak versions
+  - See [home-assistant/core#160503](https://github.com/home-assistant/core/issues/160503)
+
 ## [1.23.0] - 2026-01-09
 
 ### Added

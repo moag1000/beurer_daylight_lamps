@@ -1308,8 +1308,20 @@ class BeurerInstance:
             )
 
             # Start notifications
-            await self._client.start_notify(self._read_uuid, self._handle_notification)
-            LOGGER.debug("Notifications started for %s", self._mac)
+            # Workaround for bleak 2.0.0 regression on BlueZ (HA 2026.1)
+            # bleak 2.0.0 switched to AcquireNotify which breaks some devices
+            # bleak 2.1.0 added bluez={"use_start_notify": True} to force old behavior
+            try:
+                await self._client.start_notify(
+                    self._read_uuid,
+                    self._handle_notification,
+                    bluez={"use_start_notify": True},
+                )
+                LOGGER.debug("Notifications started for %s (using StartNotify)", self._mac)
+            except TypeError:
+                # bleak < 2.1.0: bluez parameter not supported, use default
+                await self._client.start_notify(self._read_uuid, self._handle_notification)
+                LOGGER.debug("Notifications started for %s", self._mac)
 
             # Get initial status
             await self._request_status()
