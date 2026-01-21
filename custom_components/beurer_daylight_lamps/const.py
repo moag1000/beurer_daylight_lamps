@@ -5,7 +5,7 @@ import logging
 from typing import Final
 
 DOMAIN: Final = "beurer_daylight_lamps"
-VERSION: Final = "1.22.0"
+VERSION: Final = "1.25.0"
 LOGGER = logging.getLogger(__package__)
 
 # BLE Characteristic UUIDs
@@ -38,6 +38,19 @@ TURN_OFF_DELAY: Final = 0.15    # Short delay after turn off sequence
 
 # Rate limiting for commands to prevent overwhelming the device
 MIN_COMMAND_INTERVAL: Final = 0.1  # Minimum time between commands (100ms)
+
+# Reconnection timing constants
+RECONNECT_INITIAL_BACKOFF: Final = 1.0    # Initial delay before reconnect (seconds)
+RECONNECT_MAX_BACKOFF: Final = 60.0       # Maximum backoff delay (seconds)
+RECONNECT_BACKOFF_MULTIPLIER: Final = 2.0 # Backoff multiplier on each failure
+RECONNECT_MIN_INTERVAL: Final = 30.0      # Minimum time between reconnect attempts (seconds)
+
+# Connection health monitoring
+CONNECTION_WATCHDOG_INTERVAL: Final = 60.0  # Check connection health every N seconds
+CONNECTION_STALE_TIMEOUT: Final = 300.0     # Consider connection stale after N seconds without data
+
+# Adapter failure tracking
+ADAPTER_FAILURE_COOLDOWN: Final = 300.0  # Cooldown for failed adapters (seconds)
 
 # Supported light effects (index corresponds to protocol value)
 SUPPORTED_EFFECTS: Final[list[str]] = [

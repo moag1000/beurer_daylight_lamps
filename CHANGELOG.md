@@ -5,6 +5,64 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.25.0] - 2026-01-21
+
+### Added
+
+- **Exponential Backoff for Reconnections**: Reconnect attempts now use exponential backoff
+  - Starts at 1 second, doubles on each failure, maxes out at 60 seconds
+  - Prevents overwhelming the BLE stack with rapid reconnection attempts
+  - Automatically resets when connection succeeds or device becomes reachable again
+
+- **Connection Watchdog**: Monitors connection health and detects stale connections
+  - Checks every 60 seconds if data has been received
+  - Forces reconnect if no data received for 5 minutes (stale connection)
+  - Properly cleaned up on disconnect
+
+- **Adapter Failure Tracking**: Intelligent rotation between Bluetooth adapters
+  - Tracks which adapters failed recently (5 minute cooldown)
+  - Prefers adapters that haven't failed when reconnecting
+  - Falls back to cooldown adapters if all have failed
+
+- **Reconnect Cooldown**: Prevents reconnect spam from frequent BLE advertisements
+  - Minimum 30 seconds between reconnect attempts triggered by advertisements
+  - Prevents queueing too many reconnect tasks
+
+### Fixed
+
+- **Race Condition in Reconnect Logic**: Fixed TOCTOU (Time-of-Check-Time-of-Use) race condition
+  - Previously checked `lock.locked()` before acquiring, which could allow parallel reconnects
+  - Now uses proper `async with lock` pattern with checks inside the lock
+  - Affects `_auto_reconnect()`, `mark_seen()`, and `_on_disconnect()`
+
+- **Watchdog Task Tracking**: Fixed memory leak where watchdog tasks were not properly tracked
+  - `_safe_create_task()` now returns task reference
+  - Watchdog task is now properly stored and can be cancelled on disconnect
+  - Task cleanup in `finally` block ensures proper cleanup on exit
+
+- **CancelledError Handling**: Fixed improper handling of task cancellation
+  - `asyncio.CancelledError` is now properly re-raised to signal cancellation
+  - Prevents tasks from hanging during Home Assistant shutdown
+  - Applies to `_auto_reconnect()`, `_safe_create_task()`, and watchdog loop
+
+### Changed
+
+- **Logging Levels**: Adjusted logging levels for better signal-to-noise ratio
+  - Routine reconnect attempts now use DEBUG level (was INFO)
+  - Reconnect failures now use WARNING level (was DEBUG)
+  - Successful reconnects still use INFO level
+
+### Technical Details
+
+New constants added to `const.py`:
+- `RECONNECT_INITIAL_BACKOFF = 1.0` - Initial reconnect delay (seconds)
+- `RECONNECT_MAX_BACKOFF = 60.0` - Maximum reconnect delay (seconds)
+- `RECONNECT_BACKOFF_MULTIPLIER = 2.0` - Backoff multiplier on each failure
+- `RECONNECT_MIN_INTERVAL = 30.0` - Minimum time between reconnect attempts
+- `CONNECTION_WATCHDOG_INTERVAL = 60.0` - Watchdog check interval (seconds)
+- `CONNECTION_STALE_TIMEOUT = 300.0` - Time without data before connection is stale
+- `ADAPTER_FAILURE_COOLDOWN = 300.0` - Cooldown for failed adapters (seconds)
+
 ## [1.24.0] - 2026-01-09
 
 ### Fixed

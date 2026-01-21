@@ -63,6 +63,16 @@ from .const import (
     STATUS_DELAY,
     TURN_OFF_DELAY,
     MIN_COMMAND_INTERVAL,
+    # Reconnection constants
+    RECONNECT_INITIAL_BACKOFF,
+    RECONNECT_MAX_BACKOFF,
+    RECONNECT_BACKOFF_MULTIPLIER,
+    RECONNECT_MIN_INTERVAL,
+    # Connection health constants
+    CONNECTION_WATCHDOG_INTERVAL,
+    CONNECTION_STALE_TIMEOUT,
+    # Adapter failure constants
+    ADAPTER_FAILURE_COOLDOWN,
 )
 
 
@@ -119,8 +129,16 @@ class BeurerInstance:
         self._timer_active: bool = False
         self._timer_minutes: int | None = None
 
-        # Reconnection state (prevents multiple parallel reconnect attempts)
-        self._reconnecting: bool = False
+        # Reconnection state - using asyncio.Lock for thread-safety
+        self._reconnect_lock: asyncio.Lock = asyncio.Lock()
+        self._reconnect_backoff: float = RECONNECT_INITIAL_BACKOFF
+        self._last_reconnect_attempt: float = 0.0
+
+        # Adapter failure tracking for intelligent rotation
+        self._adapter_failures: dict[str, float] = {}  # source -> failure timestamp
+
+        # Connection watchdog task reference
+        self._watchdog_task: asyncio.Task[None] | None = None
 
         # Therapy tracking - sunrise/sunset simulation and exposure tracking
         self._sunrise_simulation: SunriseSimulation | None = None
@@ -152,17 +170,27 @@ class BeurerInstance:
         if was_ble_unavailable:
             LOGGER.info("Device %s is now reachable again", self._mac)
             self._ble_available = True
+            # Reset backoff when device becomes reachable again
+            self._reconnect_backoff = RECONNECT_INITIAL_BACKOFF
             self._safe_create_task(self._trigger_update(), "beurer_ble_reachable_update")
 
-        # Auto-reconnect if:
-        # 1. Device was BLE unavailable and we're not connected, OR
-        # 2. Device is BLE available but not connected (stale connection)
-        # But not if already reconnecting
+        # Auto-reconnect if device needs it
+        # The _auto_reconnect method is thread-safe and handles the lock internally
         should_reconnect = (
-            not self._reconnecting
-            and not self.is_connected
+            not self.is_connected
             and (was_ble_unavailable or not self._available)
         )
+
+        # Apply cooldown to prevent queueing too many reconnect attempts
+        # from frequent BLE advertisements
+        now = time.time()
+        if should_reconnect and (now - self._last_reconnect_attempt) < RECONNECT_MIN_INTERVAL:
+            LOGGER.debug(
+                "Device %s reconnect skipped - cooldown active (%.1fs remaining)",
+                self._mac,
+                RECONNECT_MIN_INTERVAL - (now - self._last_reconnect_attempt),
+            )
+            should_reconnect = False
 
         if should_reconnect:
             LOGGER.debug(
@@ -183,31 +211,94 @@ class BeurerInstance:
             self._safe_create_task(self._trigger_update(), "beurer_unavailable_update")
 
     async def _auto_reconnect(self) -> None:
-        """Automatically reconnect when device becomes available again."""
-        if self._reconnecting:
-            return  # Already reconnecting
+        """Automatically reconnect when device becomes available again.
 
-        self._reconnecting = True
-        try:
-            # Small delay to let BLE stack settle
-            await asyncio.sleep(1)
+        Uses exponential backoff to avoid overwhelming the BLE stack with
+        rapid reconnection attempts. The backoff is reset when:
+        - Connection succeeds
+        - Device becomes BLE reachable again after being unavailable
 
-            if self._available:
-                # Already available, no need to reconnect
+        This method uses asyncio.Lock to ensure only one reconnect runs at a time.
+        Multiple callers will wait for the lock, then check if reconnect is still needed.
+        """
+        async with self._reconnect_lock:
+            # Check if reconnect is still needed (another caller may have connected)
+            if self._available or self.is_connected:
+                LOGGER.debug(
+                    "Auto-reconnect to %s skipped - already connected",
+                    self._mac,
+                )
+                self._reconnect_backoff = RECONNECT_INITIAL_BACKOFF
                 return
 
-            LOGGER.info("Auto-reconnecting to %s", self._mac)
-            connected = await self.connect()
+            # Check if device is BLE reachable
+            if not self._ble_available:
+                LOGGER.debug(
+                    "Auto-reconnect to %s skipped - device not BLE reachable",
+                    self._mac,
+                )
+                return
 
-            if connected:
-                LOGGER.info("Auto-reconnect to %s successful", self._mac)
-            else:
-                LOGGER.debug("Auto-reconnect to %s failed, will retry on next advertisement", self._mac)
+            self._last_reconnect_attempt = time.time()
 
-        except Exception as err:
-            LOGGER.debug("Auto-reconnect to %s failed: %s", self._mac, err)
-        finally:
-            self._reconnecting = False
+            # Apply exponential backoff delay
+            LOGGER.debug(
+                "Auto-reconnect to %s starting (backoff: %.1fs)",
+                self._mac,
+                self._reconnect_backoff,
+            )
+            await asyncio.sleep(self._reconnect_backoff)
+
+            # Re-check conditions after delay (device state may have changed)
+            if self._available or self.is_connected:
+                LOGGER.debug(
+                    "Auto-reconnect to %s cancelled - connected during backoff",
+                    self._mac,
+                )
+                self._reconnect_backoff = RECONNECT_INITIAL_BACKOFF
+                return
+
+            if not self._ble_available:
+                LOGGER.debug(
+                    "Auto-reconnect to %s cancelled - device became unreachable",
+                    self._mac,
+                )
+                return
+
+            LOGGER.debug("Auto-reconnecting to %s", self._mac)
+
+            try:
+                connected = await self.connect()
+
+                if connected:
+                    LOGGER.info("Auto-reconnect to %s successful", self._mac)
+                    self._reconnect_backoff = RECONNECT_INITIAL_BACKOFF
+                else:
+                    self._reconnect_backoff = min(
+                        self._reconnect_backoff * RECONNECT_BACKOFF_MULTIPLIER,
+                        RECONNECT_MAX_BACKOFF,
+                    )
+                    LOGGER.debug(
+                        "Auto-reconnect to %s failed, next backoff: %.1fs",
+                        self._mac,
+                        self._reconnect_backoff,
+                    )
+
+            except asyncio.CancelledError:
+                LOGGER.debug("Auto-reconnect to %s cancelled", self._mac)
+                raise  # Re-raise to properly handle cancellation
+
+            except Exception as err:
+                self._reconnect_backoff = min(
+                    self._reconnect_backoff * RECONNECT_BACKOFF_MULTIPLIER,
+                    RECONNECT_MAX_BACKOFF,
+                )
+                LOGGER.warning(
+                    "Auto-reconnect to %s failed: %s (next backoff: %.1fs)",
+                    self._mac,
+                    err,
+                    self._reconnect_backoff,
+                )
 
     @property
     def ble_available(self) -> bool:
@@ -308,16 +399,22 @@ class BeurerInstance:
         self._color_on = False
         self._write_uuid = None
         self._read_uuid = None
+
+        # Stop the connection watchdog
+        self._stop_watchdog()
+
         if self._update_callbacks:
             self._safe_create_task(self._trigger_update(), "beurer_disconnect_update")
+
         # Trigger auto-reconnect after disconnect (if device is still BLE reachable)
-        if self._ble_available and not self._reconnecting:
-            LOGGER.info("Device %s still BLE reachable, scheduling reconnect", self._mac)
+        # The _auto_reconnect method is thread-safe and handles concurrency internally
+        if self._ble_available:
+            LOGGER.debug("Device %s still BLE reachable, scheduling reconnect", self._mac)
             self._safe_create_task(self._auto_reconnect(), "beurer_disconnect_reconnect")
 
     def _safe_create_task(
         self, coro: Coroutine[Any, Any, None], name: str | None = None
-    ) -> None:
+    ) -> asyncio.Task[None] | None:
         """Create an asyncio task with error handling.
 
         This prevents unhandled exceptions in fire-and-forget tasks from
@@ -326,28 +423,104 @@ class BeurerInstance:
         Args:
             coro: The coroutine to run
             name: Optional name for the task (for debugging)
+
+        Returns:
+            The created task, or None if task creation failed.
         """
         task_name = name or f"beurer_task_{self._mac}"
 
         async def _wrapped() -> None:
             try:
                 await coro
+            except asyncio.CancelledError:
+                LOGGER.debug("Background task '%s' cancelled for %s", task_name, self._mac)
+                raise  # Re-raise to properly signal cancellation
             except Exception as err:
                 LOGGER.error("Error in background task '%s' for %s: %s", task_name, self._mac, err)
 
         try:
             # Prefer Home Assistant's task creation if available
             if self._hass is not None:
-                self._hass.async_create_background_task(
+                return self._hass.async_create_background_task(
                     _wrapped(),
                     task_name,
                 )
             else:
                 # Fallback for standalone usage
-                asyncio.create_task(_wrapped(), name=task_name)
+                return asyncio.create_task(_wrapped(), name=task_name)
         except RuntimeError:
             # No event loop running (e.g., during shutdown)
             LOGGER.debug("Could not create task '%s' - no event loop running", task_name)
+            return None
+
+    def _start_watchdog(self) -> None:
+        """Start the connection watchdog task.
+
+        The watchdog monitors connection health and triggers reconnection
+        if the connection becomes stale (no data received for too long).
+        """
+        self._stop_watchdog()  # Cancel any existing watchdog
+
+        async def _watchdog_loop() -> None:
+            """Periodically check connection health."""
+            try:
+                while True:
+                    try:
+                        await asyncio.sleep(CONNECTION_WATCHDOG_INTERVAL)
+
+                        if not self.is_connected:
+                            LOGGER.debug("Watchdog: %s not connected, stopping", self._mac)
+                            break
+
+                        time_since_data = time.time() - self._last_seen
+                        if time_since_data > CONNECTION_STALE_TIMEOUT:
+                            LOGGER.warning(
+                                "Watchdog: Connection to %s appears stale (%.0fs without data), forcing reconnect",
+                                self._mac,
+                                time_since_data,
+                            )
+                            # Disconnect and let auto-reconnect handle it
+                            await self.disconnect()
+                            if self._ble_available:
+                                self._safe_create_task(
+                                    self._auto_reconnect(),
+                                    "beurer_watchdog_reconnect",
+                                )
+                            break
+                        else:
+                            LOGGER.debug(
+                                "Watchdog: %s healthy (last data %.0fs ago)",
+                                self._mac,
+                                time_since_data,
+                            )
+
+                    except asyncio.CancelledError:
+                        LOGGER.debug("Watchdog: %s cancelled", self._mac)
+                        raise  # Re-raise to exit the loop
+
+                    except Exception as err:
+                        LOGGER.error("Watchdog: Error for %s: %s", self._mac, err)
+                        break  # Exit loop on unexpected error
+
+            finally:
+                # Clear task reference when loop exits
+                self._watchdog_task = None
+                LOGGER.debug("Watchdog: %s exited", self._mac)
+
+        # Store task reference for proper cleanup
+        self._watchdog_task = self._safe_create_task(
+            _watchdog_loop(),
+            f"beurer_watchdog_{self._mac}",
+        )
+        if self._watchdog_task:
+            LOGGER.debug("Started connection watchdog for %s", self._mac)
+
+    def _stop_watchdog(self) -> None:
+        """Stop the connection watchdog task."""
+        if self._watchdog_task is not None:
+            self._watchdog_task.cancel()
+            # Don't set to None here - the finally block in the task will do it
+            LOGGER.debug("Stopping connection watchdog for %s", self._mac)
 
     def set_update_callback(self, callback: Callable[[], None] | None) -> None:
         """Register or unregister a callback for state updates."""
@@ -1105,11 +1278,64 @@ class BeurerInstance:
         LOGGER.debug("Source '%s' assumed GATT-capable (unknown type)", source)
         return True
 
+    def _is_adapter_in_cooldown(self, source: str) -> bool:
+        """Check if an adapter is in failure cooldown.
+
+        Args:
+            source: The Bluetooth source identifier
+
+        Returns:
+            True if the adapter recently failed and should be skipped
+        """
+        fail_time = self._adapter_failures.get(source)
+        if fail_time is None:
+            return False
+
+        elapsed = time.time() - fail_time
+        if elapsed < ADAPTER_FAILURE_COOLDOWN:
+            LOGGER.debug(
+                "Adapter '%s' in cooldown (%.0fs remaining)",
+                source,
+                ADAPTER_FAILURE_COOLDOWN - elapsed,
+            )
+            return True
+
+        # Cooldown expired, remove from failures
+        del self._adapter_failures[source]
+        LOGGER.debug("Adapter '%s' cooldown expired, now available", source)
+        return False
+
+    def _mark_adapter_failed(self, source: str) -> None:
+        """Mark an adapter as failed, putting it in cooldown.
+
+        Args:
+            source: The Bluetooth source identifier that failed
+        """
+        self._adapter_failures[source] = time.time()
+        LOGGER.debug(
+            "Marked adapter '%s' as failed (cooldown: %.0fs)",
+            source,
+            ADAPTER_FAILURE_COOLDOWN,
+        )
+
+    def _clear_adapter_failure(self, source: str) -> None:
+        """Clear adapter failure status after successful connection.
+
+        Args:
+            source: The Bluetooth source identifier
+        """
+        if source in self._adapter_failures:
+            del self._adapter_failures[source]
+            LOGGER.debug("Cleared failure status for adapter '%s'", source)
+
     def _get_gatt_capable_device(self) -> BLEDevice | None:
         """Get a BLE device from a GATT-capable adapter.
 
         This method filters out passive-only Bluetooth sources (like Shelly plugs)
         and prefers GATT-capable adapters (ESPHome Proxies, local adapters).
+
+        Adapters that recently failed are put in a cooldown period and will be
+        skipped in favor of other available adapters.
 
         Returns:
             BLEDevice from a GATT-capable source, or None if not found
@@ -1126,24 +1352,39 @@ class BeurerInstance:
         )
 
         gatt_capable_infos = []
+        cooldown_infos = []
         non_gatt_infos = []
 
         for scanner_device in all_service_infos:
             source = scanner_device.scanner.source
-            if self._is_gatt_capable_source(source):
-                gatt_capable_infos.append((scanner_device, source))
-            else:
+            if not self._is_gatt_capable_source(source):
                 non_gatt_infos.append((scanner_device, source))
+            elif self._is_adapter_in_cooldown(source):
+                cooldown_infos.append((scanner_device, source))
+            else:
+                gatt_capable_infos.append((scanner_device, source))
 
         if gatt_capable_infos:
-            # Pick the one with best RSSI from GATT-capable sources
+            # Pick the one with best RSSI from available GATT-capable sources
             best = max(gatt_capable_infos, key=lambda x: x[0].advertisement.rssi or -100)
             LOGGER.info(
-                "Selected GATT-capable adapter '%s' for %s (RSSI: %s, skipped %d non-GATT sources)",
+                "Selected GATT-capable adapter '%s' for %s (RSSI: %s, skipped %d non-GATT, %d in cooldown)",
                 best[1],
                 self._mac,
                 best[0].advertisement.rssi,
                 len(non_gatt_infos),
+                len(cooldown_infos),
+            )
+            return best[0].ble_device
+
+        # If all GATT-capable adapters are in cooldown, use one anyway (best effort)
+        if cooldown_infos:
+            best = max(cooldown_infos, key=lambda x: x[0].advertisement.rssi or -100)
+            LOGGER.warning(
+                "All GATT-capable adapters in cooldown for %s, using '%s' anyway (RSSI: %s)",
+                self._mac,
+                best[1],
+                best[0].advertisement.rssi,
             )
             return best[0].ble_device
 
@@ -1332,6 +1573,21 @@ class BeurerInstance:
                 self._available = True
                 await self._trigger_update()
 
+            # Connection successful - clear any adapter failure status
+            if self._hass:
+                from homeassistant.components import bluetooth
+                service_info = bluetooth.async_last_service_info(
+                    self._hass, self._mac, connectable=True
+                )
+                if service_info:
+                    self._clear_adapter_failure(service_info.source)
+
+            # Reset reconnect backoff on successful connection
+            self._reconnect_backoff = RECONNECT_INITIAL_BACKOFF
+
+            # Start connection watchdog to detect stale connections
+            self._start_watchdog()
+
             return True
 
         except BleakError as err:
@@ -1362,6 +1618,15 @@ class BeurerInstance:
                 type(err).__name__,
             )
 
+        # Mark the adapter that failed so we try a different one next time
+        if self._hass:
+            from homeassistant.components import bluetooth
+            service_info = bluetooth.async_last_service_info(
+                self._hass, self._mac, connectable=True
+            )
+            if service_info:
+                self._mark_adapter_failed(service_info.source)
+
         await self.disconnect()
         return False
 
@@ -1388,6 +1653,9 @@ class BeurerInstance:
     async def disconnect(self) -> None:
         """Disconnect from the device and reset connection state."""
         LOGGER.debug("Disconnecting from %s", self._mac)
+
+        # Stop the connection watchdog
+        self._stop_watchdog()
 
         if self._client is not None and self._client.is_connected:
             try:
