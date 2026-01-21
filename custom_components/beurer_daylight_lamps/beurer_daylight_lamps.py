@@ -252,16 +252,16 @@ class BeurerInstance:
             # Re-check conditions after delay (device state may have changed during sleep)
             # Note: mypy thinks these are unreachable because it doesn't understand that
             # state can change during await. These checks ARE necessary.
-            if self._available or self.is_connected:  # type: ignore[unreachable]
-                LOGGER.debug(
+            if self._available or self.is_connected:
+                LOGGER.debug(  # type: ignore[unreachable]
                     "Auto-reconnect to %s cancelled - connected during backoff",
                     self._mac,
                 )
                 self._reconnect_backoff = RECONNECT_INITIAL_BACKOFF
                 return
 
-            if not self._ble_available:  # type: ignore[unreachable]
-                LOGGER.debug(
+            if not self._ble_available:
+                LOGGER.debug(  # type: ignore[unreachable]
                     "Auto-reconnect to %s cancelled - device became unreachable",
                     self._mac,
                 )
