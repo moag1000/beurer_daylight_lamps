@@ -17,16 +17,21 @@ from homeassistant.components.light import ColorMode  # type: ignore[attr-define
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import DOMAIN, LOGGER
+from .const import (
+    DOMAIN,
+    LOGGER,
+    POLL_INTERVAL_LIGHT_ON,
+    POLL_INTERVAL_LIGHT_OFF,
+    POLL_INTERVAL_UNAVAILABLE,
+)
 
 if TYPE_CHECKING:
     from .beurer_daylight_lamps import BeurerInstance
 
 
-# Minimum update interval for periodic refresh
-# BLE notifications are the primary update mechanism, but we refresh
-# periodically to ensure state consistency
-UPDATE_INTERVAL = timedelta(minutes=5)
+# Default update interval (used initially before state is known)
+# Will be dynamically adjusted based on device state
+DEFAULT_UPDATE_INTERVAL = timedelta(seconds=POLL_INTERVAL_LIGHT_OFF)
 
 
 class BeurerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
@@ -56,11 +61,14 @@ class BeurerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             hass,
             LOGGER,
             name=f"Beurer {name}",
-            update_interval=UPDATE_INTERVAL,
+            update_interval=DEFAULT_UPDATE_INTERVAL,
             always_update=False,  # Only update when data changes
         )
         self.instance = instance
         self.device_name = name
+
+        # Track the current polling state for adaptive intervals
+        self._last_poll_state: str = "unknown"
 
         # Register for push updates from BLE notifications
         self.instance.set_update_callback(self._handle_push_update)
@@ -74,6 +82,57 @@ class BeurerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """
         LOGGER.debug("Push update received from %s", self.instance.mac)
         self.async_set_updated_data(self._get_current_data())
+        # Adjust polling interval based on new state
+        self._adjust_polling_interval()
+
+    def _get_adaptive_interval(self) -> timedelta:
+        """Calculate the appropriate polling interval based on device state.
+
+        Returns:
+            timedelta: The polling interval to use
+        """
+        # If device is unavailable, use longest interval
+        if not self.instance.ble_available:
+            return timedelta(seconds=POLL_INTERVAL_UNAVAILABLE)
+
+        # If light is on, poll more frequently for responsive updates
+        if self.instance.is_on:
+            return timedelta(seconds=POLL_INTERVAL_LIGHT_ON)
+
+        # Light is off but device is available - standard interval
+        return timedelta(seconds=POLL_INTERVAL_LIGHT_OFF)
+
+    def _get_poll_state(self) -> str:
+        """Get a string representing current polling state."""
+        if not self.instance.ble_available:
+            return "unavailable"
+        if self.instance.is_on:
+            return "on"
+        return "off"
+
+    @callback
+    def _adjust_polling_interval(self) -> None:
+        """Adjust the polling interval based on current device state.
+
+        This implements adaptive polling:
+        - 30 seconds when light is on (responsive updates)
+        - 5 minutes when light is off (save resources)
+        - 15 minutes when device unavailable (minimal polling)
+        """
+        new_interval = self._get_adaptive_interval()
+        new_state = self._get_poll_state()
+
+        # Only log and update if the interval actually changed
+        if new_state != self._last_poll_state:
+            LOGGER.debug(
+                "Adaptive polling for %s: state=%s -> %s, interval=%ds",
+                self.instance.mac,
+                self._last_poll_state,
+                new_state,
+                int(new_interval.total_seconds()),
+            )
+            self._last_poll_state = new_state
+            self.update_interval = new_interval
 
     def _get_current_data(self) -> dict[str, Any]:
         """Get current device state as dictionary.
@@ -108,6 +167,11 @@ class BeurerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "therapy_goal_reached": self.instance.therapy_goal_reached,
             "therapy_goal_progress_pct": self.instance.therapy_goal_progress_pct,
             "therapy_daily_goal": self.instance.therapy_daily_goal,
+            # Connection health metrics
+            "reconnect_count": self.instance.reconnect_count,
+            "command_success_rate": self.instance.command_success_rate,
+            "connection_uptime": self.instance.connection_uptime_seconds,
+            "total_commands": self.instance.total_commands,
         }
 
     async def _async_update_data(self) -> dict[str, Any]:
@@ -135,7 +199,12 @@ class BeurerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     self.instance.mac,
                 )
 
-            return self._get_current_data()
+            data = self._get_current_data()
+
+            # Adjust polling interval after each update
+            self._adjust_polling_interval()
+
+            return data
 
         except Exception as err:
             LOGGER.debug(
@@ -143,6 +212,9 @@ class BeurerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self.instance.mac,
                 err,
             )
+            # Adjust polling interval even on failure
+            self._adjust_polling_interval()
+
             # Don't raise UpdateFailed for BLE - device might be temporarily
             # out of range, and we don't want to mark entities unavailable
             # The availability is managed by the BLE stack
@@ -195,3 +267,15 @@ class BeurerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def rssi(self) -> int | None:
         """Return RSSI signal strength."""
         return self.data.get("rssi") if self.data else None
+
+    @property
+    def current_poll_interval(self) -> int:
+        """Return current polling interval in seconds."""
+        if self.update_interval:
+            return int(self.update_interval.total_seconds())
+        return POLL_INTERVAL_LIGHT_OFF
+
+    @property
+    def poll_state(self) -> str:
+        """Return current polling state (on/off/unavailable)."""
+        return self._last_poll_state

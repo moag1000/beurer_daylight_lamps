@@ -7,7 +7,7 @@
             "message": "Failed to connect to {name}. The device may be out of range or already connected to another device."
         },
         "command_failed": {
-            "message": "Failed to send command to {name}. Please try again."
+            "message": "Failed to send command to device(s): {devices}. Please try again."
         },
         "initialization_failed": {
             "message": "Failed to initialize {name}: {error}"
@@ -26,6 +26,12 @@
         },
         "reconnect_failed": {
             "message": "Failed to reconnect to {name} after multiple attempts. Try moving the device closer or check if it's powered on."
+        },
+        "no_target_entities": {
+            "message": "No Beurer lamp entities found for the specified target. Ensure you have selected a valid lamp."
+        },
+        "invalid_hex_command": {
+            "message": "Invalid hex command '{command}': {error}. Use format like '33 01 1E' or '33011E'."
         }
     },
     "config": {
@@ -177,6 +183,15 @@
             },
             "therapy_progress": {
                 "name": "Daily goal progress"
+            },
+            "reconnect_count": {
+                "name": "Reconnection count"
+            },
+            "command_success_rate": {
+                "name": "Command success rate"
+            },
+            "connection_uptime": {
+                "name": "Connection uptime"
             }
         },
         "binary_sensor": {

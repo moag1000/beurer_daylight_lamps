@@ -5,6 +5,108 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.26.0] - 2026-01-22
+
+### Added
+
+- **Adaptive Polling Interval**: Polling frequency now adjusts based on device state
+  - 30 seconds when light is on (responsive updates)
+  - 5 minutes when light is off (save resources)
+  - 15 minutes when device unavailable (minimal polling)
+  - State transitions are logged for debugging
+  - Reduces unnecessary BLE traffic and battery consumption
+
+- **Connection Health Metrics**: New diagnostic sensors for monitoring BLE stability
+  - `reconnect_count` - Total reconnections since startup (diagnostic)
+  - `command_success_rate` - Percentage of successful BLE commands (diagnostic)
+  - `connection_uptime` - Seconds since current connection established (diagnostic)
+  - All disabled by default, enable via entity settings if needed
+  - Includes `total_commands` as extra attribute on success rate sensor
+
+- **Color Temperature Persistence**: Color temperature is now restored after Home Assistant restart
+  - Uses `RestoreEntity` to persist color temp across restarts
+  - Important since color temp is simulated via RGB and not stored on device
+  - Includes new `BeurerLightExtraStoredData` dataclass for storage
+
+- **Improved Service Error Feedback**: Services now raise `ServiceValidationError` with translations
+  - Raw command failures show which devices failed
+  - Invalid hex commands show the parsing error
+  - No target entities shows a clear error message
+  - All messages are translatable via `strings.json`
+
+- **Therapy Tracker Public API**: Added `has_active_session` property
+  - Replaces internal `_current_session is None` checks
+  - Cleaner public API for checking if therapy is being tracked
+
+### Fixed
+
+- **Sunrise/Sunset Simulation Stability**: Fixed simulations overwhelming the BLE device
+  - Created new `set_color_with_brightness_fast()` method with minimal overhead
+  - Skips redundant mode switches, effect clears, and status requests
+  - Only sends MODE/EFFECT commands once at start instead of every step
+  - Reduces BLE commands from ~5 per step to ~2 per step
+  - Adds final status request only at simulation end
+  - Should significantly reduce connection drops during morning routines
+
+- **Timer Limit Inconsistency**: Service schema now correctly limits timer to 120 minutes
+  - Previously schema allowed 240 but device only supports 120
+  - Now validates at service level matching the BLE protocol specification
+
+- **Therapy Goal Validation Logging**: Now logs warning when goal is clamped to valid range
+  - Helps users understand when their input was adjusted
+  - Shows both original and clamped values
+
+### Changed
+
+- **Sunrise/Sunset Task Tracking**: Now uses `hass.async_create_background_task()`
+  - Proper lifecycle management by Home Assistant
+  - Better error tracking and cleanup
+  - Task names include MAC address for identification
+
+- **Optimized Initial Connect**: Removed unnecessary 2-second delay when device not visible
+  - Sleep only happens when device is initially available
+  - Faster startup for devices that are powered off
+
+- **Refactored BLE Device Lookup**: Consolidated duplicate lookup code into `_get_ble_device_and_rssi()` helper
+  - Reduces code duplication in `async_setup_entry()` and callbacks
+  - Consistent behavior for connectable/non-connectable device lookup
+
+### Technical Details
+
+New constants in `const.py`:
+- `POLL_INTERVAL_LIGHT_ON` (30s) - Polling when light is on
+- `POLL_INTERVAL_LIGHT_OFF` (300s) - Polling when light is off
+- `POLL_INTERVAL_UNAVAILABLE` (900s) - Polling when device unavailable
+
+New properties in `beurer_daylight_lamps.py`:
+- `reconnect_count` - Total reconnections since startup
+- `command_success_rate` - Percentage of successful commands
+- `connection_uptime_seconds` - Seconds since connection established
+- `total_commands` - Total commands sent
+
+New class in `sensor.py`:
+- `BeurerConnectionHealthSensor` - Diagnostic sensor for connection metrics
+
+New methods in `coordinator.py`:
+- `_get_adaptive_interval()` - Calculates appropriate polling interval
+- `_adjust_polling_interval()` - Adjusts interval based on state
+- `current_poll_interval` property - Exposes current interval
+- `poll_state` property - Exposes current polling state
+
+New translations added to `strings.json`:
+- `no_target_entities` - When service has no valid target
+- `invalid_hex_command` - When raw command parsing fails
+- `command_failed` - Updated to include device list
+- `reconnect_count` - Reconnection count sensor name
+- `command_success_rate` - Command success rate sensor name
+- `connection_uptime` - Connection uptime sensor name
+
+New class in `light.py`:
+- `BeurerLightExtraStoredData` - Stores color_temp_kelvin across restarts
+
+New method in `beurer_daylight_lamps.py`:
+- `set_color_with_brightness_fast()` - Optimized for rapid sequential updates (simulations)
+
 ## [1.25.0] - 2026-01-21
 
 ### Added

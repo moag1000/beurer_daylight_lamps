@@ -6,6 +6,7 @@ import pytest
 import voluptuous as vol
 
 from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.exceptions import ServiceValidationError
 
 # Import service constants and schemas from __init__.py
 from custom_components.beurer_daylight_lamps import (
@@ -132,12 +133,12 @@ class TestServiceSchemas:
         assert result[ATTR_MINUTES] == 1
 
     def test_timer_schema_max_value(self) -> None:
-        """Test timer schema accepts maximum value (240)."""
+        """Test timer schema accepts maximum value (120 per BLE protocol)."""
         data = {
-            ATTR_MINUTES: 240,
+            ATTR_MINUTES: 120,
         }
         result = SERVICE_TIMER_SCHEMA(data)
-        assert result[ATTR_MINUTES] == 240
+        assert result[ATTR_MINUTES] == 120
 
     def test_timer_schema_below_min(self) -> None:
         """Test timer schema rejects value below minimum."""
@@ -148,9 +149,9 @@ class TestServiceSchemas:
             SERVICE_TIMER_SCHEMA(data)
 
     def test_timer_schema_above_max(self) -> None:
-        """Test timer schema rejects value above maximum."""
+        """Test timer schema rejects value above maximum (120 per BLE protocol)."""
         data = {
-            ATTR_MINUTES: 241,
+            ATTR_MINUTES: 121,
         }
         with pytest.raises(vol.Invalid):
             SERVICE_TIMER_SCHEMA(data)
@@ -635,7 +636,7 @@ class TestSendRawCommandService:
 
     @pytest.mark.asyncio
     async def test_send_raw_command_invalid_hex(self, hass: HomeAssistant) -> None:
-        """Test send raw command with invalid hex."""
+        """Test send raw command with invalid hex raises ServiceValidationError."""
         mock_instance = MagicMock()
         mock_instance.mac = "AA:BB:CC:DD:EE:FF"
         mock_instance._send_packet = AsyncMock(return_value=True)
@@ -648,14 +649,16 @@ class TestSendRawCommandService:
         ):
             await _async_setup_services(hass)
 
-            # Should not raise, but should not call _send_packet
-            await hass.services.async_call(
-                DOMAIN,
-                SERVICE_SEND_RAW,
-                {ATTR_COMMAND: "GG HH"},  # Invalid
-                blocking=True,
-            )
+            # Should raise ServiceValidationError for invalid hex
+            with pytest.raises(ServiceValidationError) as exc_info:
+                await hass.services.async_call(
+                    DOMAIN,
+                    SERVICE_SEND_RAW,
+                    {ATTR_COMMAND: "GG HH"},  # Invalid
+                    blocking=True,
+                )
 
+            assert exc_info.value.translation_key == "invalid_hex_command"
             mock_instance._send_packet.assert_not_called()
 
 

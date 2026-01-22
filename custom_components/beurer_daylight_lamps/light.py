@@ -19,11 +19,14 @@ from homeassistant.helpers.device_registry import (
     format_mac,
 )
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.restore_state import ExtraStoredData, RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util.color import (
     color_temperature_to_rgb,
     match_max_scale,
 )
+
+from dataclasses import dataclass
 
 from . import BeurerConfigEntry
 from .const import DOMAIN, LOGGER, VERSION, detect_model
@@ -31,6 +34,29 @@ from .coordinator import BeurerDataUpdateCoordinator
 
 # Limit parallel updates to 1 per device to prevent BLE command conflicts
 PARALLEL_UPDATES = 1
+
+
+@dataclass
+class BeurerLightExtraStoredData(ExtraStoredData):
+    """Extra stored data for Beurer light entity.
+
+    Stores color temperature across HA restarts since it's simulated
+    via RGB and not stored on the device itself.
+    """
+
+    color_temp_kelvin: int | None
+
+    def as_dict(self) -> dict[str, Any]:
+        """Return a dict representation of the extra data."""
+        return {"color_temp_kelvin": self.color_temp_kelvin}
+
+    @classmethod
+    def from_dict(cls, restored: dict[str, Any]) -> BeurerLightExtraStoredData | None:
+        """Initialize extra stored data from a dict."""
+        try:
+            return cls(color_temp_kelvin=restored.get("color_temp_kelvin"))
+        except (KeyError, TypeError):
+            return None
 
 # Color temperature range (in Kelvin)
 # Beurer TL100 has 5300K daylight, we support warm to cool white
@@ -55,8 +81,12 @@ async def async_setup_entry(
     async_add_entities([BeurerLight(coordinator, name, entry.entry_id)])
 
 
-class BeurerLight(CoordinatorEntity[BeurerDataUpdateCoordinator], LightEntity):
-    """Representation of a Beurer Daylight Lamp."""
+class BeurerLight(CoordinatorEntity[BeurerDataUpdateCoordinator], RestoreEntity, LightEntity):
+    """Representation of a Beurer Daylight Lamp.
+
+    Uses RestoreEntity to persist color temperature across HA restarts,
+    since color temp is simulated via RGB and not stored on the device.
+    """
 
     _attr_has_entity_name: bool = True
     _attr_name: str | None = None
@@ -89,7 +119,24 @@ class BeurerLight(CoordinatorEntity[BeurerDataUpdateCoordinator], LightEntity):
     async def async_added_to_hass(self) -> None:
         """Run when entity about to be added to hass."""
         await super().async_added_to_hass()
+
+        # Restore color temperature from previous state
+        if (extra_data := await self.async_get_last_extra_data()) is not None:
+            if (restored := BeurerLightExtraStoredData.from_dict(extra_data.as_dict())) is not None:
+                if restored.color_temp_kelvin is not None:
+                    self._color_temp_kelvin = restored.color_temp_kelvin
+                    LOGGER.debug(
+                        "Restored color temperature: %dK for %s",
+                        self._color_temp_kelvin,
+                        self._instance.mac,
+                    )
+
         await self._instance.update()
+
+    @property
+    def extra_restore_state_data(self) -> BeurerLightExtraStoredData:
+        """Return entity specific state data to be restored."""
+        return BeurerLightExtraStoredData(color_temp_kelvin=self._color_temp_kelvin)
 
     @property
     def available(self) -> bool:

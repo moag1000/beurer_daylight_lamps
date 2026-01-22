@@ -15,7 +15,7 @@ from homeassistant.components.bluetooth import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_MAC, CONF_NAME, Platform
 from homeassistant.core import HomeAssistant, ServiceCall, callback
-from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.exceptions import ConfigEntryNotReady, ServiceValidationError
 from homeassistant.helpers import (
     device_registry as dr,
     entity_registry as er,
@@ -108,7 +108,8 @@ SERVICE_RAW_SCHEMA = vol.Schema(
 
 SERVICE_TIMER_SCHEMA = vol.Schema(
     {
-        vol.Required(ATTR_MINUTES): vol.All(vol.Coerce(int), vol.Range(min=1, max=240)),
+        # Timer range is 1-120 minutes per BLE protocol specification
+        vol.Required(ATTR_MINUTES): vol.All(vol.Coerce(int), vol.Range(min=1, max=120)),
     }
 )
 
@@ -170,6 +171,43 @@ PLATFORMS: list[Platform] = [
 ]
 
 
+def _get_ble_device_and_rssi(
+    hass: HomeAssistant, mac_address: str
+) -> tuple[Any | None, int | None]:
+    """Get BLE device and RSSI for a MAC address.
+
+    Tries both connectable and non-connectable device lookups to handle
+    devices that alternate between advertisement types.
+
+    Args:
+        hass: Home Assistant instance
+        mac_address: MAC address to look up
+
+    Returns:
+        Tuple of (BLEDevice or None, RSSI or None)
+    """
+    from bleak.backends.device import BLEDevice
+
+    # Try connectable first, then non-connectable
+    ble_device: BLEDevice | None = bluetooth.async_ble_device_from_address(
+        hass, mac_address
+    )
+    if not ble_device:
+        ble_device = bluetooth.async_ble_device_from_address(
+            hass, mac_address, connectable=False
+        )
+
+    # Get RSSI from service info
+    service_info = bluetooth.async_last_service_info(hass, mac_address)
+    if not service_info:
+        service_info = bluetooth.async_last_service_info(
+            hass, mac_address, connectable=False
+        )
+    rssi = service_info.rssi if service_info else None
+
+    return ble_device, rssi
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> bool:
     """Set up Beurer daylight lamp from a config entry."""
     mac_address = entry.data[CONF_MAC]
@@ -178,25 +216,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> bo
 
     # Use Home Assistant's Bluetooth stack - this automatically uses all adapters
     # including ESPHome Bluetooth Proxies for better range and reliability
-    # Try both connectable and non-connectable devices
-    ble_device = bluetooth.async_ble_device_from_address(
-        hass, mac_address
-    )
-    # If not found, explicitly try non-connectable
-    if not ble_device:
-        ble_device = bluetooth.async_ble_device_from_address(
-            hass, mac_address, connectable=False
-        )
-
-    # Also get the latest service info for RSSI (try both types)
-    service_info = bluetooth.async_last_service_info(
-        hass, mac_address
-    )
-    if not service_info:
-        service_info = bluetooth.async_last_service_info(
-            hass, mac_address, connectable=False
-        )
-    rssi = service_info.rssi if service_info else None
+    ble_device, rssi = _get_ble_device_and_rssi(hass, mac_address)
 
     device_initially_available = ble_device is not None
 
@@ -288,14 +308,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> bo
             instance.update_rssi(service_info.rssi)
 
         # Update the BLE device reference to use the best available adapter
-        # Try both connectable and non-connectable devices
-        new_device = bluetooth.async_ble_device_from_address(
-            hass, mac_address
-        )
-        if not new_device:
-            new_device = bluetooth.async_ble_device_from_address(
-                hass, mac_address, connectable=False
-            )
+        new_device, _ = _get_ble_device_and_rssi(hass, mac_address)
         if new_device:
             instance.update_ble_device(new_device)
 
@@ -347,8 +360,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> bo
     # This runs in the background to not block the setup
     async def _async_initial_connect() -> None:
         """Try to connect and get initial state."""
-        await asyncio.sleep(2)  # Give BLE stack time to settle
+        # Only wait if device is initially available - otherwise don't waste time
         if device_initially_available:
+            await asyncio.sleep(2)  # Give BLE stack time to settle
             LOGGER.debug("Attempting initial connection to %s", mac_address)
             try:
                 connected = await instance.connect()
@@ -486,24 +500,39 @@ async def _async_setup_services(hass: HomeAssistant) -> None:
 
         instances = await _async_get_instances_from_target(hass, call, "RAW_CMD")
         if not instances:
-            return
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="no_target_entities",
+            )
 
         # Parse hex bytes from command string (e.g., "33 01 1E" or "33011E")
         try:
             hex_str = command_str.replace(" ", "").replace("0x", "")
             payload = [int(hex_str[i:i+2], 16) for i in range(0, len(hex_str), 2)]
         except ValueError as err:
-            LOGGER.error("RAW_CMD: Invalid hex command '%s': %s", command_str, err)
-            return
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="invalid_hex_command",
+                translation_placeholders={"command": command_str, "error": str(err)},
+            ) from err
 
         LOGGER.debug("RAW_CMD: Parsed payload: %s", [f"0x{b:02X}" for b in payload])
 
+        failed_devices: list[str] = []
         for instance in instances:
             success = await instance._send_packet(payload)
             if success:
                 LOGGER.debug("RAW_CMD: Sent successfully to %s", instance.mac)
             else:
                 LOGGER.error("RAW_CMD: Failed to send to %s", instance.mac)
+                failed_devices.append(instance.mac)
+
+        if failed_devices:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="command_failed",
+                translation_placeholders={"devices": ", ".join(failed_devices)},
+            )
 
     hass.services.async_register(
         DOMAIN,

@@ -9,8 +9,13 @@ from homeassistant.components.light import ColorMode
 from homeassistant.core import HomeAssistant
 
 from custom_components.beurer_daylight_lamps.coordinator import (
-    UPDATE_INTERVAL,
+    DEFAULT_UPDATE_INTERVAL,
     BeurerDataUpdateCoordinator,
+)
+from custom_components.beurer_daylight_lamps.const import (
+    POLL_INTERVAL_LIGHT_ON,
+    POLL_INTERVAL_LIGHT_OFF,
+    POLL_INTERVAL_UNAVAILABLE,
 )
 
 
@@ -22,9 +27,15 @@ from custom_components.beurer_daylight_lamps.coordinator import (
 class TestConstants:
     """Tests for module constants."""
 
-    def test_update_interval(self) -> None:
-        """Test update interval is 5 minutes."""
-        assert UPDATE_INTERVAL == timedelta(minutes=5)
+    def test_default_update_interval(self) -> None:
+        """Test default update interval is 5 minutes (POLL_INTERVAL_LIGHT_OFF)."""
+        assert DEFAULT_UPDATE_INTERVAL == timedelta(seconds=POLL_INTERVAL_LIGHT_OFF)
+
+    def test_poll_interval_constants(self) -> None:
+        """Test polling interval constants are properly defined."""
+        assert POLL_INTERVAL_LIGHT_ON == 30
+        assert POLL_INTERVAL_LIGHT_OFF == 300
+        assert POLL_INTERVAL_UNAVAILABLE == 900
 
 
 # =============================================================================
@@ -61,6 +72,11 @@ class TestCoordinatorInitialization:
         instance.therapy_goal_reached = False
         instance.therapy_goal_progress_pct = 50.0
         instance.therapy_daily_goal = 60
+        # Connection health metrics
+        instance.reconnect_count = 0
+        instance.command_success_rate = 100
+        instance.connection_uptime_seconds = 3600
+        instance.total_commands = 50
         instance.set_update_callback = MagicMock()
         instance.remove_update_callback = MagicMock()
         instance.update = AsyncMock()
@@ -84,7 +100,7 @@ class TestCoordinatorInitialization:
         assert coordinator.instance == mock_instance
         assert coordinator.device_name == "Test Lamp"
         assert coordinator.name == "Beurer Test Lamp"
-        assert coordinator.update_interval == UPDATE_INTERVAL
+        assert coordinator.update_interval == DEFAULT_UPDATE_INTERVAL
 
     def test_registers_update_callback(
         self, mock_hass: MagicMock, mock_instance: MagicMock
@@ -133,6 +149,11 @@ class TestGetCurrentData:
         instance.therapy_goal_reached = True
         instance.therapy_goal_progress_pct = 100.0
         instance.therapy_daily_goal = 45
+        # Connection health metrics
+        instance.reconnect_count = 2
+        instance.command_success_rate = 98
+        instance.connection_uptime_seconds = 7200
+        instance.total_commands = 100
         instance.set_update_callback = MagicMock()
         instance.remove_update_callback = MagicMock()
         return instance
@@ -220,6 +241,11 @@ class TestPushUpdates:
         instance.therapy_goal_reached = False
         instance.therapy_goal_progress_pct = 0.0
         instance.therapy_daily_goal = 30
+        # Connection health metrics
+        instance.reconnect_count = 0
+        instance.command_success_rate = 100
+        instance.connection_uptime_seconds = None
+        instance.total_commands = 0
         instance.set_update_callback = MagicMock()
         instance.remove_update_callback = MagicMock()
         return instance
@@ -283,6 +309,11 @@ class TestPeriodicUpdates:
         instance.therapy_goal_reached = False
         instance.therapy_goal_progress_pct = 25.0
         instance.therapy_daily_goal = 60
+        # Connection health metrics
+        instance.reconnect_count = 1
+        instance.command_success_rate = 95
+        instance.connection_uptime_seconds = 1800
+        instance.total_commands = 20
         instance.set_update_callback = MagicMock()
         instance.remove_update_callback = MagicMock()
         instance.update = AsyncMock()
@@ -377,6 +408,11 @@ class TestShutdown:
         instance.therapy_goal_reached = False
         instance.therapy_goal_progress_pct = 0.0
         instance.therapy_daily_goal = 30
+        # Connection health metrics
+        instance.reconnect_count = 0
+        instance.command_success_rate = 100
+        instance.connection_uptime_seconds = 3600
+        instance.total_commands = 10
         instance.set_update_callback = MagicMock()
         instance.remove_update_callback = MagicMock()
         return instance
@@ -420,6 +456,8 @@ class TestConvenienceProperties:
         """Create a mock BeurerInstance."""
         instance = MagicMock()
         instance.mac = "AA:BB:CC:DD:EE:FF"
+        instance.ble_available = True
+        instance.is_on = True
         instance.set_update_callback = MagicMock()
         instance.remove_update_callback = MagicMock()
         return instance

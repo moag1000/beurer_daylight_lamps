@@ -140,6 +140,12 @@ class BeurerInstance:
         # Connection watchdog task reference
         self._watchdog_task: asyncio.Task[None] | None = None
 
+        # Connection health metrics tracking
+        self._reconnect_count: int = 0           # Total reconnections since startup
+        self._command_success_count: int = 0     # Successful commands
+        self._command_failure_count: int = 0     # Failed commands
+        self._connection_start_time: float | None = None  # When current connection started
+
         # Therapy tracking - sunrise/sunset simulation and exposure tracking
         self._sunrise_simulation: SunriseSimulation | None = None
         self._therapy_tracker: TherapyTracker = TherapyTracker()
@@ -355,7 +361,7 @@ class BeurerInstance:
     def sunrise_simulation(self) -> SunriseSimulation:
         """Return the sunrise simulation controller."""
         if self._sunrise_simulation is None:
-            self._sunrise_simulation = SunriseSimulation(self)
+            self._sunrise_simulation = SunriseSimulation(self, self._hass)
         return self._sunrise_simulation
 
     @property
@@ -389,9 +395,47 @@ class BeurerInstance:
         return self._therapy_tracker.daily_goal_minutes
 
     def set_therapy_daily_goal(self, minutes: int) -> None:
-        """Set the daily therapy goal."""
-        self._therapy_tracker.daily_goal_minutes = max(1, min(120, minutes))
+        """Set the daily therapy goal.
+
+        Args:
+            minutes: Goal in minutes (will be clamped to 1-120 range)
+        """
+        clamped = max(1, min(120, minutes))
+        if clamped != minutes:
+            LOGGER.warning(
+                "Therapy goal %d minutes clamped to valid range: %d minutes",
+                minutes,
+                clamped,
+            )
+        self._therapy_tracker.daily_goal_minutes = clamped
+        LOGGER.debug("Set therapy daily goal to %d minutes", clamped)
         self._safe_create_task(self._trigger_update(), "beurer_therapy_goal_update")
+
+    # Connection health metrics properties
+    @property
+    def reconnect_count(self) -> int:
+        """Return the total number of reconnections since startup."""
+        return self._reconnect_count
+
+    @property
+    def command_success_rate(self) -> int:
+        """Return command success rate as percentage (0-100)."""
+        total = self._command_success_count + self._command_failure_count
+        if total == 0:
+            return 100  # No commands yet, assume 100%
+        return int(self._command_success_count / total * 100)
+
+    @property
+    def connection_uptime_seconds(self) -> int | None:
+        """Return seconds since current connection was established."""
+        if self._connection_start_time is None or not self.is_connected:
+            return None
+        return int(time.time() - self._connection_start_time)
+
+    @property
+    def total_commands(self) -> int:
+        """Return total number of commands sent."""
+        return self._command_success_count + self._command_failure_count
 
     def _on_disconnect(self, client: BleakClient) -> None:
         """Handle disconnection callback."""
@@ -401,6 +445,7 @@ class BeurerInstance:
         self._color_on = False
         self._write_uuid = None
         self._read_uuid = None
+        self._connection_start_time = None  # Clear connection uptime
 
         # Stop the connection watchdog
         self._stop_watchdog()
@@ -677,14 +722,17 @@ class BeurerInstance:
             LOGGER.debug("Device not connected, attempting reconnect for write")
             if not await self.connect():
                 LOGGER.debug("Failed to reconnect for write to %s", self._mac)
+                self._command_failure_count += 1
                 return False
 
         # Safety check after reconnect (for type checker)
         if self._client is None:
+            self._command_failure_count += 1
             return False
 
         if not self._write_uuid:
             LOGGER.error("Write UUID not available")
+            self._command_failure_count += 1
             return False
 
         try:
@@ -694,17 +742,21 @@ class BeurerInstance:
                 data.hex(),
             )
             await self._client.write_gatt_char(self._write_uuid, data)
+            self._command_success_count += 1
             return True
         except BleakError as err:
             LOGGER.debug("BleakError during write to %s: %s", self._mac, err)
+            self._command_failure_count += 1
             await self.disconnect()
             return False
         except (TimeoutError, asyncio.TimeoutError) as err:
             LOGGER.debug("Timeout during write to %s: %s", self._mac, err)
+            self._command_failure_count += 1
             await self.disconnect()
             return False
         except OSError as err:
             LOGGER.error("OS error during write to %s: %s", self._mac, err)
+            self._command_failure_count += 1
             await self.disconnect()
             return False
 
@@ -844,6 +896,56 @@ class BeurerInstance:
 
         # Single status request at the end
         await self._request_status()
+
+    async def set_color_with_brightness_fast(
+        self,
+        rgb: tuple[int, int, int],
+        brightness: int | None = None,
+    ) -> None:
+        """Set RGB color and brightness with minimal BLE overhead.
+
+        Optimized for rapid sequential updates (like sunrise/sunset simulations).
+        Skips redundant mode switches, effect clears, and status requests.
+
+        Args:
+            rgb: Tuple of (red, green, blue) values (0-255 each)
+            brightness: Brightness value (0-255), or None to keep current
+        """
+        r, g, b = int(rgb[0]), int(rgb[1]), int(rgb[2])
+
+        # Only switch mode if not already in RGB mode
+        if not self._color_on:
+            LOGGER.debug("Fast color: Activating RGB mode")
+            await self._send_packet([CMD_MODE, MODE_RGB])
+            await asyncio.sleep(MODE_CHANGE_DELAY)
+            self._color_on = True
+            self._light_on = False
+            self._mode = ColorMode.RGB
+
+            # Clear effect only on first call (mode switch)
+            if self._effect != "Off":
+                LOGGER.debug("Fast color: Clearing effect")
+                self._effect = "Off"
+                await self._send_packet([CMD_EFFECT, 0])
+                await asyncio.sleep(COMMAND_DELAY)
+
+        # Update internal state
+        self._rgb_color = (r, g, b)
+        self._available = True
+
+        # Set color
+        await self._send_packet([CMD_COLOR, r, g, b])
+        await asyncio.sleep(COMMAND_DELAY)
+
+        # Set brightness if provided
+        if brightness is not None:
+            brightness = int(brightness)
+            self._color_brightness = brightness
+            brightness_percent = max(0, min(100, int(brightness / 255 * 100)))
+            await self._send_packet([CMD_BRIGHTNESS, MODE_RGB, brightness_percent])
+            await asyncio.sleep(COMMAND_DELAY)
+
+        # No status request - caller can request if needed
 
     async def set_color_brightness(
         self, brightness: int | float | None, _from_turn_on: bool = False
@@ -1188,7 +1290,7 @@ class BeurerInstance:
                 self._therapy_tracker.update_session(estimated_kelvin, brightness_pct)
                 if is_white_ish and brightness_pct >= 80:
                     # Start new session if not tracking, or continue existing
-                    if self._therapy_tracker._current_session is None:
+                    if not self._therapy_tracker.has_active_session:
                         self._therapy_tracker.start_session(estimated_kelvin, brightness_pct)
             elif not self._color_on:
                 # End session when color mode turns off
@@ -1586,6 +1688,17 @@ class BeurerInstance:
 
             # Reset reconnect backoff on successful connection
             self._reconnect_backoff = RECONNECT_INITIAL_BACKOFF
+
+            # Track connection health metrics
+            # Increment reconnect count if this isn't the first connection
+            if self._connection_start_time is not None:
+                self._reconnect_count += 1
+                LOGGER.debug(
+                    "Reconnection #%d for %s",
+                    self._reconnect_count,
+                    self._mac,
+                )
+            self._connection_start_time = time.time()
 
             # Start connection watchdog to detect stale connections
             self._start_watchdog()

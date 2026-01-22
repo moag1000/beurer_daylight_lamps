@@ -7,7 +7,7 @@ This module provides:
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 from enum import Enum
@@ -15,6 +15,7 @@ from enum import Enum
 from homeassistant.util.color import color_temperature_to_rgb
 
 if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
     from .beurer_daylight_lamps import BeurerInstance
 
 from .const import LOGGER
@@ -101,6 +102,11 @@ class TherapyTracker:
     sessions: list[TherapySession] = field(default_factory=list)
     daily_goal_minutes: int = 30
     _current_session: TherapySession | None = None
+
+    @property
+    def has_active_session(self) -> bool:
+        """Return True if a therapy session is currently active."""
+        return self._current_session is not None
 
     def start_session(
         self,
@@ -215,13 +221,38 @@ class TherapyTracker:
 class SunriseSimulation:
     """Manages sunrise/sunset light simulations."""
 
-    def __init__(self, instance: BeurerInstance) -> None:
-        """Initialize sunrise simulation."""
+    def __init__(
+        self,
+        instance: BeurerInstance,
+        hass: HomeAssistant | None = None,
+    ) -> None:
+        """Initialize sunrise simulation.
+
+        Args:
+            instance: The BeurerInstance to control
+            hass: Home Assistant instance for proper task tracking
+        """
         self._instance = instance
+        self._hass: HomeAssistant | None = hass
         self._running = False
         self._task: asyncio.Task[None] | None = None
         self._current_step = 0
         self._total_steps = 0
+
+    def _create_background_task(
+        self,
+        coro: Any,
+        name: str,
+    ) -> asyncio.Task[None]:
+        """Create a background task with proper HA tracking.
+
+        Uses Home Assistant's task creation when available for proper
+        lifecycle management and error tracking.
+        """
+        if self._hass is not None:
+            return self._hass.async_create_background_task(coro, name)
+        # Fallback for standalone usage
+        return asyncio.create_task(coro, name=name)
 
     @property
     def is_running(self) -> bool:
@@ -258,8 +289,9 @@ class SunriseSimulation:
         )
 
         self._running = True
-        self._task = asyncio.create_task(
-            self._run_sunrise(duration_minutes, config)
+        self._task = self._create_background_task(
+            self._run_sunrise(duration_minutes, config),
+            f"beurer_sunrise_{self._instance.mac}",
         )
 
     async def start_sunset(
@@ -283,8 +315,9 @@ class SunriseSimulation:
         )
 
         self._running = True
-        self._task = asyncio.create_task(
-            self._run_sunset(duration_minutes, end_brightness_pct)
+        self._task = self._create_background_task(
+            self._run_sunset(duration_minutes, end_brightness_pct),
+            f"beurer_sunset_{self._instance.mac}",
         )
 
     async def stop(self) -> None:
@@ -392,10 +425,12 @@ class SunriseSimulation:
                 )
 
                 # Apply to lamp with retry logic
+                # Use fast method optimized for sequential updates (no redundant
+                # mode switches, effect clears, or status requests)
                 # Capture values for lambda to avoid late binding issues
                 _rgb, _brightness = rgb, brightness_255
                 success = await self._apply_with_retry(
-                    lambda: self._instance.set_color_with_brightness(_rgb, _brightness)
+                    lambda: self._instance.set_color_with_brightness_fast(_rgb, _brightness)
                 )
 
                 if success:
@@ -414,7 +449,16 @@ class SunriseSimulation:
                         break
 
                 if i < steps:
+                    # Wait for next step - interval already accounts for duration
+                    # Add small buffer to prevent overwhelming the device
                     await asyncio.sleep(interval)
+
+            # Request final status to sync state after simulation
+            if self._running:
+                try:
+                    await self._instance._request_status()
+                except Exception:
+                    pass  # Non-critical
 
             LOGGER.info("Sunrise simulation completed")
 
@@ -477,6 +521,7 @@ class SunriseSimulation:
                 )
 
                 # Apply with retry logic
+                # Use fast method optimized for sequential updates
                 if brightness_pct <= 0:
                     success = await self._apply_with_retry(
                         lambda: self._instance.turn_off()
@@ -485,7 +530,7 @@ class SunriseSimulation:
                     # Capture values for lambda
                     _rgb, _brightness = warm_rgb, brightness_255
                     success = await self._apply_with_retry(
-                        lambda: self._instance.set_color_with_brightness(_rgb, _brightness)
+                        lambda: self._instance.set_color_with_brightness_fast(_rgb, _brightness)
                     )
 
                 if success:
@@ -504,11 +549,19 @@ class SunriseSimulation:
                         break
 
                 if i < steps:
+                    # Wait for next step
                     await asyncio.sleep(interval)
 
             # Final turn off if end_brightness is 0
             if end_brightness_pct == 0 and self._running:
                 await self._apply_with_retry(lambda: self._instance.turn_off())
+
+            # Request final status to sync state after simulation
+            if self._running:
+                try:
+                    await self._instance._request_status()
+                except Exception:
+                    pass  # Non-critical
 
             LOGGER.info("Sunset simulation completed")
 

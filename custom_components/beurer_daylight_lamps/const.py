@@ -5,7 +5,7 @@ import logging
 from typing import Final
 
 DOMAIN: Final = "beurer_daylight_lamps"
-VERSION: Final = "1.25.0"
+VERSION: Final = "1.26.0"
 LOGGER = logging.getLogger(__package__)
 
 # BLE Characteristic UUIDs
@@ -51,6 +51,12 @@ CONNECTION_STALE_TIMEOUT: Final = 300.0     # Consider connection stale after N 
 
 # Adapter failure tracking
 ADAPTER_FAILURE_COOLDOWN: Final = 300.0  # Cooldown for failed adapters (seconds)
+
+# Adaptive polling intervals
+# Poll more frequently when light is on for responsive updates
+POLL_INTERVAL_LIGHT_ON: Final = 30       # 30 seconds when light is on
+POLL_INTERVAL_LIGHT_OFF: Final = 300     # 5 minutes when light is off
+POLL_INTERVAL_UNAVAILABLE: Final = 900   # 15 minutes when device unavailable
 
 # Supported light effects (index corresponds to protocol value)
 SUPPORTED_EFFECTS: Final[list[str]] = [

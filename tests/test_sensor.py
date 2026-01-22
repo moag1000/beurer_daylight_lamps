@@ -257,8 +257,8 @@ class TestAsyncSetupEntry:
 
         await async_setup_entry(mock_hass, mock_entry, capture_entities)
 
-        # Should create 5 entities: 2 diagnostic + 3 therapy
-        assert len(added_entities) == 5
+        # Should create 8 entities: 2 diagnostic + 3 therapy + 3 connection health
+        assert len(added_entities) == 8
 
         # Verify types
         diagnostic_sensors = [e for e in added_entities if isinstance(e, BeurerSensor)]
@@ -266,6 +266,7 @@ class TestAsyncSetupEntry:
 
         assert len(diagnostic_sensors) == 2
         assert len(therapy_sensors) == 3
+        # 3 connection health sensors are the remaining entities
 
     @pytest.mark.asyncio
     async def test_uses_default_name(self, mock_coordinator: MagicMock) -> None:

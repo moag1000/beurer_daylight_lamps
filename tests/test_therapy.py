@@ -296,7 +296,7 @@ class TestSunriseSimulation:
     def mock_instance(self) -> MagicMock:
         """Create a mock BeurerInstance."""
         instance = MagicMock()
-        instance.set_color_with_brightness = AsyncMock()
+        instance.set_color_with_brightness_fast = AsyncMock()
         instance.turn_off = AsyncMock()
         instance.color_brightness = 200
         instance.white_brightness = 255
@@ -385,7 +385,7 @@ class TestSunriseSimulationExecution:
     def mock_instance(self) -> MagicMock:
         """Create a mock BeurerInstance."""
         instance = MagicMock()
-        instance.set_color_with_brightness = AsyncMock()
+        instance.set_color_with_brightness_fast = AsyncMock()
         instance.turn_off = AsyncMock()
         instance.color_brightness = 200
         instance.white_brightness = 255
@@ -393,7 +393,7 @@ class TestSunriseSimulationExecution:
 
     @pytest.mark.asyncio
     async def test_run_sunrise_calls_set_color(self, mock_instance: MagicMock) -> None:
-        """Test _run_sunrise calls set_color_with_brightness."""
+        """Test _run_sunrise calls set_color_with_brightness_fast."""
         sim = SunriseSimulation(mock_instance)
 
         # Run a very short sunrise
@@ -404,8 +404,8 @@ class TestSunriseSimulationExecution:
         with patch("asyncio.sleep", new_callable=AsyncMock):
             await sim._run_sunrise(duration_minutes=1, config=config)
 
-        # Should have called set_color_with_brightness at least once
-        assert mock_instance.set_color_with_brightness.call_count >= 1
+        # Should have called set_color_with_brightness_fast at least once
+        assert mock_instance.set_color_with_brightness_fast.call_count >= 1
 
     @pytest.mark.asyncio
     async def test_run_sunrise_stops_when_not_running(self, mock_instance: MagicMock) -> None:
@@ -419,7 +419,7 @@ class TestSunriseSimulationExecution:
             await sim._run_sunrise(duration_minutes=5, config=config)
 
         # Should not have called set_color at all
-        assert mock_instance.set_color_with_brightness.call_count == 0
+        assert mock_instance.set_color_with_brightness_fast.call_count == 0
 
     @pytest.mark.asyncio
     async def test_run_sunrise_handles_cancellation(self, mock_instance: MagicMock) -> None:
@@ -446,7 +446,7 @@ class TestSunriseSimulationExecution:
         sim = SunriseSimulation(mock_instance)
         config = SUNRISE_PROFILES[SunriseProfile.NATURAL]
 
-        mock_instance.set_color_with_brightness = AsyncMock(side_effect=Exception("Test error"))
+        mock_instance.set_color_with_brightness_fast = AsyncMock(side_effect=Exception("Test error"))
         sim._running = True
 
         # Should not raise, just log error
@@ -464,7 +464,7 @@ class TestSunriseSimulationExecution:
         with patch("asyncio.sleep", new_callable=AsyncMock):
             await sim._run_sunset(duration_minutes=1, end_brightness_pct=0)
 
-        assert mock_instance.set_color_with_brightness.called or mock_instance.turn_off.called
+        assert mock_instance.set_color_with_brightness_fast.called or mock_instance.turn_off.called
 
     @pytest.mark.asyncio
     async def test_run_sunset_fallback_white_brightness(self, mock_instance: MagicMock) -> None:
@@ -504,7 +504,7 @@ class TestSunriseSimulationExecution:
             await sim._run_sunset(duration_minutes=1, end_brightness_pct=20)
 
         # Should have set color but not necessarily turned off
-        assert mock_instance.set_color_with_brightness.called
+        assert mock_instance.set_color_with_brightness_fast.called
 
     @pytest.mark.asyncio
     async def test_run_sunset_handles_cancellation(self, mock_instance: MagicMock) -> None:
@@ -528,7 +528,7 @@ class TestSunriseSimulationExecution:
         """Test _run_sunset handles errors gracefully."""
         sim = SunriseSimulation(mock_instance)
         mock_instance.color_brightness = 200
-        mock_instance.set_color_with_brightness = AsyncMock(side_effect=Exception("Test error"))
+        mock_instance.set_color_with_brightness_fast = AsyncMock(side_effect=Exception("Test error"))
         sim._running = True
 
         # Should not raise
