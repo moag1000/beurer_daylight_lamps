@@ -31,7 +31,7 @@
             "message": "No Beurer lamp entities found for the specified target. Ensure you have selected a valid lamp."
         },
         "invalid_hex_command": {
-            "message": "Invalid hex command '{command}': {error}. Use format like '33 01 1E' or '33011E'."
+            "message": "Invalid hex command: {error}. Use format like 33 01 1E or 33011E."
         }
     },
     "config": {

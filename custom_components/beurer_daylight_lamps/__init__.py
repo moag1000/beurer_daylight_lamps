@@ -513,7 +513,7 @@ async def _async_setup_services(hass: HomeAssistant) -> None:
             raise ServiceValidationError(
                 translation_domain=DOMAIN,
                 translation_key="invalid_hex_command",
-                translation_placeholders={"command": command_str, "error": str(err)},
+                translation_placeholders={"error": str(err)},
             ) from err
 
         LOGGER.debug("RAW_CMD: Parsed payload: %s", [f"0x{b:02X}" for b in payload])
