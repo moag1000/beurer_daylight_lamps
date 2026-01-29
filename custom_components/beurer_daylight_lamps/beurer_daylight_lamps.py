@@ -146,6 +146,9 @@ class BeurerInstance:
         self._command_failure_count: int = 0     # Failed commands
         self._connection_start_time: float | None = None  # When current connection started
 
+        # Reconnect loop tracking - prevents duplicate loops
+        self._reconnect_loop_active: bool = False
+
         # Therapy tracking - sunrise/sunset simulation and exposure tracking
         self._sunrise_simulation: SunriseSimulation | None = None
         self._therapy_tracker: TherapyTracker = TherapyTracker()
@@ -219,94 +222,137 @@ class BeurerInstance:
     async def _auto_reconnect(self) -> None:
         """Automatically reconnect when device becomes available again.
 
-        Uses exponential backoff to avoid overwhelming the BLE stack with
-        rapid reconnection attempts. The backoff is reset when:
+        Runs as a persistent retry loop with exponential backoff to avoid
+        overwhelming the BLE stack. The loop keeps retrying until:
+        - Connection succeeds
+        - Device becomes BLE unavailable (powered off / out of range)
+        - Task is cancelled
+
+        The backoff is reset when:
         - Connection succeeds
         - Device becomes BLE reachable again after being unavailable
 
-        This method uses asyncio.Lock to ensure only one reconnect runs at a time.
-        Multiple callers will wait for the lock, then check if reconnect is still needed.
+        Uses asyncio.Lock per-iteration to prevent parallel connection attempts
+        while allowing external state updates (mark_seen) between retries.
+
+        Only one reconnect loop runs at a time. If a loop is already active,
+        new calls return immediately (the running loop will pick up state changes).
         """
-        async with self._reconnect_lock:
-            # Check if reconnect is still needed (another caller may have connected)
-            if self._available or self.is_connected:
-                LOGGER.debug(
-                    "Auto-reconnect to %s skipped - already connected",
-                    self._mac,
-                )
-                self._reconnect_backoff = RECONNECT_INITIAL_BACKOFF
-                return
-
-            # Check if device is BLE reachable
-            if not self._ble_available:
-                LOGGER.debug(
-                    "Auto-reconnect to %s skipped - device not BLE reachable",
-                    self._mac,
-                )
-                return
-
-            self._last_reconnect_attempt = time.time()
-
-            # Apply exponential backoff delay
+        # Prevent duplicate reconnect loops
+        if self._reconnect_loop_active:
             LOGGER.debug(
-                "Auto-reconnect to %s starting (backoff: %.1fs)",
+                "Auto-reconnect to %s skipped - loop already active",
                 self._mac,
-                self._reconnect_backoff,
             )
-            await asyncio.sleep(self._reconnect_backoff)
+            return
 
-            # Re-check conditions after delay (device state may have changed during sleep)
-            # Note: mypy thinks these are unreachable because it doesn't understand that
-            # state can change during await. These checks ARE necessary.
-            if self._available or self.is_connected:
-                LOGGER.debug(  # type: ignore[unreachable]
-                    "Auto-reconnect to %s cancelled - connected during backoff",
-                    self._mac,
-                )
-                self._reconnect_backoff = RECONNECT_INITIAL_BACKOFF
-                return
+        self._reconnect_loop_active = True
+        max_attempts = 0  # Safety counter for logging
 
-            if not self._ble_available:
-                LOGGER.debug(  # type: ignore[unreachable]
-                    "Auto-reconnect to %s cancelled - device became unreachable",
-                    self._mac,
-                )
-                return
+        try:
+            while True:
+                max_attempts += 1
 
-            LOGGER.debug("Auto-reconnecting to %s", self._mac)
+                async with self._reconnect_lock:
+                    # Check if reconnect is still needed
+                    if self._available or self.is_connected:
+                        LOGGER.debug(
+                            "Auto-reconnect to %s skipped - already connected",
+                            self._mac,
+                        )
+                        self._reconnect_backoff = RECONNECT_INITIAL_BACKOFF
+                        return
 
-            try:
-                connected = await self.connect()
+                    # Check if device is BLE reachable
+                    if not self._ble_available:
+                        LOGGER.debug(
+                            "Auto-reconnect to %s stopped - device not BLE reachable",
+                            self._mac,
+                        )
+                        return
 
-                if connected:
-                    LOGGER.info("Auto-reconnect to %s successful", self._mac)
+                    self._last_reconnect_attempt = time.time()
+
+                    LOGGER.debug(
+                        "Auto-reconnect to %s attempt #%d (backoff: %.1fs)",
+                        self._mac,
+                        max_attempts,
+                        self._reconnect_backoff,
+                    )
+
+                # Sleep OUTSIDE the lock so mark_seen() can update state
+                await asyncio.sleep(self._reconnect_backoff)
+
+                # Re-check conditions after delay (state may have changed during sleep)
+                # Note: mypy thinks these are unreachable because it doesn't understand
+                # that state can change during await. These checks ARE necessary.
+                if self._available or self.is_connected:
+                    LOGGER.debug(  # type: ignore[unreachable]
+                        "Auto-reconnect to %s cancelled - connected during backoff",
+                        self._mac,
+                    )
                     self._reconnect_backoff = RECONNECT_INITIAL_BACKOFF
-                else:
+                    return
+
+                if not self._ble_available:
+                    LOGGER.debug(  # type: ignore[unreachable]
+                        "Auto-reconnect to %s cancelled - device became unreachable",
+                        self._mac,
+                    )
+                    return
+
+                LOGGER.debug("Auto-reconnecting to %s (attempt #%d)", self._mac, max_attempts)
+
+                try:
+                    async with self._reconnect_lock:
+                        # Final check inside lock before connecting
+                        # State can change between the earlier checks and lock acquisition
+                        if self._available or self.is_connected:
+                            self._reconnect_backoff = RECONNECT_INITIAL_BACKOFF  # type: ignore[unreachable]
+                            return
+
+                        connected = await self.connect()
+
+                    if connected:
+                        LOGGER.info(
+                            "Auto-reconnect to %s successful (attempt #%d)",
+                            self._mac,
+                            max_attempts,
+                        )
+                        self._reconnect_backoff = RECONNECT_INITIAL_BACKOFF
+                        return  # Success - exit the loop
+
+                    # Failed - increase backoff and retry
                     self._reconnect_backoff = min(
                         self._reconnect_backoff * RECONNECT_BACKOFF_MULTIPLIER,
                         RECONNECT_MAX_BACKOFF,
                     )
                     LOGGER.debug(
-                        "Auto-reconnect to %s failed, next backoff: %.1fs",
+                        "Auto-reconnect to %s failed (attempt #%d), retrying in %.1fs",
                         self._mac,
+                        max_attempts,
                         self._reconnect_backoff,
                     )
 
-            except asyncio.CancelledError:
-                LOGGER.debug("Auto-reconnect to %s cancelled", self._mac)
-                raise  # Re-raise to properly handle cancellation
+                except asyncio.CancelledError:
+                    LOGGER.debug("Auto-reconnect to %s cancelled", self._mac)
+                    raise  # Re-raise to properly handle cancellation
 
-            except Exception as err:
-                self._reconnect_backoff = min(
-                    self._reconnect_backoff * RECONNECT_BACKOFF_MULTIPLIER,
-                    RECONNECT_MAX_BACKOFF,
-                )
-                LOGGER.warning(
-                    "Auto-reconnect to %s failed: %s (next backoff: %.1fs)",
-                    self._mac,
-                    err,
-                    self._reconnect_backoff,
-                )
+                except Exception as err:
+                    self._reconnect_backoff = min(
+                        self._reconnect_backoff * RECONNECT_BACKOFF_MULTIPLIER,
+                        RECONNECT_MAX_BACKOFF,
+                    )
+                    LOGGER.warning(
+                        "Auto-reconnect to %s failed (attempt #%d): %s (retrying in %.1fs)",
+                        self._mac,
+                        max_attempts,
+                        err,
+                        self._reconnect_backoff,
+                    )
+
+        finally:
+            self._reconnect_loop_active = False
 
     @property
     def ble_available(self) -> bool:
