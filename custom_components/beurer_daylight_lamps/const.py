@@ -41,8 +41,8 @@ MIN_COMMAND_INTERVAL: Final = 0.1  # Minimum time between commands (100ms)
 
 # Reconnection timing constants
 RECONNECT_INITIAL_BACKOFF: Final = 5.0      # Initial delay before reconnect (seconds)
-RECONNECT_MAX_BACKOFF: Final = 300.0        # Maximum backoff delay (5 min, covers 20+ min outages)
-RECONNECT_BACKOFF_MULTIPLIER: Final = 1.5   # Backoff multiplier (gentler ramp: 5→7.5→11→17→25→38→56→85→127→190→285→300)
+RECONNECT_MAX_BACKOFF: Final = 60.0         # Maximum backoff delay (1 min cap — reconnects within 60s after any outage)
+RECONNECT_BACKOFF_MULTIPLIER: Final = 1.5   # Backoff multiplier (5→7.5→11→17→25→38→56→60s cap reached after ~7 attempts)
 RECONNECT_MIN_INTERVAL: Final = 30.0        # Minimum time between reconnect attempts (seconds)
 
 # Connection health monitoring
