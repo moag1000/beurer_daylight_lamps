@@ -111,6 +111,19 @@ blueprint:
             - label: "Switch to comfortable reading light (4000K, 80%)"
               value: "reading"
 
+    reconnect_button:
+      name: "Reconnect Button (Optional)"
+      description: |
+        Select the reconnect button for your Beurer lamp.
+        If configured, the automation will attempt to reconnect
+        when the device is unavailable before starting the session.
+      default: []
+      selector:
+        entity:
+          filter:
+            - integration: beurer_daylight_lamps
+              domain: button
+
 variables:
   beurer: !input beurer_light
   extras: !input additional_lights
@@ -118,6 +131,7 @@ variables:
   therapy_mins: !input therapy_duration
   schedule: !input schedule_days
   end_behavior: !input end_action
+  reconnect_btn: !input reconnect_button
 
   # Calculate steps: one update every 30 seconds
   total_steps: "{{ (sunrise_mins * 2) | int if sunrise_mins > 0 else 0 }}"
@@ -141,6 +155,31 @@ condition:
          (schedule == 'weekends' and day >= 5) }}
 
 action:
+  # =========================================================================
+  # STEP 0: CONNECTION CHECK & RECONNECT
+  # =========================================================================
+  # If reconnect button is configured and device is unavailable, try reconnect
+  - if:
+      - condition: template
+        value_template: "{{ reconnect_btn is string and reconnect_btn != '' }}"
+      - condition: state
+        entity_id: !input beurer_light
+        state: "unavailable"
+    then:
+      - service: button.press
+        target:
+          entity_id: "{{ reconnect_btn }}"
+      # Wait for BLE connection to establish
+      - delay:
+          seconds: 15
+
+  # Abort if device is still unavailable after reconnect attempt
+  - condition: not
+    conditions:
+      - condition: state
+        entity_id: !input beurer_light
+        state: "unavailable"
+
   # =========================================================================
   # PHASE 1: SUNRISE SIMULATION (gradual increase over sunrise_mins)
   # =========================================================================

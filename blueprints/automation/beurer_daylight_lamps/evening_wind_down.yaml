@@ -141,6 +141,19 @@ blueprint:
       selector:
         boolean:
 
+    reconnect_button:
+      name: "Reconnect Button (Optional)"
+      description: |
+        Select the reconnect button for your Beurer lamp.
+        If configured, the automation will attempt to reconnect
+        when the device is unavailable before starting the session.
+      default: []
+      selector:
+        entity:
+          filter:
+            - integration: beurer_daylight_lamps
+              domain: button
+
 variables:
   beurer: !input beurer_light
   extras: !input additional_lights
@@ -150,6 +163,7 @@ variables:
   brightness_start: !input start_brightness
   brightness_end: !input end_brightness
   check_state: !input only_if_on
+  reconnect_btn: !input reconnect_button
 
   # Calculate steps (one every minute for smoother dimming)
   total_steps: "{{ duration_mins | int }}"
@@ -202,6 +216,31 @@ condition:
         state: "on"
 
 action:
+  # =========================================================================
+  # STEP 0: CONNECTION CHECK & RECONNECT
+  # =========================================================================
+  # If reconnect button is configured and device is unavailable, try reconnect
+  - if:
+      - condition: template
+        value_template: "{{ reconnect_btn is string and reconnect_btn != '' }}"
+      - condition: state
+        entity_id: !input beurer_light
+        state: "unavailable"
+    then:
+      - service: button.press
+        target:
+          entity_id: "{{ reconnect_btn }}"
+      # Wait for BLE connection to establish
+      - delay:
+          seconds: 15
+
+  # Abort if device is still unavailable after reconnect attempt
+  - condition: not
+    conditions:
+      - condition: state
+        entity_id: !input beurer_light
+        state: "unavailable"
+
   # =========================================================================
   # INITIAL STATE: Set warm light at starting brightness
   # =========================================================================

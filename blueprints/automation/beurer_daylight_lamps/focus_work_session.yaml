@@ -188,6 +188,19 @@ blueprint:
               value: "stay_on"
           mode: dropdown
 
+    reconnect_button:
+      name: "Reconnect Button (Optional)"
+      description: |
+        Select the reconnect button for your Beurer lamp.
+        If configured, the automation will attempt to reconnect
+        when the device is unavailable before starting the session.
+      default: []
+      selector:
+        entity:
+          filter:
+            - integration: beurer_daylight_lamps
+              domain: button
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # VARIABLES
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -202,6 +215,7 @@ variables:
   break_mins: !input break_interval
   end_behavior: !input end_action
   use_time: !input use_time_trigger
+  reconnect_btn: !input reconnect_button
 
   # Helper: all lights combined
   all_lights: >
@@ -259,6 +273,31 @@ condition:
 # ACTIONS
 # ═══════════════════════════════════════════════════════════════════════════════
 action:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # STEP 0: CONNECTION CHECK & RECONNECT
+  # ─────────────────────────────────────────────────────────────────────────────
+  # If reconnect button is configured and device is unavailable, try reconnect
+  - if:
+      - condition: template
+        value_template: "{{ reconnect_btn is string and reconnect_btn != '' }}"
+      - condition: state
+        entity_id: !input beurer_light
+        state: "unavailable"
+    then:
+      - service: button.press
+        target:
+          entity_id: "{{ reconnect_btn }}"
+      # Wait for BLE connection to establish
+      - delay:
+          seconds: 15
+
+  # Abort if device is still unavailable after reconnect attempt
+  - condition: not
+    conditions:
+      - condition: state
+        entity_id: !input beurer_light
+        state: "unavailable"
+
   # ─────────────────────────────────────────────────────────────────────────────
   # START FOCUS LIGHT
   # ─────────────────────────────────────────────────────────────────────────────
