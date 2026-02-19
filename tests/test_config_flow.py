@@ -238,9 +238,15 @@ async def test_connection_timeout_error(hass: HomeAssistant) -> None:
     flow._ble_device = mock_device
     flow._rssi = -60
 
-    with patch(
-        "custom_components.beurer_daylight_lamps.config_flow.BeurerInstance",
-        return_value=mock_instance,
+    with (
+        patch(
+            "custom_components.beurer_daylight_lamps.config_flow.BeurerInstance",
+            return_value=mock_instance,
+        ),
+        patch(
+            "custom_components.beurer_daylight_lamps.config_flow.bluetooth.async_ble_device_from_address",
+            return_value=None,
+        ),
     ):
         result = await flow._test_connection()
 
@@ -263,9 +269,15 @@ async def test_connection_asyncio_timeout(hass: HomeAssistant) -> None:
     flow._ble_device = mock_device
     flow._rssi = -60
 
-    with patch(
-        "custom_components.beurer_daylight_lamps.config_flow.BeurerInstance",
-        return_value=mock_instance,
+    with (
+        patch(
+            "custom_components.beurer_daylight_lamps.config_flow.BeurerInstance",
+            return_value=mock_instance,
+        ),
+        patch(
+            "custom_components.beurer_daylight_lamps.config_flow.bluetooth.async_ble_device_from_address",
+            return_value=None,
+        ),
     ):
         result = await flow._test_connection()
 
@@ -777,7 +789,13 @@ class TestAsyncStepValidate:
         flow.hass = hass
         flow._mac = "AA:BB:CC:DD:EE:FF"
 
-        with patch.object(flow, "_test_connection", new_callable=AsyncMock, return_value=False):
+        with (
+            patch(
+                "custom_components.beurer_daylight_lamps.config_flow.bluetooth.async_ble_device_from_address",
+                return_value=MagicMock(),
+            ),
+            patch.object(flow, "_test_connection", new_callable=AsyncMock, return_value=False),
+        ):
             result = await flow.async_step_validate(user_input=None)
 
         assert result["type"] == "form"
@@ -793,7 +811,13 @@ class TestAsyncStepValidate:
         flow.hass = hass
         flow._mac = "AA:BB:CC:DD:EE:FF"
 
-        with patch.object(flow, "_test_connection", new_callable=AsyncMock, return_value=True):
+        with (
+            patch(
+                "custom_components.beurer_daylight_lamps.config_flow.bluetooth.async_ble_device_from_address",
+                return_value=MagicMock(),
+            ),
+            patch.object(flow, "_test_connection", new_callable=AsyncMock, return_value=True),
+        ):
             result = await flow.async_step_validate(user_input=None)
 
         assert result["type"] == "form"
@@ -1138,10 +1162,17 @@ class TestTestConnectionWithServiceInfo:
         flow._ble_device = mock_device
         flow._rssi = -60
 
-        with patch(
-            "custom_components.beurer_daylight_lamps.config_flow.BeurerInstance",
-            return_value=mock_instance,
-        ), patch("asyncio.timeout", side_effect=asyncio.TimeoutError()):
+        with (
+            patch(
+                "custom_components.beurer_daylight_lamps.config_flow.BeurerInstance",
+                return_value=mock_instance,
+            ),
+            patch("asyncio.timeout", side_effect=asyncio.TimeoutError()),
+            patch(
+                "custom_components.beurer_daylight_lamps.config_flow.bluetooth.async_ble_device_from_address",
+                return_value=None,
+            ),
+        ):
             result = await flow._test_connection()
 
         assert result is False
