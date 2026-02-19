@@ -149,6 +149,10 @@ class BeurerInstance:
         # Reconnect loop tracking - prevents duplicate loops
         self._reconnect_loop_active: bool = False
 
+        # Mode switch guard - prevents stale notifications from overwriting state
+        # during mode transitions (fixes race condition in sunrise→white switch)
+        self._mode_switch_in_progress: bool = False
+
         # Therapy tracking - sunrise/sunset simulation and exposure tracking
         self._sunrise_simulation: SunriseSimulation | None = None
         self._therapy_tracker: TherapyTracker = TherapyTracker()
@@ -1044,10 +1048,17 @@ class BeurerInstance:
         self._brightness = intensity
 
         # Switch to white mode if not already active
-        if not self._light_on:
-            LOGGER.debug("Activating white mode")
-            await self._send_packet([CMD_MODE, MODE_WHITE])
-            await asyncio.sleep(MODE_CHANGE_DELAY)
+        if not self._light_on or self._color_on:
+            LOGGER.debug(
+                "Activating white mode (light_on=%s, color_on=%s)",
+                self._light_on, self._color_on,
+            )
+            self._mode_switch_in_progress = True
+            try:
+                await self._send_packet([CMD_MODE, MODE_WHITE])
+                await asyncio.sleep(MODE_CHANGE_DELAY)
+            finally:
+                self._mode_switch_in_progress = False
             self._light_on = True
             self._color_on = False
             self._available = True
@@ -1074,8 +1085,12 @@ class BeurerInstance:
         if not self._color_on:
             LOGGER.debug("Activating RGB mode for effect")
             self._mode = ColorMode.RGB
-            await self._send_packet([CMD_MODE, MODE_RGB])
-            await asyncio.sleep(MODE_CHANGE_DELAY)
+            self._mode_switch_in_progress = True
+            try:
+                await self._send_packet([CMD_MODE, MODE_RGB])
+                await asyncio.sleep(MODE_CHANGE_DELAY)
+            finally:
+                self._mode_switch_in_progress = False
             self._color_on = True
             self._light_on = False
             self._available = True
@@ -1267,6 +1282,16 @@ class BeurerInstance:
         version = data[8]
         self._last_notification_version = version
         trigger_update = False
+
+        # Guard: ignore status notifications during mode switch to prevent
+        # stale responses from overwriting the new mode state
+        if self._mode_switch_in_progress:
+            LOGGER.debug(
+                "Ignoring status notification (version=%d) during mode switch",
+                version,
+            )
+            self._last_seen = time.time()
+            return
 
         if version == 1:  # White mode status
             new_light_on = data[9] == 1

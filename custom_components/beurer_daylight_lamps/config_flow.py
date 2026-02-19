@@ -271,6 +271,30 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
             if user_input.get("retry") is False:
                 return self.async_abort(reason="cannot_connect")
 
+        # Pre-flight check: verify a connectable (GATT-capable) adapter can
+        # reach the device before attempting the full connection test.
+        # This prevents a 45s wait on a doomed connection attempt.
+        if self._mac:
+            connectable = bluetooth.async_ble_device_from_address(
+                self.hass, self._mac, connectable=True
+            )
+            if not connectable:
+                non_conn = bluetooth.async_ble_device_from_address(
+                    self.hass, self._mac, connectable=False
+                )
+                if non_conn:
+                    LOGGER.warning(
+                        "Device %s visible but no GATT-capable adapter found. "
+                        "Only passive scanners can see it. An ESPHome Bluetooth "
+                        "Proxy or local Bluetooth adapter is required.",
+                        self._mac,
+                    )
+                    return self.async_show_form(
+                        step_id="validate",
+                        data_schema=vol.Schema({vol.Required("retry"): bool}),
+                        errors={"base": "no_gatt_adapter"},
+                    )
+
         success = await self._test_connection()
 
         if not success:
@@ -426,19 +450,41 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
                 getattr(self._ble_device, "name", "unknown") if self._ble_device else "unknown",
             )
             # Add timeout - ESPHome proxies can connect even to "non-connectable" devices
-            # but we need a reasonable timeout to prevent hanging forever
+            # but we need a reasonable timeout to prevent hanging forever.
+            # Use 30s (reduced from 45s) with max_attempts=3 for faster feedback.
             try:
-                async with asyncio.timeout(45):  # 45 second timeout (proxies may be slow)
+                async with asyncio.timeout(30):
                     await self._instance.update()
             except asyncio.TimeoutError:
+                # Determine likely cause for a more specific error message
+                has_connectable = bluetooth.async_ble_device_from_address(
+                    self.hass, self._mac, connectable=True
+                ) is not None
+                has_non_connectable = bluetooth.async_ble_device_from_address(
+                    self.hass, self._mac, connectable=False
+                ) is not None
+
+                if not has_connectable and has_non_connectable:
+                    reason = (
+                        "Device visible but no GATT-capable adapter available. "
+                        "Consider adding an ESPHome Bluetooth Proxy with 'active: true'."
+                    )
+                elif not has_connectable and not has_non_connectable:
+                    reason = (
+                        "Device not visible by any Bluetooth adapter. "
+                        "Ensure lamp is powered on and within range."
+                    )
+                else:
+                    reason = (
+                        "GATT connection failed - BLE connection slots may be full. "
+                        "Try power cycling the lamp or reducing other BLE devices."
+                    )
+
                 LOGGER.error(
-                    "Connection test timed out for %s after 45s. "
-                    "Device RSSI: %s dBm, Adapter: %s. "
-                    "Troubleshooting: (1) Power cycle the lamp (turn off/on at switch), "
-                    "(2) Move lamp closer to Bluetooth adapter, "
-                    "(3) Check if other BLE devices are using connection slots, "
-                    "(4) Consider adding an ESPHome Bluetooth Proxy for better range.",
+                    "Connection test timed out for %s after 30s. %s "
+                    "(RSSI: %s dBm, Adapter: %s)",
                     self._mac,
+                    reason,
                     self._rssi if self._rssi else "unknown",
                     getattr(self._ble_device, "name", "unknown") if self._ble_device else "unknown",
                 )

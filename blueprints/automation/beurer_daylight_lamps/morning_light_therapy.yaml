@@ -280,14 +280,14 @@ action:
         entity_id: !input beurer_light
         state: "off"
 
-  # Smooth transition: First go to near-white RGB at high brightness
+  # Smooth transition: use color_temp_kelvin to explicitly trigger white mode
+  # instead of near-white RGB which could cause race conditions on BLE devices
   - service: light.turn_on
     target:
       entity_id: "{{ beurer }}"
     data:
-      brightness_pct: 100
-      rgb_color: [255, 255, 250]
-      transition: 10
+      brightness_pct: 95
+      color_temp_kelvin: 4500
 
   - if:
       - condition: template
@@ -301,9 +301,9 @@ action:
           color_temp_kelvin: 5000
           transition: 10
 
-  # Wait for transition
+  # Wait for BLE mode switch to complete
   - delay:
-      seconds: 12
+      seconds: 5
 
   # =========================================================================
   # PHASE 3: FULL THERAPY BRIGHTNESS (Native White Mode)
@@ -314,14 +314,14 @@ action:
         entity_id: !input beurer_light
         state: "off"
 
-  # Switch Beurer to native white mode - start at 80% to avoid harsh jump
+  # Switch Beurer to native white mode (>= 5000K triggers native white)
+  # Start at 80% to avoid harsh jump
   - service: light.turn_on
     target:
       entity_id: "{{ beurer }}"
     data:
       brightness_pct: 80
       color_temp_kelvin: 5300
-      transition: 5
 
   - if:
       - condition: template

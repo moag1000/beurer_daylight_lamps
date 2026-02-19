@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.27.0] - 2026-02-19
+
+### Fixed
+
+- **Mode switch race condition** (fixes #4): Added `_mode_switch_in_progress` guard to prevent stale BLE notifications from overwriting mode state during white/RGB transitions. The `set_white()` method now also triggers mode switch when `color_on` is still true, ensuring reliable transition from RGB to native white mode.
+
+- **Morning Light Therapy blueprint** (fixes #4): Phase 2 now uses explicit `color_temp_kelvin: 4500` instead of near-white `rgb_color: [255, 255, 250]`, avoiding reliance on the white-detection shortcut and ensuring a clean transition to native white mode in Phase 3.
+
+- **White-ish RGB detection**: The HomeKit white-ish RGB detection now correctly sets `_color_temp_kelvin` to track the simulated color temperature state.
+
+- **Config flow connection timeout** (fixes #3): Reduced timeout from 45s to 30s for faster user feedback. Added pre-flight GATT capability check that immediately detects when only passive Bluetooth scanners (e.g., Shelly plugs) are available, preventing a long wait on a doomed connection attempt.
+
+- **Config flow error messages** (fixes #3): Connection timeout errors now provide specific diagnostics based on the failure cause (no GATT adapter, device not visible, connection slots full) instead of generic troubleshooting advice.
+
+### Added
+
+- New `no_gatt_adapter` error message in config flow when device is visible but no GATT-capable Bluetooth adapter is available
+
 ## [1.26.0] - 2026-01-22
 
 ### Added

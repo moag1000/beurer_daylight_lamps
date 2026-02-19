@@ -252,9 +252,11 @@ class BeurerLight(CoordinatorEntity[BeurerDataUpdateCoordinator], RestoreEntity,
             # If all RGB values are >= 200 and within 55 of each other, treat as white
             if min_val >= 200 and (max_val - min_val) <= 55:
                 LOGGER.debug(
-                    "Detected white-ish RGB %s from HomeKit, using native white mode",
-                    rgb
+                    "Detected white-ish RGB %s, using native white mode "
+                    "(current mode=%s, color_on=%s)",
+                    rgb, self._instance.color_mode, self._instance.color_on,
                 )
+                self._color_temp_kelvin = WHITE_MODE_THRESHOLD_KELVIN
                 await self._instance.set_white(
                     brightness if has_brightness else self._instance.white_brightness
                 )
@@ -271,8 +273,10 @@ class BeurerLight(CoordinatorEntity[BeurerDataUpdateCoordinator], RestoreEntity,
             # This gives the best daylight therapy light quality
             if kelvin >= WHITE_MODE_THRESHOLD_KELVIN:
                 LOGGER.debug(
-                    "Color temp %dK >= %dK, using native white mode",
-                    kelvin, WHITE_MODE_THRESHOLD_KELVIN
+                    "Color temp %dK >= %dK, using native white mode "
+                    "(current mode=%s, color_on=%s)",
+                    kelvin, WHITE_MODE_THRESHOLD_KELVIN,
+                    self._instance.color_mode, self._instance.color_on,
                 )
                 await self._instance.set_white(
                     brightness if has_brightness else self._instance.white_brightness

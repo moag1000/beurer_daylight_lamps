@@ -81,6 +81,7 @@
         },
         "error": {
             "cannot_connect": "Failed to connect to lamp",
+            "no_gatt_adapter": "No Bluetooth adapter with GATT support found. The lamp is visible but cannot be connected. Please add an ESPHome Bluetooth Proxy or use a local Bluetooth adapter.",
             "invalid_mac": "Invalid MAC address format"
         },
         "abort": {
