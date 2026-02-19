@@ -231,9 +231,11 @@ class TestTherapyTracker:
         tracker = TherapyTracker(daily_goal_minutes=10)
 
         # Add 20-minute session (200% of goal)
+        # Use noon today to avoid midnight boundary issues in CI
+        now = datetime.now().replace(hour=12, minute=0, second=0, microsecond=0)
         session = TherapySession(
-            start_time=datetime.now() - timedelta(minutes=30),
-            end_time=datetime.now() - timedelta(minutes=10),
+            start_time=now - timedelta(minutes=30),
+            end_time=now - timedelta(minutes=10),
             color_temp_kelvin=5300,
             brightness_pct=100,
         )
