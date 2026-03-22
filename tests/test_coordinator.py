@@ -350,7 +350,7 @@ class TestPeriodicUpdates:
         self, mock_hass: MagicMock, mock_instance: MagicMock
     ) -> None:
         """Test periodic update handles exceptions gracefully."""
-        mock_instance.update = AsyncMock(side_effect=Exception("BLE error"))
+        mock_instance.update = AsyncMock(side_effect=OSError("BLE error"))
         coordinator = BeurerDataUpdateCoordinator(mock_hass, mock_instance, "Test Lamp")
 
         # Should not raise, returns current data instead

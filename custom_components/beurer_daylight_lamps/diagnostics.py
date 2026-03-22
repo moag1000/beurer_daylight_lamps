@@ -7,14 +7,17 @@ Diagnostics allow users to download troubleshooting information about their devi
 from __future__ import annotations
 
 import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.const import CONF_MAC
-from homeassistant.core import HomeAssistant
 
-from . import BeurerConfigEntry
 from .const import VERSION
+
+if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
+
+    from . import BeurerConfigEntry
 
 # Data to redact for privacy - MAC addresses are semi-sensitive
 TO_REDACT = {CONF_MAC}

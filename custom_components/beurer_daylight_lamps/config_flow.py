@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import voluptuous as vol
-from bleak.backends.device import BLEDevice
 from bleak.exc import BleakError
 from homeassistant.components import bluetooth
 from homeassistant.components.bluetooth import (
@@ -25,6 +24,9 @@ from homeassistant.helpers.device_registry import format_mac
 
 from .beurer_daylight_lamps import BeurerInstance
 from .const import DEVICE_NAME_PREFIXES, DOMAIN, LOGGER
+
+if TYPE_CHECKING:
+    from bleak.backends.device import BLEDevice
 
 # Option constants
 CONF_THERAPY_GOAL = "therapy_goal"

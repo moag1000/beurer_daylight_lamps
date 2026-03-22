@@ -17,17 +17,12 @@ ignore = [
     "COM812",  # incompatible with formatter
     "ISC001",  # incompatible with formatter
     "E501",    # line-too-long (formatter handles this, some BLE hex lines are long)
-    "PLC0415", # import-outside-top-level (we use conditional imports for TYPE_CHECKING)
     "PLR2004", # magic-value-comparison (BLE protocol uses raw byte values)
     "FBT001",  # boolean-type-hint-positional-argument (common in HA integrations)
     "FBT002",  # boolean-default-value-positional-argument
     "TRY003",  # raise-vanilla-args (we use translated exceptions)
     "EM101",   # raw-string-in-exception
     "EM102",   # f-string-in-exception
-    "BLE001",  # blind-except (needed for robust BLE error handling)
-    "TC001",   # typing-only-first-party-import (conflicts with runtime needs)
-    "TC002",   # typing-only-third-party-import
-    "TC003",   # typing-only-standard-library-import
     "RUF012",  # mutable-class-default (dataclass fields)
     "SLF001",  # private-member-access (common in HA integrations for internal state)
     "ARG001",  # unused-function-argument (HA callback signatures require specific params)
@@ -53,6 +48,10 @@ ignore = [
     "PLW0108", # unnecessary-lambda
     "E402",    # module-import-not-at-top-of-file (conditional test imports)
     "B007",    # unused-loop-control-variable
+    "PLC0415", # import-outside-top-level (tests use local imports per test method)
+    "TC001",   # typing-only imports not needed in tests
+    "TC002",   # typing-only imports not needed in tests
+    "TC003",   # typing-only imports not needed in tests
 ]
 "tools/**" = [
     "T201",    # print is the primary output method for CLI tools
@@ -61,12 +60,6 @@ ignore = [
     "INP001",  # implicit namespace package (tools/ is not a package)
     "S101",    # assert allowed in tools
     "ASYNC250",# blocking input() is intentional for interactive CLI
-]
-"custom_components/**/beurer_daylight_lamps.py" = [
-    "PLR0911", # too-many-return-statements (notification handler has many branches)
-    "PLR0912", # too-many-branches (notification handler)
-    "PLR0915", # too-many-statements (connect method is complex by necessity)
-    "C901",    # complex-structure (BLE protocol handling is inherently complex)
 ]
 
 [lint.flake8-pytest-style]

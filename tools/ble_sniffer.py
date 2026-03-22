@@ -42,6 +42,7 @@ from pathlib import Path
 
 from bleak import BleakClient, BleakScanner
 from bleak.backends.characteristic import BleakGATTCharacteristic
+from bleak.exc import BleakError
 
 # BLE UUIDs
 WRITE_UUID = "8b00ace7-eb0b-49b0-bbe9-9aee0a26e1a3"
@@ -300,7 +301,7 @@ class BLESniffer:
             try:
                 if not await self._handle_command(cmd.split()):
                     break
-            except Exception as e:
+            except (BleakError, TimeoutError, OSError, ValueError) as e:
                 print(f"Error: {e}")
 
 

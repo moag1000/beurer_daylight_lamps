@@ -232,7 +232,7 @@ class TestInitializationFailedRepairFlow:
                 hass.config_entries,
                 "async_reload",
                 new_callable=AsyncMock,
-                side_effect=Exception("Reload failed"),
+                side_effect=RuntimeError("Reload failed"),
             ),
             patch(
                 "custom_components.beurer_daylight_lamps.repairs.ir.async_delete_issue"

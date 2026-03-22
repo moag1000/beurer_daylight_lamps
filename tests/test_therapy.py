@@ -305,6 +305,8 @@ class TestSunriseSimulation:
         instance = MagicMock()
         instance.set_color_with_brightness_fast = AsyncMock()
         instance.turn_off = AsyncMock()
+        instance._request_status = AsyncMock()
+        instance.connect = AsyncMock(return_value=True)
         instance.color_brightness = 200
         instance.white_brightness = 255
         return instance
@@ -396,6 +398,8 @@ class TestSunriseSimulationExecution:
         instance = MagicMock()
         instance.set_color_with_brightness_fast = AsyncMock()
         instance.turn_off = AsyncMock()
+        instance._request_status = AsyncMock()
+        instance.connect = AsyncMock(return_value=True)
         instance.color_brightness = 200
         instance.white_brightness = 255
         return instance
@@ -462,7 +466,7 @@ class TestSunriseSimulationExecution:
         config = SUNRISE_PROFILES[SunriseProfile.NATURAL]
 
         mock_instance.set_color_with_brightness_fast = AsyncMock(
-            side_effect=Exception("Test error")
+            side_effect=OSError("Test error")
         )
         sim._running = True
 
@@ -559,7 +563,7 @@ class TestSunriseSimulationExecution:
         sim = SunriseSimulation(mock_instance)
         mock_instance.color_brightness = 200
         mock_instance.set_color_with_brightness_fast = AsyncMock(
-            side_effect=Exception("Test error")
+            side_effect=OSError("Test error")
         )
         sim._running = True
 

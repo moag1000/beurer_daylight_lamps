@@ -14,6 +14,7 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
+from bleak.exc import BleakError
 from homeassistant.components.light import ColorMode  # type: ignore[attr-defined]
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
@@ -236,7 +237,7 @@ class BeurerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             # Adjust polling interval after each update
             self._adjust_polling_interval()
-        except Exception as err:
+        except (BleakError, TimeoutError, OSError) as err:
             LOGGER.debug(
                 "Update failed for %s: %s",
                 self.instance.mac,

@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING, Any
 
 import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
+from bleak.backends.device import BLEDevice
+from bleak.exc import BleakError
 from homeassistant.components import bluetooth
 from homeassistant.components.bluetooth import (
     BluetoothChange,
@@ -28,12 +30,14 @@ from homeassistant.helpers import (
     issue_registry as ir,
 )
 from homeassistant.helpers.service import async_extract_entity_ids
+from homeassistant.util.color import color_temperature_to_rgb
 
 from .beurer_daylight_lamps import BeurerInstance
 from .const import DOMAIN, LOGGER
 from .coordinator import BeurerDataUpdateCoordinator
 from .exceptions import BeurerInitializationError as BeurerInitializationError
 from .therapy import SunriseProfile
+from .wl90 import AlarmItem
 
 # Service constants
 SERVICE_APPLY_PRESET = "apply_preset"
@@ -233,8 +237,6 @@ def _get_ble_device_and_rssi(
     Returns:
         Tuple of (BLEDevice or None, RSSI or None)
     """
-    from bleak.backends.device import BLEDevice
-
     # Try connectable first, then non-connectable
     ble_device: BLEDevice | None = bluetooth.async_ble_device_from_address(
         hass, mac_address
@@ -271,8 +273,6 @@ def _get_or_create_ble_device(
             "Device %s not currently visible via Bluetooth - will retry when seen",
             mac_address,
         )
-        from bleak.backends.device import BLEDevice
-
         ble_device = BLEDevice(
             address=mac_address,
             name=device_name,
@@ -437,7 +437,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> bo
                         "Initial connection to %s failed, will retry on demand",
                         mac_address,
                     )
-            except Exception as err:
+            except (BleakError, TimeoutError, OSError) as err:
                 LOGGER.debug("Initial connection to %s failed: %s", mac_address, err)
 
     entry.async_create_background_task(
@@ -541,8 +541,6 @@ def _register_preset_service(hass: HomeAssistant) -> None:
             return
 
         preset = PRESETS[preset_name]
-
-        from homeassistant.util.color import color_temperature_to_rgb
 
         for instance in instances:
             LOGGER.debug("Applying preset '%s' to %s", preset_name, instance.mac)
@@ -747,8 +745,6 @@ def _register_alarm_service(hass: HomeAssistant) -> None:
         Configures one of the 3 alarm slots with time, days,
         tone, volume, snooze, and optional sunrise simulation.
         """
-        from .wl90 import AlarmItem
-
         slot = call.data[ATTR_SLOT]
 
         instances = await _async_get_instances_from_target(hass, call, "ALARM")

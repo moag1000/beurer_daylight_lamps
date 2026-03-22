@@ -14,6 +14,7 @@ from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 
+from bleak.exc import BleakError
 from homeassistant.util.color import color_temperature_to_rgb
 
 if TYPE_CHECKING:
@@ -378,7 +379,7 @@ class SunriseSimulation:
 
                 # Execute the action
                 await action()
-            except Exception as err:
+            except (BleakError, TimeoutError, OSError) as err:
                 LOGGER.warning(
                     "Action failed (attempt %d/%d): %s", attempt + 1, max_retries, err
                 )
@@ -475,7 +476,7 @@ class SunriseSimulation:
             if self._running:
                 try:
                     await self._instance._request_status()
-                except Exception:
+                except (BleakError, TimeoutError, OSError):
                     LOGGER.debug("Non-critical: failed to request status after sunrise")
 
             LOGGER.info("Sunrise simulation completed")
@@ -588,7 +589,7 @@ class SunriseSimulation:
             if self._running:
                 try:
                     await self._instance._request_status()
-                except Exception:
+                except (BleakError, TimeoutError, OSError):
                     LOGGER.debug("Non-critical: failed to request status after sunset")
 
             LOGGER.info("Sunset simulation completed")

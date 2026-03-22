@@ -31,7 +31,7 @@ def send_raw_cmd(cmd: str) -> bool:
             json={"device_id": DEVICE_ID, "command": cmd},
             timeout=10,
         )
-    except Exception as e:
+    except (requests.RequestException, OSError) as e:
         print(f"Error sending {cmd}: {e}")
         return False
     else:
@@ -54,7 +54,7 @@ def get_last_notifications(n: int = 5) -> list:
                 if state.startswith("feef0c") and len(state) > 20:
                     notifications.append(state)
             return notifications[-n:]
-    except Exception as e:
+    except (requests.RequestException, OSError, ValueError, KeyError) as e:
         print(f"Error getting notifications: {e}")
     return []
 
@@ -73,7 +73,7 @@ def parse_rgb_notification(hex_str: str) -> dict:
         brightness = int(hex_str[20:22], 16)
         timer_active = int(hex_str[22:24], 16)
         timer_min = int(hex_str[24:26], 16)
-    except Exception as e:
+    except (ValueError, IndexError) as e:
         return {"raw": hex_str, "error": str(e)}
     else:
         return {

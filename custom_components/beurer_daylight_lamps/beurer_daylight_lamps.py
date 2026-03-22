@@ -24,33 +24,39 @@ Notification versions (byte 8 of response):
 from __future__ import annotations
 
 import asyncio
+import datetime
 import time
-from collections.abc import Callable, Coroutine
 from typing import TYPE_CHECKING, Any
 
-from bleak import BleakClient
-from bleak.backends.characteristic import BleakGATTCharacteristic
-from bleak.backends.device import BLEDevice
+from bleak import BleakClient  # noqa: TC002 - needed at runtime for test mocking
 from bleak.exc import BleakError
 from bleak_retry_connector import BleakClientWithServiceCache, establish_connection
+from homeassistant.components import bluetooth
 from homeassistant.components.light import ColorMode  # type: ignore[attr-defined]
 
 from .therapy import SunriseSimulation, TherapyTracker
 from .wl90 import WL90Controller
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Coroutine
+
+    from bleak.backends.characteristic import BleakGATTCharacteristic
+    from bleak.backends.device import BLEDevice
     from homeassistant.core import HomeAssistant
 
 from .const import (
     # Adapter failure constants
     ADAPTER_FAILURE_COOLDOWN,
+    CMD_ALARM_SYNC,
     CMD_BRIGHTNESS,
     CMD_COLOR,
     # Protocol commands
     CMD_DEVICE_PERMISSION,
     CMD_EFFECT,
     CMD_MODE,
+    CMD_MUSIC_QUERY,
     CMD_OFF,
+    CMD_RADIO_SYNC_STATUS,
     CMD_SETTINGS_READ,
     CMD_SETTINGS_WRITE,
     CMD_STATUS,
@@ -76,24 +82,10 @@ from .const import (
     RECONNECT_INITIAL_BACKOFF,
     RECONNECT_MAX_BACKOFF,
     RECONNECT_MIN_INTERVAL,
-    # WL90 response types
-    RESP_ALARM,
     # Response command bytes
     RESP_DEVICE_PERMISSION,
     RESP_LIGHT_TIMER_END,
     RESP_MOONLIGHT_TIMER_END,
-    RESP_MUSIC_INFO,
-    RESP_MUSIC_STATUS,
-    RESP_MUSIC_TIMER,
-    RESP_MUSIC_TIMER_END,
-    RESP_MUSIC_TOGGLE,
-    RESP_RADIO_INFO,
-    RESP_RADIO_POWER,
-    RESP_RADIO_PRESET,
-    RESP_RADIO_SAVE,
-    RESP_RADIO_STATUS,
-    RESP_RADIO_TIMER_END,
-    RESP_RADIO_TUNE,
     RESP_SETTINGS_FROM_DEVICE,
     RESP_SETTINGS_SYNC,
     STATUS_DELAY,
@@ -128,12 +120,12 @@ class BeurerInstance:
         self._mac: str = device.address
         self._ble_device: BLEDevice = device
         self._hass: HomeAssistant | None = hass
-        # Don't create BleakClient here - we'll create it fresh in connect()
-        # This allows us to use updated device references from better proxies
         self._client: BleakClient | None = None
-
         self._update_callbacks: list[Callable[[], None]] = []
-        self._available: bool = False  # True once we've received status from device
+        self._rssi: int | None = rssi
+
+        # Light state
+        self._available: bool = False
         self._light_on: bool = False
         self._color_on: bool = False
         self._rgb_color: tuple[int, int, int] = (255, 255, 255)
@@ -144,70 +136,53 @@ class BeurerInstance:
         self._read_uuid: str | None = None
         self._mode: ColorMode = ColorMode.WHITE
         self._supported_effects: list[str] = list(SUPPORTED_EFFECTS)
-        self._rssi: int | None = rssi
-        self._last_command_time: float = 0.0  # For rate limiting
-        self._last_seen: float = time.time()  # Track when device was last seen
-        self._ble_available: bool = True  # Track if device is seen by any BLE adapter
-        # Diagnostic: raw notification data for reverse engineering
+        self._mode_switch_target: ColorMode | None = None
+
+        # Connection and timing state
+        self._last_command_time: float = 0.0
+        self._last_seen: float = time.time()
+        self._ble_available: bool = True
+
+        # Diagnostic state
         self._last_raw_notification: str | None = None
         self._last_unknown_notification: str | None = None
         self._last_notification_version: int | None = None
-        self._heartbeat_count: int = 0  # Counter for ACK/heartbeat packets
-        # Timer state tracking (discovered via reverse engineering)
+        self._heartbeat_count: int = 0
         self._timer_active: bool = False
         self._timer_minutes: int | None = None
-
-        # Device control permission (from APK: CMD 0x00, response must be 2)
         self._device_permission_granted: bool = False
 
-        # Device settings (discovered from APK reverse engineering)
-        self._feedback_enabled: bool | None = None  # Device beep/sound on button press
-        self._fade_enabled: bool | None = None  # Smooth brightness transitions
-        self._display_setting: int = 0  # Display mode (stored for settings write-back)
-        self._date_format: int = 0  # Date format (stored for settings write-back)
-        self._time_format: int = 0  # Time format (stored for settings write-back)
+        # Device settings (from APK reverse engineering)
+        self._feedback_enabled: bool | None = None
+        self._fade_enabled: bool | None = None
+        self._display_setting: int = 0
+        self._date_format: int = 0
+        self._time_format: int = 0
 
-        # Reconnection state - using asyncio.Lock for thread-safety
-        self._reconnect_lock: asyncio.Lock = asyncio.Lock()
-        self._reconnect_backoff: float = RECONNECT_INITIAL_BACKOFF
-        self._last_reconnect_attempt: float = 0.0
+        # Connection health and reconnection
+        self._init_connection_state()
 
-        # Adapter failure tracking for intelligent rotation
-        self._adapter_failures: dict[str, float] = {}  # source -> failure timestamp
-
-        # Connection watchdog task reference
-        self._watchdog_task: asyncio.Task[None] | None = None
-
-        # Connection health metrics tracking
-        self._reconnect_count: int = 0  # Total reconnections since startup
-        self._command_success_count: int = 0  # Successful commands
-        self._command_failure_count: int = 0  # Failed commands
-        self._connection_start_time: float | None = (
-            None  # When current connection started
-        )
-
-        # Reconnect loop tracking - prevents duplicate loops
-        self._reconnect_loop_active: bool = False
-
-        # Mode switch guard - selectively filters contradicting notifications
-        # during mode transitions (fixes race condition in sunrise→white switch)
-        # When set to a ColorMode, only notifications matching that target mode
-        # (or device-off/shutdown) are processed; contradicting mode notifications
-        # are discarded as stale responses from the previous mode.
-        self._mode_switch_target: ColorMode | None = None
-
-        # Therapy tracking - sunrise/sunset simulation and exposure tracking
+        # Therapy tracking and WL90
         self._sunrise_simulation: SunriseSimulation | None = None
         self._therapy_tracker: TherapyTracker = TherapyTracker()
-
-        # Reference to adaptive lighting switch (set by switch entity)
         self.adaptive_lighting_switch: Any = None
-
-        # WL90-specific controller (only initialized for WL90 devices)
         self._is_wl90: bool = is_wl90_model(getattr(device, "name", None))
         self._wl90: WL90Controller | None = (
             WL90Controller(self) if self._is_wl90 else None
         )
+
+    def _init_connection_state(self) -> None:
+        """Initialize connection health and reconnection state."""
+        self._reconnect_lock: asyncio.Lock = asyncio.Lock()
+        self._reconnect_backoff: float = RECONNECT_INITIAL_BACKOFF
+        self._last_reconnect_attempt: float = 0.0
+        self._adapter_failures: dict[str, float] = {}
+        self._watchdog_task: asyncio.Task[None] | None = None
+        self._reconnect_count: int = 0
+        self._command_success_count: int = 0
+        self._command_failure_count: int = 0
+        self._connection_start_time: float | None = None
+        self._reconnect_loop_active: bool = False
 
     def update_ble_device(self, device: BLEDevice) -> None:
         """Update the BLE device reference.
@@ -345,19 +320,19 @@ class BeurerInstance:
                 # Re-check conditions after delay (state may have changed during sleep)
                 # Note: mypy thinks these are unreachable because it doesn't understand
                 # that state can change during await. These checks ARE necessary.
-                if self._available or self.is_connected:
-                    LOGGER.debug(  # type: ignore[unreachable]
-                        "Auto-reconnect to %s cancelled - connected during backoff",
-                        self._mac,
+                if self._available or self.is_connected or not self._ble_available:
+                    reason = (  # type: ignore[unreachable]
+                        "connected during backoff"
+                        if (self._available or self.is_connected)
+                        else "device became unreachable"
                     )
-                    self._reconnect_backoff = RECONNECT_INITIAL_BACKOFF
-                    return
-
-                if not self._ble_available:
-                    LOGGER.debug(  # type: ignore[unreachable]
-                        "Auto-reconnect to %s cancelled - device became unreachable",
+                    LOGGER.debug(
+                        "Auto-reconnect to %s cancelled - %s",
                         self._mac,
+                        reason,
                     )
+                    if self._available or self.is_connected:
+                        self._reconnect_backoff = RECONNECT_INITIAL_BACKOFF
                     return
 
                 LOGGER.debug(
@@ -399,7 +374,7 @@ class BeurerInstance:
                     LOGGER.debug("Auto-reconnect to %s cancelled", self._mac)
                     raise  # Re-raise to properly handle cancellation
 
-                except Exception as err:
+                except (BleakError, TimeoutError, OSError) as err:
                     self._reconnect_backoff = min(
                         self._reconnect_backoff * RECONNECT_BACKOFF_MULTIPLIER,
                         RECONNECT_MAX_BACKOFF,
@@ -616,7 +591,7 @@ class BeurerInstance:
                     "Background task '%s' cancelled for %s", task_name, self._mac
                 )
                 raise  # Re-raise to properly signal cancellation
-            except Exception as err:
+            except (BleakError, TimeoutError, OSError) as err:
                 LOGGER.error(
                     "Error in background task '%s' for %s: %s",
                     task_name,
@@ -686,7 +661,7 @@ class BeurerInstance:
                         LOGGER.debug("Watchdog: %s cancelled", self._mac)
                         raise  # Re-raise to exit the loop
 
-                    except Exception as err:
+                    except (BleakError, TimeoutError, OSError) as err:
                         LOGGER.error("Watchdog: Error for %s: %s", self._mac, err)
                         break  # Exit loop on unexpected error
 
@@ -885,18 +860,8 @@ class BeurerInstance:
                 data.hex(),
             )
             await self._client.write_gatt_char(self._write_uuid, data)
-        except BleakError as err:
-            LOGGER.debug("BleakError during write to %s: %s", self._mac, err)
-            self._command_failure_count += 1
-            await self.disconnect()
-            return False
-        except TimeoutError as err:
-            LOGGER.debug("Timeout during write to %s: %s", self._mac, err)
-            self._command_failure_count += 1
-            await self.disconnect()
-            return False
-        except OSError as err:
-            LOGGER.error("OS error during write to %s: %s", self._mac, err)
+        except (BleakError, TimeoutError, OSError) as err:
+            LOGGER.debug("Error during write to %s: %s", self._mac, err)
             self._command_failure_count += 1
             await self.disconnect()
             return False
@@ -1162,8 +1127,6 @@ class BeurerInstance:
         Returns:
             True if time sync command was sent successfully.
         """
-        import datetime
-
         now = datetime.datetime.now(tz=datetime.UTC)
         LOGGER.info(
             "Syncing time to %s: %s", self._mac, now.strftime("%Y-%m-%d %H:%M:%S")
@@ -1474,293 +1437,315 @@ class BeurerInstance:
             for callback in self._update_callbacks:
                 callback()
 
+    def _handle_white_status(self, data: bytearray) -> bool:
+        """Handle white mode status notification (version 1).
+
+        Returns:
+            True if state changed and UI update is needed.
+        """
+        changed = False
+        new_light_on = data[9] == 1
+        new_brightness = int(data[10] * 255 / 100) if new_light_on else None
+
+        if self._light_on != new_light_on or self._brightness != new_brightness:
+            changed = True
+
+        self._light_on = new_light_on
+        self._brightness = new_brightness
+        if self._light_on:
+            self._mode = ColorMode.WHITE
+
+        # Parse timer state from notification (APK: data[11]=enabled, data[12]=minutes)
+        if len(data) > 12:
+            new_timer_active = data[11] == 1
+            new_timer_minutes = data[12] if new_timer_active else None
+            if (
+                self._timer_active != new_timer_active
+                or self._timer_minutes != new_timer_minutes
+            ):
+                self._timer_active = new_timer_active
+                self._timer_minutes = new_timer_minutes
+                changed = True
+
+        LOGGER.debug(
+            "White status: on=%s, brightness=%s, timer=%s/%s",
+            self._light_on,
+            self._brightness,
+            self._timer_active,
+            self._timer_minutes,
+        )
+        return changed
+
+    def _handle_rgb_status(self, data: bytearray) -> bool:
+        """Handle RGB mode status notification (version 2).
+
+        Returns:
+            True if state changed and UI update is needed.
+        """
+        changed = False
+        new_color_on = data[9] == 1
+        new_effect = self._effect
+        new_color_brightness = self._color_brightness
+        new_rgb = self._rgb_color
+
+        if new_color_on:
+            effect_idx = data[16]
+            if effect_idx < len(self._supported_effects):
+                new_effect = self._supported_effects[effect_idx]
+            new_color_brightness = int(data[10] * 255 / 100)
+            new_rgb = (data[13], data[14], data[15])
+
+        if (
+            self._color_on != new_color_on
+            or self._effect != new_effect
+            or self._color_brightness != new_color_brightness
+            or self._rgb_color != new_rgb
+        ):
+            changed = True
+
+        self._color_on = new_color_on
+        self._effect = new_effect
+        self._color_brightness = new_color_brightness
+        self._rgb_color = new_rgb
+        if self._color_on:
+            self._mode = ColorMode.RGB
+
+        # Parse timer state from notification (APK: data[11]=enabled, data[12]=minutes)
+        if len(data) > 12:
+            new_timer_active = data[11] == 1
+            new_timer_minutes = data[12] if new_timer_active else None
+            if (
+                self._timer_active != new_timer_active
+                or self._timer_minutes != new_timer_minutes
+            ):
+                self._timer_active = new_timer_active
+                self._timer_minutes = new_timer_minutes
+                changed = True
+
+        LOGGER.debug(
+            "RGB status: on=%s, brightness=%s, rgb=%s, effect=%s, timer=%s/%s",
+            self._color_on,
+            self._color_brightness,
+            self._rgb_color,
+            self._effect,
+            self._timer_active,
+            self._timer_minutes,
+        )
+
+        # Track therapy exposure based on current RGB state
+        self._track_therapy_from_rgb()
+
+        return changed
+
+    def _track_therapy_from_rgb(self) -> None:
+        """Track therapy exposure based on current RGB state."""
+        # Therapy-relevant light: cool white (high blue component) at high brightness
+        if self._color_on and self._color_brightness is not None:
+            # Estimate color temperature from RGB (simplified: higher blue = cooler)
+            r, g, b = self._rgb_color
+            # Cool light has roughly equal R/G and higher relative values
+            # Therapy-relevant: bright, balanced white (R~=G~=B with high values)
+            is_white_ish = abs(r - g) < 50 and abs(g - b) < 50 and min(r, g, b) > 150
+            brightness_pct = int(self._color_brightness / 255 * 100)
+            # Estimate kelvin (very rough): white-ish light with high brightness
+            estimated_kelvin = 5300 if is_white_ish else 3000
+            self._therapy_tracker.update_session(estimated_kelvin, brightness_pct)
+            if (
+                is_white_ish
+                and brightness_pct >= 80
+                and not self._therapy_tracker.has_active_session
+            ):
+                self._therapy_tracker.start_session(estimated_kelvin, brightness_pct)
+        elif not self._color_on:
+            # End session when color mode turns off
+            self._therapy_tracker.end_session()
+
+    def _handle_device_off(self) -> bool:
+        """Handle device-off notification (version 255).
+
+        Returns:
+            True if state changed and UI update is needed.
+        """
+        changed = False
+        if self._light_on or self._color_on:
+            changed = True
+            # End therapy session when light turns off
+            self._therapy_tracker.end_session()
+        self._light_on = False
+        self._color_on = False
+        LOGGER.debug("Device off notification")
+        return changed
+
+    async def _dispatch_command_response(self, resp_cmd: int, data: bytearray) -> bool:
+        """Dispatch special command responses (timer end, permission, settings, WL90).
+
+        Returns:
+            True if the notification was fully handled and no further processing needed.
+        """
+        # Timer end notifications (from APK: 0xEB=light, 0xEC=moonlight)
+        if resp_cmd in (RESP_LIGHT_TIMER_END, RESP_MOONLIGHT_TIMER_END):
+            timer_type = "light" if resp_cmd == RESP_LIGHT_TIMER_END else "moonlight"
+            result = data[8] if len(data) > 8 else 0
+            LOGGER.info(
+                "Timer end notification from %s: type=%s, result=%d (1=off, 2=cancelled)",
+                self._mac,
+                timer_type,
+                result,
+            )
+            self._timer_active = False
+            self._timer_minutes = None
+            self._last_seen = time.time()
+            if result == 1:
+                self._light_on = False
+                self._color_on = False
+            await self._trigger_update()
+            return True
+
+        # Device permission response (from APK: 0xF0)
+        if resp_cmd == RESP_DEVICE_PERMISSION:
+            permission_value = data[8] if len(data) > 8 else 0
+            self._device_permission_granted = permission_value == 2
+            if self._device_permission_granted:
+                LOGGER.debug("Device permission granted on %s", self._mac)
+            else:
+                LOGGER.warning(
+                    "Device permission DENIED on %s (value=%d). "
+                    "Another device may be controlling the lamp.",
+                    self._mac,
+                    permission_value,
+                )
+            self._last_seen = time.time()
+            return True
+
+        # Settings responses (from APK: 0xE2=read, 0xF2=write confirm)
+        if resp_cmd in (RESP_SETTINGS_FROM_DEVICE, RESP_SETTINGS_SYNC):
+            self._handle_settings_notification(data)
+            return True
+
+        # WL90-specific responses (radio, alarm, music)
+        if self._wl90 is not None and self._wl90.handle_notification(resp_cmd, data):
+            self._last_seen = time.time()
+            await self._trigger_update()
+            return True
+
+        return False
+
+    def _is_mode_switch_filtered(self, version: int) -> bool:
+        """Check if a notification should be filtered during mode switch.
+
+        Returns:
+            True if the notification should be discarded as stale.
+        """
+        if self._mode_switch_target is None:
+            return False
+
+        if (
+            self._mode_switch_target == ColorMode.WHITE
+            and version == 2  # RGB notification contradicts WHITE target
+        ):
+            LOGGER.debug(
+                "Filtering stale RGB notification (version=%d) during WHITE mode switch",
+                version,
+            )
+            self._last_seen = time.time()
+            return True
+        if (
+            self._mode_switch_target == ColorMode.RGB
+            and version == 1  # White notification contradicts RGB target
+        ):
+            LOGGER.debug(
+                "Filtering stale white notification (version=%d) during RGB mode switch",
+                version,
+            )
+            self._last_seen = time.time()
+            return True
+        return False
+
     async def _handle_notification(
         self, characteristic: BleakGATTCharacteristic, data: bytearray
     ) -> None:
-        """Handle BLE notification from device."""
-        hex_str = data.hex()
-        LOGGER.debug(
-            "Notification from %s: %s",
-            self._mac,
-            hex_str,
-        )
+        """Handle BLE notification from device.
 
-        # Store raw notification for diagnostics (always)
+        Dispatches to sub-handlers based on packet type:
+        - Command responses (timer end, permission, settings, WL90)
+        - Heartbeat/ACK packets
+        - Status updates (white, RGB, device off, shutdown)
+        """
+        hex_str = data.hex()
+        LOGGER.debug("Notification from %s: %s", self._mac, hex_str)
         self._last_raw_notification = hex_str
 
         if len(data) < 10:
             LOGGER.debug("Short notification (%d bytes), ignoring", len(data))
             return
 
-        # Check response command byte (data[7]) for special response types
-        # that may have short payloads but are NOT heartbeats
-        if len(data) > 7:
-            resp_cmd = data[7]
+        # Dispatch special command responses first
+        if len(data) > 7 and await self._dispatch_command_response(data[7], data):
+            return
 
-            # Timer end notifications (from APK: 0xEB=light, 0xEC=moonlight)
-            # These have short payloads but carry meaningful state changes
-            if resp_cmd in (RESP_LIGHT_TIMER_END, RESP_MOONLIGHT_TIMER_END):
-                timer_type = (
-                    "light" if resp_cmd == RESP_LIGHT_TIMER_END else "moonlight"
-                )
-                result = data[8] if len(data) > 8 else 0
-                LOGGER.info(
-                    "Timer end notification from %s: type=%s, result=%d (1=off, 2=cancelled)",
-                    self._mac,
-                    timer_type,
-                    result,
-                )
-                self._timer_active = False
-                self._timer_minutes = None
-                self._last_seen = time.time()
-                if result == 1:
-                    # Timer expired - light turned off
-                    self._light_on = False
-                    self._color_on = False
-                await self._trigger_update()
-                return
-
-            # Device permission response (from APK: 0xF0)
-            if resp_cmd == RESP_DEVICE_PERMISSION:
-                permission_value = data[8] if len(data) > 8 else 0
-                self._device_permission_granted = permission_value == 2
-                if self._device_permission_granted:
-                    LOGGER.debug("Device permission granted on %s", self._mac)
-                else:
-                    LOGGER.warning(
-                        "Device permission DENIED on %s (value=%d). "
-                        "Another device may be controlling the lamp.",
-                        self._mac,
-                        permission_value,
-                    )
-                self._last_seen = time.time()
-                return
-
-            # Settings responses (from APK: 0xE2=read, 0xF2=write confirm)
-            # Must be caught before version-based routing to avoid misinterpretation
-            if resp_cmd in (RESP_SETTINGS_FROM_DEVICE, RESP_SETTINGS_SYNC):
-                self._handle_settings_notification(data)
-                return
-
-            # WL90-specific responses (radio, alarm, music)
-            if self._wl90 is not None:
-                wl90_resp_cmds = (
-                    RESP_ALARM,
-                    RESP_RADIO_STATUS,
-                    RESP_RADIO_INFO,
-                    RESP_RADIO_POWER,
-                    RESP_RADIO_PRESET,
-                    RESP_RADIO_TUNE,
-                    RESP_RADIO_SAVE,
-                    RESP_RADIO_TIMER_END,
-                    RESP_MUSIC_STATUS,
-                    RESP_MUSIC_TOGGLE,
-                    RESP_MUSIC_TIMER,
-                    RESP_MUSIC_INFO,
-                    RESP_MUSIC_TIMER_END,
-                )
-                if resp_cmd in wl90_resp_cmds:
-                    handled = self._wl90.handle_notification(resp_cmd, data)
-                    if handled:
-                        self._last_seen = time.time()
-                        await self._trigger_update()
-                        return
-
-        # Check payload length (byte 6) to determine packet type
-        # Full status packets have payload_len >= 0x08
-        # Short ACK/heartbeat packets have payload_len 0x04 and should be ignored
-        # for status updates (they report version 0xFF which would turn off the light)
+        # Check payload length for heartbeat/ACK packets
         payload_len = data[6] if len(data) > 6 else 0
         if payload_len < 0x08:
             LOGGER.debug(
                 "Short payload (%d bytes), likely ACK/heartbeat - not updating state",
                 payload_len,
             )
-            # Use heartbeat to confirm device is still alive
             self._last_seen = time.time()
             self._heartbeat_count += 1
-            # Mark as available since we're receiving communication from the device
             if not self._available:
                 self._available = True
-            # Trigger update to refresh heartbeat counter sensor
             await self._trigger_update()
             return
 
+        # Version-based status dispatch
         version = data[8]
         self._last_notification_version = version
-        trigger_update = False
 
-        # Guard: selectively filter contradicting notifications during mode switch.
-        # Only discard notifications from the OLD mode; allow the target mode,
-        # device-off (255), and shutdown (0) notifications through.
-        if self._mode_switch_target is not None:
-            if (
-                self._mode_switch_target == ColorMode.WHITE
-                and version == 2  # RGB notification contradicts WHITE target
-            ):
-                LOGGER.debug(
-                    "Filtering stale RGB notification (version=%d) during WHITE mode switch",
-                    version,
-                )
-                self._last_seen = time.time()
-                return
-            if (
-                self._mode_switch_target == ColorMode.RGB
-                and version == 1  # White notification contradicts RGB target
-            ):
-                LOGGER.debug(
-                    "Filtering stale white notification (version=%d) during RGB mode switch",
-                    version,
-                )
-                self._last_seen = time.time()
-                return
-            # version 255 (off), 0 (shutdown), and matching mode notifications pass through
+        if self._is_mode_switch_filtered(version):
+            return
 
-        if version == 1:  # White mode status
-            new_light_on = data[9] == 1
-            new_brightness = int(data[10] * 255 / 100) if new_light_on else None
-
-            if self._light_on != new_light_on or self._brightness != new_brightness:
-                trigger_update = True
-
-            self._light_on = new_light_on
-            self._brightness = new_brightness
-            if self._light_on:
-                self._mode = ColorMode.WHITE
-
-            # Parse timer state from notification (APK: data[11]=enabled, data[12]=minutes)
-            if len(data) > 12:
-                new_timer_active = data[11] == 1
-                new_timer_minutes = data[12] if new_timer_active else None
-                if (
-                    self._timer_active != new_timer_active
-                    or self._timer_minutes != new_timer_minutes
-                ):
-                    self._timer_active = new_timer_active
-                    self._timer_minutes = new_timer_minutes
-                    trigger_update = True
-
-            LOGGER.debug(
-                "White status: on=%s, brightness=%s, timer=%s/%s",
-                self._light_on,
-                self._brightness,
-                self._timer_active,
-                self._timer_minutes,
-            )
-
-        elif version == 2:  # RGB mode status
-            new_color_on = data[9] == 1
-            new_effect = self._effect
-            new_color_brightness = self._color_brightness
-            new_rgb = self._rgb_color
-
-            if new_color_on:
-                effect_idx = data[16]
-                if effect_idx < len(self._supported_effects):
-                    new_effect = self._supported_effects[effect_idx]
-                new_color_brightness = int(data[10] * 255 / 100)
-                new_rgb = (data[13], data[14], data[15])
-
-            if (
-                self._color_on != new_color_on
-                or self._effect != new_effect
-                or self._color_brightness != new_color_brightness
-                or self._rgb_color != new_rgb
-            ):
-                trigger_update = True
-
-            self._color_on = new_color_on
-            self._effect = new_effect
-            self._color_brightness = new_color_brightness
-            self._rgb_color = new_rgb
-            if self._color_on:
-                self._mode = ColorMode.RGB
-
-            # Parse timer state from notification (APK: data[11]=enabled, data[12]=minutes)
-            if len(data) > 12:
-                new_timer_active = data[11] == 1
-                new_timer_minutes = data[12] if new_timer_active else None
-                if (
-                    self._timer_active != new_timer_active
-                    or self._timer_minutes != new_timer_minutes
-                ):
-                    self._timer_active = new_timer_active
-                    self._timer_minutes = new_timer_minutes
-                    trigger_update = True
-
-            LOGGER.debug(
-                "RGB status: on=%s, brightness=%s, rgb=%s, effect=%s, timer=%s/%s",
-                self._color_on,
-                self._color_brightness,
-                self._rgb_color,
-                self._effect,
-                self._timer_active,
-                self._timer_minutes,
-            )
-
-            # Track therapy exposure based on current RGB state
-            # Therapy-relevant light: cool white (high blue component) at high brightness
-            if self._color_on and self._color_brightness is not None:
-                # Estimate color temperature from RGB (simplified: higher blue = cooler)
-                r, g, b = self._rgb_color
-                # Cool light has roughly equal R/G and higher relative values
-                # Therapy-relevant: bright, balanced white (R≈G≈B with high values)
-                is_white_ish = (
-                    abs(r - g) < 50 and abs(g - b) < 50 and min(r, g, b) > 150
-                )
-                brightness_pct = int(self._color_brightness / 255 * 100)
-                # Estimate kelvin (very rough): white-ish light with high brightness
-                estimated_kelvin = 5300 if is_white_ish else 3000
-                self._therapy_tracker.update_session(estimated_kelvin, brightness_pct)
-                if (
-                    is_white_ish
-                    and brightness_pct >= 80
-                    and not self._therapy_tracker.has_active_session
-                ):
-                    self._therapy_tracker.start_session(
-                        estimated_kelvin, brightness_pct
-                    )
-            elif not self._color_on:
-                # End session when color mode turns off
-                self._therapy_tracker.end_session()
-
-        elif version == 255:  # Device off
-            if self._light_on or self._color_on:
-                trigger_update = True
-                # End therapy session when light turns off
-                self._therapy_tracker.end_session()
-            self._light_on = False
-            self._color_on = False
-            LOGGER.debug("Device off notification")
-
-        elif version == 0:  # Shutdown
+        # Shutdown must be handled here (async disconnect)
+        if version == 0:
             LOGGER.debug("Device shutting down")
             await self.disconnect()
             return
 
-        else:
-            # Unknown version - store for reverse engineering
-            self._last_unknown_notification = hex_str
-            LOGGER.warning(
-                "Unknown notification version %d from %s: hex=%s len=%d bytes=[%s]",
-                version,
-                self._mac,
-                hex_str,
-                len(data),
-                ", ".join(f"0x{b:02x}" for b in data),
-            )
-            # Still mark as available - device is communicating
-            if not self._available:
-                self._available = True
-            trigger_update = True  # Update sensors to show new unknown data
+        trigger_update = self._dispatch_version_status(version, data, hex_str)
 
-        # Mark as available once we've received any valid status
         if not self._available:
             self._available = True
             trigger_update = True
 
         if trigger_update:
             await self._trigger_update()
+
+    def _dispatch_version_status(
+        self, version: int, data: bytearray, hex_str: str
+    ) -> bool:
+        """Dispatch version-based status notifications.
+
+        Returns:
+            True if state changed and UI update is needed.
+        """
+        if version == 1:
+            return self._handle_white_status(data)
+        if version == 2:
+            return self._handle_rgb_status(data)
+        if version == 255:
+            return self._handle_device_off()
+        # Unknown version - store for reverse engineering
+        self._last_unknown_notification = hex_str
+        LOGGER.warning(
+            "Unknown notification version %d from %s: hex=%s len=%d bytes=[%s]",
+            version,
+            self._mac,
+            hex_str,
+            len(data),
+            ", ".join(f"0x{b:02x}" for b in data),
+        )
+        if not self._available:
+            self._available = True
+        return True
 
     def _handle_settings_notification(self, data: bytearray) -> None:
         """Handle a settings response notification.
@@ -1921,8 +1906,6 @@ class BeurerInstance:
         if not self._hass:
             return self._ble_device
 
-        from homeassistant.components import bluetooth
-
         # Get all service infos for this device from all adapters
         # We need to find one from a GATT-capable source
         all_service_infos = bluetooth.async_scanner_devices_by_address(
@@ -1982,16 +1965,117 @@ class BeurerInstance:
             self._hass, self._mac, connectable=True
         )
 
+    def _select_best_adapter(self) -> None:
+        """Select the best GATT-capable adapter for the device."""
+        if not self._hass:
+            return
+
+        fresh_device = self._get_gatt_capable_device()
+        if fresh_device:
+            self._ble_device = fresh_device
+            service_info = bluetooth.async_last_service_info(
+                self._hass, self._mac, connectable=True
+            )
+            if service_info and service_info.rssi:
+                self.update_rssi(service_info.rssi)
+            LOGGER.info(
+                "Selected adapter for %s (name: %s, RSSI: %s dBm)",
+                self._mac,
+                getattr(fresh_device, "name", "unknown"),
+                service_info.rssi if service_info else "unknown",
+            )
+            return
+
+        # Try non-connectable as fallback
+        fresh_device = bluetooth.async_ble_device_from_address(
+            self._hass, self._mac, connectable=False
+        )
+        if fresh_device:
+            LOGGER.debug(
+                "Device %s only available as non-connectable, trying anyway",
+                self._mac,
+            )
+            self._ble_device = fresh_device
+        else:
+            LOGGER.debug(
+                "Device %s not found by HA, using cached reference",
+                self._mac,
+            )
+
+    async def _setup_after_connect(self) -> bool:
+        """Set up characteristics, notifications, and initial state after GATT connect.
+
+        Returns:
+            True if setup succeeded, False if characteristics not found.
+        """
+        if self._client is None:
+            return False
+
+        # Find characteristics
+        self._write_uuid = None
+        self._read_uuid = None
+        for service in self._client.services:
+            for char in service.characteristics:
+                if char.uuid == WRITE_CHARACTERISTIC_UUID:
+                    self._write_uuid = char.uuid
+                if char.uuid == READ_CHARACTERISTIC_UUID:
+                    self._read_uuid = char.uuid
+
+        if not self._read_uuid or not self._write_uuid:
+            LOGGER.error(
+                "Required characteristics not found on %s (read: %s, write: %s)",
+                self._mac,
+                self._read_uuid,
+                self._write_uuid,
+            )
+            await self.disconnect()
+            return False
+
+        # Start notifications (with bleak 2.0.0 workaround)
+        try:
+            await self._client.start_notify(
+                self._read_uuid,
+                self._handle_notification,
+                bluez={"use_start_notify": True},
+            )
+        except TypeError:
+            await self._client.start_notify(self._read_uuid, self._handle_notification)
+
+        # Initial device setup sequence
+        await self._send_packet([CMD_DEVICE_PERMISSION])
+        await asyncio.sleep(STATUS_DELAY)
+        await self._request_status()
+        await asyncio.sleep(STATUS_DELAY)
+        await self.sync_time()
+
+        if self._feedback_enabled is None:
+            await asyncio.sleep(STATUS_DELAY)
+            await self._send_packet([CMD_SETTINGS_READ])
+
+        if self._wl90 is not None:
+            await self._query_wl90_state()
+
+        if not self._available:
+            self._available = True
+            await self._trigger_update()
+
+        return True
+
+    async def _query_wl90_state(self) -> None:
+        """Query WL90-specific state (alarms, radio, music)."""
+        await asyncio.sleep(STATUS_DELAY)
+        for slot_byte in (0x01, 0x07, 0x03):
+            await self._send_packet([CMD_ALARM_SYNC, slot_byte])
+            await asyncio.sleep(STATUS_DELAY)
+        await self._send_packet([CMD_RADIO_SYNC_STATUS])
+        await asyncio.sleep(STATUS_DELAY)
+        await self._send_packet([CMD_MUSIC_QUERY])
+
     async def connect(self) -> bool:
         """Connect to the device using Home Assistant's Bluetooth stack.
 
-        This method preferentially selects GATT-capable adapters (ESPHome Proxies,
+        Preferentially selects GATT-capable adapters (ESPHome Proxies,
         local Bluetooth) over passive-only scanners (Shelly devices).
-
-        Home Assistant automatically selects the best available adapter with
-        free connection slots. We use ble_device_callback to get a fresh
-        device reference on each retry attempt, allowing HA to pick a different
-        adapter if the previous one failed (e.g., no slots available).
         """
         try:
             if self._client is not None and self._client.is_connected:
@@ -2007,73 +2091,22 @@ class BeurerInstance:
                 self._rssi or "unknown",
             )
             _connect_start = time.time()
-
-            # Get initial device from HA - prefer GATT-capable adapters
-            if self._hass:
-                from homeassistant.components import bluetooth
-
-                # Try to get device from GATT-capable adapter first
-                fresh_device = self._get_gatt_capable_device()
-
-                if fresh_device:
-                    self._ble_device = fresh_device
-                    # Get RSSI from service info
-                    service_info = bluetooth.async_last_service_info(
-                        self._hass, self._mac, connectable=True
-                    )
-                    if service_info and service_info.rssi:
-                        self.update_rssi(service_info.rssi)
-                    LOGGER.info(
-                        "Selected adapter for %s (name: %s, RSSI: %s dBm)",
-                        self._mac,
-                        getattr(fresh_device, "name", "unknown"),
-                        service_info.rssi if service_info else "unknown",
-                    )
-                else:
-                    # Try non-connectable as fallback
-                    fresh_device = bluetooth.async_ble_device_from_address(
-                        self._hass, self._mac, connectable=False
-                    )
-                    if fresh_device:
-                        LOGGER.debug(
-                            "Device %s only available as non-connectable, trying anyway",
-                            self._mac,
-                        )
-                        self._ble_device = fresh_device
-                    else:
-                        LOGGER.debug(
-                            "Device %s not found by HA, using cached reference",
-                            self._mac,
-                        )
+            self._select_best_adapter()
 
             def get_fresh_device() -> BLEDevice:
-                """Get fresh device from HA on each retry.
-
-                This is the KEY for multi-adapter support: on each retry,
-                we re-evaluate which GATT-capable adapter to use. If the previous
-                adapter failed, we try the next GATT-capable one.
-                """
+                """Get fresh device from HA on each retry."""
                 if self._hass:
-                    # Use our GATT-capable filter instead of HA's default
                     fresh = self._get_gatt_capable_device()
                     if fresh:
                         old_name = getattr(self._ble_device, "name", "?")
                         new_name = getattr(fresh, "name", "?")
                         if old_name != new_name:
                             LOGGER.debug(
-                                "Switched adapter: %s -> %s",
-                                old_name,
-                                new_name,
+                                "Switched adapter: %s -> %s", old_name, new_name
                             )
                         self._ble_device = fresh
                         return fresh
                 return self._ble_device
-
-            # Use establish_connection with ble_device_callback
-            # On each retry, get_fresh_device selects the best GATT-capable adapter
-            LOGGER.debug(
-                "Establishing connection with bleak-retry-connector (max 5 attempts)..."
-            )
 
             self._client = await establish_connection(
                 BleakClientWithServiceCache,
@@ -2081,7 +2114,7 @@ class BeurerInstance:
                 self._mac,
                 disconnected_callback=self._on_disconnect,
                 max_attempts=5,
-                ble_device_callback=get_fresh_device,  # HA picks best adapter on each retry!
+                ble_device_callback=get_fresh_device,
             )
 
             LOGGER.info(
@@ -2091,156 +2124,32 @@ class BeurerInstance:
                 self._rssi or "unknown",
             )
 
-            # Connection successful - continue with setup
-
-            # Find characteristics
-            self._write_uuid = None
-            self._read_uuid = None
-            service_count = 0
-            char_count = 0
-            for service in self._client.services:
-                service_count += 1
-                for char in service.characteristics:
-                    char_count += 1
-                    if char.uuid == WRITE_CHARACTERISTIC_UUID:
-                        self._write_uuid = char.uuid
-                    if char.uuid == READ_CHARACTERISTIC_UUID:
-                        self._read_uuid = char.uuid
-
-            LOGGER.debug(
-                "Discovered %d services with %d characteristics on %s",
-                service_count,
-                char_count,
-                self._mac,
-            )
-
-            if not self._read_uuid or not self._write_uuid:
-                LOGGER.error(
-                    "Required characteristics not found on %s (read: %s, write: %s)",
-                    self._mac,
-                    self._read_uuid,
-                    self._write_uuid,
-                )
-                await self.disconnect()
+            if not await self._setup_after_connect():
                 return False
 
-            LOGGER.debug(
-                "Found characteristics - read: %s, write: %s",
-                self._read_uuid,
-                self._write_uuid,
-            )
-
-            # Start notifications
-            # Workaround for bleak 2.0.0 regression on BlueZ (HA 2026.1)
-            # bleak 2.0.0 switched to AcquireNotify which breaks some devices
-            # bleak 2.1.0 added bluez={"use_start_notify": True} to force old behavior
-            try:
-                await self._client.start_notify(
-                    self._read_uuid,
-                    self._handle_notification,
-                    bluez={"use_start_notify": True},
-                )
-                LOGGER.debug(
-                    "Notifications started for %s (using StartNotify)", self._mac
-                )
-            except TypeError:
-                # bleak < 2.1.0: bluez parameter not supported, use default
-                await self._client.start_notify(
-                    self._read_uuid, self._handle_notification
-                )
-                LOGGER.debug("Notifications started for %s", self._mac)
-
-            # Check device permission first (APK always sends CMD 0x00 before anything else)
-            # Response must be 2 to allow control; otherwise another device may hold the lock
-            await self._send_packet([CMD_DEVICE_PERMISSION])
-            await asyncio.sleep(STATUS_DELAY)
-
-            # Get initial status
-            await self._request_status()
-
-            # Sync time on every connect (APK does this too - prevents clock drift)
-            await asyncio.sleep(STATUS_DELAY)
-            await self.sync_time()
-
-            # Query device settings (feedback, fade, etc.) on first connect
-            if self._feedback_enabled is None:
-                await asyncio.sleep(STATUS_DELAY)
-                await self._send_packet([CMD_SETTINGS_READ])
-
-            # WL90: Query alarms, radio, and music status (mirrors app behavior)
-            if self._wl90 is not None:
-                from .const import (
-                    CMD_ALARM_SYNC,
-                    CMD_MUSIC_QUERY,
-                    CMD_RADIO_SYNC_STATUS,
-                )
-
-                await asyncio.sleep(STATUS_DELAY)
-                # Query all 3 alarm slots (0x01=slot0, 0x07=slot1, 0x03=slot2)
-                for slot_byte in (0x01, 0x07, 0x03):
-                    await self._send_packet([CMD_ALARM_SYNC, slot_byte])
-                    await asyncio.sleep(STATUS_DELAY)
-                # Query radio status
-                await self._send_packet([CMD_RADIO_SYNC_STATUS])
-                await asyncio.sleep(STATUS_DELAY)
-                # Query music/speaker status
-                await self._send_packet([CMD_MUSIC_QUERY])
-
-            # Mark as available - we have a working connection
-            # (Don't wait for notification response, connection itself proves device is there)
-            if not self._available:
-                self._available = True
-                await self._trigger_update()
-
-            # Connection successful - clear any adapter failure status
+            # Connection successful - clear adapter failure and track metrics
             if self._hass:
-                from homeassistant.components import bluetooth
-
                 service_info = bluetooth.async_last_service_info(
                     self._hass, self._mac, connectable=True
                 )
                 if service_info:
                     self._clear_adapter_failure(service_info.source)
 
-            # Reset reconnect backoff on successful connection
             self._reconnect_backoff = RECONNECT_INITIAL_BACKOFF
-
-            # Track connection health metrics
-            # Increment reconnect count if this isn't the first connection
             if self._connection_start_time is not None:
                 self._reconnect_count += 1
-                LOGGER.debug(
-                    "Reconnection #%d for %s",
-                    self._reconnect_count,
-                    self._mac,
-                )
             self._connection_start_time = time.time()
-
-            # Start connection watchdog to detect stale connections
             self._start_watchdog()
-        except BleakError as err:
+        except (
+            BleakError,
+            TimeoutError,
+            OSError,
+            ValueError,
+            RuntimeError,
+            AttributeError,
+        ) as err:
             LOGGER.error(
-                "BleakError connecting to %s: %s (type: %s)",
-                self._mac,
-                err,
-                type(err).__name__,
-            )
-        except TimeoutError as err:
-            LOGGER.error(
-                "Timeout connecting to %s after all retry attempts: %s",
-                self._mac,
-                err,
-            )
-        except OSError as err:
-            LOGGER.error(
-                "OS error connecting to %s: %s (errno: %s)",
-                self._mac,
-                err,
-                getattr(err, "errno", "N/A"),
-            )
-        except Exception as err:
-            LOGGER.error(
-                "Unexpected error connecting to %s: %s (type: %s)",
+                "Error connecting to %s: %s (type: %s)",
                 self._mac,
                 err,
                 type(err).__name__,
@@ -2250,8 +2159,6 @@ class BeurerInstance:
 
         # Mark the adapter that failed so we try a different one next time
         if self._hass:
-            from homeassistant.components import bluetooth
-
             service_info = bluetooth.async_last_service_info(
                 self._hass, self._mac, connectable=True
             )

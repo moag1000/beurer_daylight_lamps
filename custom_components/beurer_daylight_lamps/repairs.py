@@ -6,17 +6,19 @@ Repair flows allow users to fix common issues through a guided UI.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import voluptuous as vol
-from homeassistant import data_entry_flow
 from homeassistant.components import bluetooth
 from homeassistant.components.repairs import RepairsFlow
 from homeassistant.const import CONF_MAC, CONF_NAME
-from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
 
 from .const import DOMAIN, LOGGER
+
+if TYPE_CHECKING:
+    from homeassistant import data_entry_flow
+    from homeassistant.core import HomeAssistant
 
 
 class DeviceNotFoundRepairFlow(RepairsFlow):
@@ -134,7 +136,7 @@ class InitializationFailedRepairFlow(RepairsFlow):
             try:
                 await self.hass.config_entries.async_reload(self._entry_id)
                 return self.async_create_entry(data={})
-            except Exception as err:
+            except (OSError, ValueError, RuntimeError) as err:
                 LOGGER.error("Reload failed: %s", err)
                 return self.async_show_form(
                     step_id="confirm",
