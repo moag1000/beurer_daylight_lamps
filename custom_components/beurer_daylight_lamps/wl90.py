@@ -7,6 +7,7 @@ This module handles WL90-specific features that are not present on TL models:
 
 Protocol details discovered from APK reverse engineering of Beurer LightUp 2.1.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -59,17 +60,17 @@ class AlarmItem:
     including sunrise simulation.
     """
 
-    slot: int = 0              # 0, 1, or 2
+    slot: int = 0  # 0, 1, or 2
     enabled: bool = False
     hour: int = 7
     minute: int = 0
     # Weekday bitmask: bit0=Sun, bit1=Mon, ..., bit6=Sat
-    days: int = 0x3E           # Default: Mon-Fri (0b0111110)
-    tone: int = 0              # Alarm tone index (0-11)
-    volume: int = 5            # Volume 0-10
-    snooze_minutes: int = 10   # Snooze duration in minutes (user-facing)
+    days: int = 0x3E  # Default: Mon-Fri (0b0111110)
+    tone: int = 0  # Alarm tone index (0-11)
+    volume: int = 5  # Volume 0-10
+    snooze_minutes: int = 10  # Snooze duration in minutes (user-facing)
     sunrise_enabled: bool = True
-    sunrise_time: int = 20     # Minutes before alarm for sunrise start
+    sunrise_time: int = 20  # Minutes before alarm for sunrise start
     sunrise_brightness: int = 50  # Sunrise max brightness %
 
     # Snooze protocol mapping: the device uses an INDEX (0-5), not minutes
@@ -104,7 +105,7 @@ class AlarmItem:
         self.days = 0
         for day in days:
             if day in day_map:
-                self.days |= (1 << day_map[day])
+                self.days |= 1 << day_map[day]
 
 
 @dataclass
@@ -112,9 +113,9 @@ class RadioState:
     """Represents the FM radio state of the WL90."""
 
     is_on: bool = False
-    channel: int = 0          # Current preset channel (0-indexed)
-    frequency: int = 0        # Frequency in 10kHz units (e.g., 1040 = 104.0 MHz)
-    volume: int = 5           # Volume 0-10
+    channel: int = 0  # Current preset channel (0-indexed)
+    frequency: int = 0  # Frequency in 10kHz units (e.g., 1040 = 104.0 MHz)
+    volume: int = 5  # Volume 0-10
     sleep_timer_on: bool = False
     sleep_timer_minutes: int = 0
     presets: list[int] = field(default_factory=list)  # Saved frequencies
@@ -130,7 +131,7 @@ class MusicState:
     """Represents the Bluetooth speaker state of the WL90."""
 
     is_on: bool = False
-    volume: int = 5           # Volume 0-10
+    volume: int = 5  # Volume 0-10
     sleep_timer_on: bool = False
     sleep_timer_minutes: int = 0
 
@@ -201,7 +202,12 @@ class WL90Controller:
             auto_seek: True for auto-seek (find next station), False for fine-tune (step).
         """
         tune_type = 1 if auto_seek else 0
-        LOGGER.debug("Radio seek type=%d direction=%d on %s", tune_type, direction, self._instance.mac)
+        LOGGER.debug(
+            "Radio seek type=%d direction=%d on %s",
+            tune_type,
+            direction,
+            self._instance.mac,
+        )
         return await self._instance._send_packet([CMD_RADIO_TUNE, tune_type, direction])
 
     async def set_radio_sleep_timer(self, minutes: int) -> bool:
@@ -302,24 +308,30 @@ class WL90Controller:
 
         LOGGER.info(
             "Syncing alarm %d to %s: enabled=%s, %02d:%02d, days=%s",
-            slot, self._instance.mac, alarm.enabled,
-            alarm.hour, alarm.minute, alarm.days_list,
+            slot,
+            self._instance.mac,
+            alarm.enabled,
+            alarm.hour,
+            alarm.minute,
+            alarm.days_list,
         )
 
-        result = await self._instance._send_packet([
-            CMD_ALARM_SYNC,
-            direction_byte,
-            1 if alarm.enabled else 0,
-            alarm.minute,
-            alarm.hour,
-            alarm.days,
-            alarm.tone,
-            alarm.volume,
-            alarm._snooze_to_index(),  # Protocol uses index (0-5), not minutes
-            1 if alarm.sunrise_enabled else 0,
-            alarm.sunrise_time,
-            alarm.sunrise_brightness,
-        ])
+        result = await self._instance._send_packet(
+            [
+                CMD_ALARM_SYNC,
+                direction_byte,
+                1 if alarm.enabled else 0,
+                alarm.minute,
+                alarm.hour,
+                alarm.days,
+                alarm.tone,
+                alarm.volume,
+                alarm._snooze_to_index(),  # Protocol uses index (0-5), not minutes
+                1 if alarm.sunrise_enabled else 0,
+                alarm.sunrise_time,
+                alarm.sunrise_brightness,
+            ]
+        )
 
         if result:
             self.alarms[slot] = alarm
@@ -379,7 +391,12 @@ class WL90Controller:
 
         # Radio confirmation responses (must be caught to prevent
         # fall-through to version-based status routing which would corrupt state)
-        radio_confirmations = {RESP_RADIO_POWER, RESP_RADIO_PRESET, RESP_RADIO_TUNE, RESP_RADIO_SAVE}
+        radio_confirmations = {
+            RESP_RADIO_POWER,
+            RESP_RADIO_PRESET,
+            RESP_RADIO_TUNE,
+            RESP_RADIO_SAVE,
+        }
         if resp_cmd in radio_confirmations:
             self._handle_radio_confirmation(resp_cmd)
             return True
@@ -395,13 +412,18 @@ class WL90Controller:
         self.radio.frequency = (data[10] << 8) | data[11]
         self.radio.volume = min(10, data[12])
         self.radio.sleep_timer_on = data[13] == 1
-        self.radio.sleep_timer_minutes = max(1, data[14]) if self.radio.sleep_timer_on else 0
+        self.radio.sleep_timer_minutes = (
+            max(1, data[14]) if self.radio.sleep_timer_on else 0
+        )
 
         LOGGER.debug(
             "Radio status: on=%s, ch=%d, freq=%.1f MHz, vol=%d, timer=%s/%d",
-            self.radio.is_on, self.radio.channel,
-            self.radio.frequency_mhz, self.radio.volume,
-            self.radio.sleep_timer_on, self.radio.sleep_timer_minutes,
+            self.radio.is_on,
+            self.radio.channel,
+            self.radio.frequency_mhz,
+            self.radio.volume,
+            self.radio.sleep_timer_on,
+            self.radio.sleep_timer_minutes,
         )
 
     def _parse_radio_info(self, data: bytearray) -> None:
@@ -432,15 +454,21 @@ class WL90Controller:
         alarm.days = data[12]
         alarm.tone = data[13]
         alarm.volume = data[14]
-        alarm.snooze_minutes = AlarmItem._snooze_from_index(data[15])  # Convert index back to minutes
+        alarm.snooze_minutes = AlarmItem._snooze_from_index(
+            data[15]
+        )  # Convert index back to minutes
         alarm.sunrise_enabled = data[16] == 1
         alarm.sunrise_time = data[17]
         alarm.sunrise_brightness = data[18]
 
         LOGGER.debug(
             "Alarm %d: enabled=%s, %02d:%02d, days=%s, sunrise=%s",
-            slot, alarm.enabled, alarm.hour, alarm.minute,
-            alarm.days_list, alarm.sunrise_enabled,
+            slot,
+            alarm.enabled,
+            alarm.hour,
+            alarm.minute,
+            alarm.days_list,
+            alarm.sunrise_enabled,
         )
 
     def _parse_music_response(self, resp_cmd: int, data: bytearray) -> None:
@@ -451,14 +479,18 @@ class WL90Controller:
         if resp_cmd == RESP_MUSIC_INFO:
             self.music.volume = data[8]
             self.music.sleep_timer_on = data[9] == 1
-            self.music.sleep_timer_minutes = data[10] if self.music.sleep_timer_on else 0
+            self.music.sleep_timer_minutes = (
+                data[10] if self.music.sleep_timer_on else 0
+            )
         elif resp_cmd in (RESP_MUSIC_STATUS, RESP_MUSIC_TOGGLE):
             self.music.is_on = data[8] == 1
 
         LOGGER.debug(
             "Music status: on=%s, vol=%d, timer=%s/%d",
-            self.music.is_on, self.music.volume,
-            self.music.sleep_timer_on, self.music.sleep_timer_minutes,
+            self.music.is_on,
+            self.music.volume,
+            self.music.sleep_timer_on,
+            self.music.sleep_timer_minutes,
         )
 
     def _parse_music_timer(self, data: bytearray) -> None:

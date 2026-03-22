@@ -1,4 +1,5 @@
 """Select platform for Beurer Daylight Lamps."""
+
 from __future__ import annotations
 
 from homeassistant.components.select import SelectEntity, SelectEntityDescription
@@ -33,9 +34,7 @@ async def async_setup_entry(
     coordinator = entry.runtime_data.coordinator
     name = entry.data.get("name", "Beurer Lamp")
 
-    entities = [
-        BeurerEffectSelect(coordinator, name, SELECT_DESCRIPTIONS[0])
-    ]
+    entities = [BeurerEffectSelect(coordinator, name, SELECT_DESCRIPTIONS[0])]
     async_add_entities(entities)
 
 

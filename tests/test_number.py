@@ -1,4 +1,5 @@
 """Test Beurer Daylight Lamps number platform."""
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
@@ -44,7 +45,9 @@ class TestBeurerBrightnessNumber:
 
     def test_initialization_white_brightness(self, mock_coordinator: MagicMock) -> None:
         """Test initialization for white brightness."""
-        description = next(d for d in NUMBER_DESCRIPTIONS if d.key == "white_brightness")
+        description = next(
+            d for d in NUMBER_DESCRIPTIONS if d.key == "white_brightness"
+        )
         number = BeurerBrightnessNumber(mock_coordinator, "Test Lamp", description)
 
         assert number._instance == mock_coordinator.instance
@@ -53,14 +56,18 @@ class TestBeurerBrightnessNumber:
 
     def test_initialization_color_brightness(self, mock_coordinator: MagicMock) -> None:
         """Test initialization for color brightness."""
-        description = next(d for d in NUMBER_DESCRIPTIONS if d.key == "color_brightness")
+        description = next(
+            d for d in NUMBER_DESCRIPTIONS if d.key == "color_brightness"
+        )
         number = BeurerBrightnessNumber(mock_coordinator, "Test Lamp", description)
 
         assert "aa:bb:cc:dd:ee:ff_color_brightness" in number._attr_unique_id
 
     def test_native_value_white_brightness(self, mock_coordinator: MagicMock) -> None:
         """Test native_value returns white brightness as percentage."""
-        description = next(d for d in NUMBER_DESCRIPTIONS if d.key == "white_brightness")
+        description = next(
+            d for d in NUMBER_DESCRIPTIONS if d.key == "white_brightness"
+        )
         mock_coordinator.instance.white_brightness = 255  # Max brightness
         number = BeurerBrightnessNumber(mock_coordinator, "Test Lamp", description)
 
@@ -68,7 +75,9 @@ class TestBeurerBrightnessNumber:
 
     def test_native_value_color_brightness(self, mock_coordinator: MagicMock) -> None:
         """Test native_value returns color brightness as percentage."""
-        description = next(d for d in NUMBER_DESCRIPTIONS if d.key == "color_brightness")
+        description = next(
+            d for d in NUMBER_DESCRIPTIONS if d.key == "color_brightness"
+        )
         mock_coordinator.instance.color_brightness = 128  # ~50%
         number = BeurerBrightnessNumber(mock_coordinator, "Test Lamp", description)
 
@@ -76,7 +85,9 @@ class TestBeurerBrightnessNumber:
 
     def test_native_value_none(self, mock_coordinator: MagicMock) -> None:
         """Test native_value returns None when brightness is None."""
-        description = next(d for d in NUMBER_DESCRIPTIONS if d.key == "white_brightness")
+        description = next(
+            d for d in NUMBER_DESCRIPTIONS if d.key == "white_brightness"
+        )
         mock_coordinator.instance.white_brightness = None
         number = BeurerBrightnessNumber(mock_coordinator, "Test Lamp", description)
 
@@ -84,7 +95,9 @@ class TestBeurerBrightnessNumber:
 
     def test_available(self, mock_coordinator: MagicMock) -> None:
         """Test available property."""
-        description = next(d for d in NUMBER_DESCRIPTIONS if d.key == "white_brightness")
+        description = next(
+            d for d in NUMBER_DESCRIPTIONS if d.key == "white_brightness"
+        )
         number = BeurerBrightnessNumber(mock_coordinator, "Test Lamp", description)
 
         assert number.available is True
@@ -94,7 +107,9 @@ class TestBeurerBrightnessNumber:
 
     def test_device_info(self, mock_coordinator: MagicMock) -> None:
         """Test device_info returns correct values."""
-        description = next(d for d in NUMBER_DESCRIPTIONS if d.key == "white_brightness")
+        description = next(
+            d for d in NUMBER_DESCRIPTIONS if d.key == "white_brightness"
+        )
         number = BeurerBrightnessNumber(mock_coordinator, "TL100 Test", description)
 
         device_info = number.device_info
@@ -102,9 +117,13 @@ class TestBeurerBrightnessNumber:
         assert device_info["name"] == "TL100 Test"
 
     @pytest.mark.asyncio
-    async def test_async_set_native_value_white(self, mock_coordinator: MagicMock) -> None:
+    async def test_async_set_native_value_white(
+        self, mock_coordinator: MagicMock
+    ) -> None:
         """Test setting white brightness value."""
-        description = next(d for d in NUMBER_DESCRIPTIONS if d.key == "white_brightness")
+        description = next(
+            d for d in NUMBER_DESCRIPTIONS if d.key == "white_brightness"
+        )
         number = BeurerBrightnessNumber(mock_coordinator, "Test Lamp", description)
 
         await number.async_set_native_value(50)  # 50%
@@ -112,9 +131,13 @@ class TestBeurerBrightnessNumber:
         mock_coordinator.instance.set_white.assert_called_once_with(127)  # 50% of 255
 
     @pytest.mark.asyncio
-    async def test_async_set_native_value_color(self, mock_coordinator: MagicMock) -> None:
+    async def test_async_set_native_value_color(
+        self, mock_coordinator: MagicMock
+    ) -> None:
         """Test setting color brightness value."""
-        description = next(d for d in NUMBER_DESCRIPTIONS if d.key == "color_brightness")
+        description = next(
+            d for d in NUMBER_DESCRIPTIONS if d.key == "color_brightness"
+        )
         number = BeurerBrightnessNumber(mock_coordinator, "Test Lamp", description)
 
         await number.async_set_native_value(100)  # 100%
@@ -175,7 +198,9 @@ class TestBeurerTimerNumber:
 
         assert timer.available is True
 
-    def test_available_when_device_unavailable(self, mock_coordinator: MagicMock) -> None:
+    def test_available_when_device_unavailable(
+        self, mock_coordinator: MagicMock
+    ) -> None:
         """Test available is False when device is unavailable."""
         mock_coordinator.instance.available = False
         timer = BeurerTimerNumber(mock_coordinator, "Test Lamp")
@@ -191,7 +216,9 @@ class TestBeurerTimerNumber:
         assert device_info["name"] == "TL100 Test"
 
     @pytest.mark.asyncio
-    async def test_async_set_native_value_success(self, mock_coordinator: MagicMock) -> None:
+    async def test_async_set_native_value_success(
+        self, mock_coordinator: MagicMock
+    ) -> None:
         """Test setting timer value successfully."""
         mock_coordinator.instance.set_timer = AsyncMock(return_value=True)
         mock_coordinator.instance.timer_active = False
@@ -202,7 +229,9 @@ class TestBeurerTimerNumber:
         mock_coordinator.instance.set_timer.assert_called()
 
     @pytest.mark.asyncio
-    async def test_async_set_native_value_failure(self, mock_coordinator: MagicMock) -> None:
+    async def test_async_set_native_value_failure(
+        self, mock_coordinator: MagicMock
+    ) -> None:
         """Test setting timer value fails raises error."""
         mock_coordinator.instance.set_timer = AsyncMock(return_value=False)
         mock_coordinator.instance.timer_active = False
@@ -322,9 +351,13 @@ class TestAsyncSetupEntry:
         assert len(added_entities) == 4
 
         # Verify types
-        brightness_numbers = [e for e in added_entities if isinstance(e, BeurerBrightnessNumber)]
+        brightness_numbers = [
+            e for e in added_entities if isinstance(e, BeurerBrightnessNumber)
+        ]
         timer_numbers = [e for e in added_entities if isinstance(e, BeurerTimerNumber)]
-        goal_numbers = [e for e in added_entities if isinstance(e, BeurerTherapyGoalNumber)]
+        goal_numbers = [
+            e for e in added_entities if isinstance(e, BeurerTherapyGoalNumber)
+        ]
 
         assert len(brightness_numbers) == 2
         assert len(timer_numbers) == 1

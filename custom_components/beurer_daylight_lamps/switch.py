@@ -1,4 +1,5 @@
 """Switch platform for Beurer Daylight Lamps - Adaptive Lighting & Device Settings."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -59,10 +60,12 @@ async def async_setup_entry(
         for desc in SWITCH_DESCRIPTIONS
     ]
     # Add device hardware switches (feedback sound, fade)
-    entities.extend([
-        BeurerDeviceSwitch(coordinator, name, desc)
-        for desc in DEVICE_SWITCH_DESCRIPTIONS
-    ])
+    entities.extend(
+        [
+            BeurerDeviceSwitch(coordinator, name, desc)
+            for desc in DEVICE_SWITCH_DESCRIPTIONS
+        ]
+    )
 
     async_add_entities(entities)
 
@@ -109,7 +112,7 @@ class BeurerAdaptiveLightingSwitch(
             self._is_on = last_state.state == "on"
             LOGGER.debug(
                 "Restored Adaptive Lighting state: %s",
-                "enabled" if self._is_on else "disabled"
+                "enabled" if self._is_on else "disabled",
             )
 
         # Store the switch reference in instance for light entity access
@@ -149,8 +152,12 @@ class BeurerAdaptiveLightingSwitch(
         """Return extra state attributes."""
         return {
             "description": "Controls whether Adaptive Lighting can adjust this lamp",
-            "therapy_mode_active": self._instance._therapy_active if hasattr(self._instance, "_therapy_active") else False,
-            "current_effect": self._instance.effect if self._instance.effect != "Off" else None,
+            "therapy_mode_active": self._instance._therapy_active
+            if hasattr(self._instance, "_therapy_active")
+            else False,
+            "current_effect": self._instance.effect
+            if self._instance.effect != "Off"
+            else None,
         }
 
     async def async_turn_on(self, **kwargs: Any) -> None:
@@ -182,12 +189,13 @@ class BeurerAdaptiveLightingSwitch(
             return True
 
         # Therapy mode active - don't override
-        return hasattr(self._instance, "_therapy_active") and self._instance._therapy_active
+        return (
+            hasattr(self._instance, "_therapy_active")
+            and self._instance._therapy_active
+        )
 
 
-class BeurerDeviceSwitch(
-    CoordinatorEntity[BeurerDataUpdateCoordinator], SwitchEntity
-):
+class BeurerDeviceSwitch(CoordinatorEntity[BeurerDataUpdateCoordinator], SwitchEntity):
     """Switch for device hardware settings (feedback sound, fade).
 
     These control actual device firmware settings discovered from

@@ -1,4 +1,5 @@
 """Test Beurer Daylight Lamps binary sensor platform."""
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock
@@ -44,7 +45,9 @@ class TestBinarySensorDescriptions:
     def test_therapy_goal_sensor_description(self) -> None:
         """Test therapy goal sensor has correct description."""
         therapy_desc = next(
-            d for d in THERAPY_BINARY_SENSOR_DESCRIPTIONS if d.key == "therapy_goal_reached"
+            d
+            for d in THERAPY_BINARY_SENSOR_DESCRIPTIONS
+            if d.key == "therapy_goal_reached"
         )
         assert therapy_desc.icon == "mdi:check-circle"
         assert therapy_desc.translation_key == "therapy_goal_reached"
@@ -200,7 +203,9 @@ class TestBeurerTherapyBinarySensor:
     def test_initialization(self, mock_coordinator: MagicMock) -> None:
         """Test initialization for therapy goal sensor."""
         description = next(
-            d for d in THERAPY_BINARY_SENSOR_DESCRIPTIONS if d.key == "therapy_goal_reached"
+            d
+            for d in THERAPY_BINARY_SENSOR_DESCRIPTIONS
+            if d.key == "therapy_goal_reached"
         )
         sensor = BeurerTherapyBinarySensor(mock_coordinator, "Test Lamp", description)
 
@@ -211,7 +216,9 @@ class TestBeurerTherapyBinarySensor:
     def test_is_on_goal_reached(self, mock_coordinator: MagicMock) -> None:
         """Test is_on returns True when goal is reached."""
         description = next(
-            d for d in THERAPY_BINARY_SENSOR_DESCRIPTIONS if d.key == "therapy_goal_reached"
+            d
+            for d in THERAPY_BINARY_SENSOR_DESCRIPTIONS
+            if d.key == "therapy_goal_reached"
         )
         mock_coordinator.instance.therapy_goal_reached = True
         sensor = BeurerTherapyBinarySensor(mock_coordinator, "Test Lamp", description)
@@ -221,7 +228,9 @@ class TestBeurerTherapyBinarySensor:
     def test_is_on_goal_not_reached(self, mock_coordinator: MagicMock) -> None:
         """Test is_on returns False when goal is not reached."""
         description = next(
-            d for d in THERAPY_BINARY_SENSOR_DESCRIPTIONS if d.key == "therapy_goal_reached"
+            d
+            for d in THERAPY_BINARY_SENSOR_DESCRIPTIONS
+            if d.key == "therapy_goal_reached"
         )
         mock_coordinator.instance.therapy_goal_reached = False
         sensor = BeurerTherapyBinarySensor(mock_coordinator, "Test Lamp", description)
@@ -240,7 +249,9 @@ class TestBeurerTherapyBinarySensor:
     def test_available_always_true(self, mock_coordinator: MagicMock) -> None:
         """Test available is always True for therapy sensor."""
         description = next(
-            d for d in THERAPY_BINARY_SENSOR_DESCRIPTIONS if d.key == "therapy_goal_reached"
+            d
+            for d in THERAPY_BINARY_SENSOR_DESCRIPTIONS
+            if d.key == "therapy_goal_reached"
         )
         sensor = BeurerTherapyBinarySensor(mock_coordinator, "Test Lamp", description)
 
@@ -249,9 +260,13 @@ class TestBeurerTherapyBinarySensor:
     def test_device_info(self, mock_coordinator: MagicMock) -> None:
         """Test device info is returned correctly."""
         description = next(
-            d for d in THERAPY_BINARY_SENSOR_DESCRIPTIONS if d.key == "therapy_goal_reached"
+            d
+            for d in THERAPY_BINARY_SENSOR_DESCRIPTIONS
+            if d.key == "therapy_goal_reached"
         )
-        sensor = BeurerTherapyBinarySensor(mock_coordinator, "TL100 Therapy", description)
+        sensor = BeurerTherapyBinarySensor(
+            mock_coordinator, "TL100 Therapy", description
+        )
 
         device_info = sensor.device_info
         assert device_info["manufacturer"] == "Beurer"
@@ -260,7 +275,9 @@ class TestBeurerTherapyBinarySensor:
     def test_has_entity_name(self, mock_coordinator: MagicMock) -> None:
         """Test has_entity_name is True."""
         description = next(
-            d for d in THERAPY_BINARY_SENSOR_DESCRIPTIONS if d.key == "therapy_goal_reached"
+            d
+            for d in THERAPY_BINARY_SENSOR_DESCRIPTIONS
+            if d.key == "therapy_goal_reached"
         )
         sensor = BeurerTherapyBinarySensor(mock_coordinator, "Test Lamp", description)
 
@@ -311,8 +328,12 @@ class TestAsyncSetupEntry:
         assert len(added_entities) == 3
 
         # Verify types
-        beurer_sensors = [e for e in added_entities if isinstance(e, BeurerBinarySensor)]
-        therapy_sensors = [e for e in added_entities if isinstance(e, BeurerTherapyBinarySensor)]
+        beurer_sensors = [
+            e for e in added_entities if isinstance(e, BeurerBinarySensor)
+        ]
+        therapy_sensors = [
+            e for e in added_entities if isinstance(e, BeurerTherapyBinarySensor)
+        ]
 
         assert len(beurer_sensors) == 2
         assert len(therapy_sensors) == 1

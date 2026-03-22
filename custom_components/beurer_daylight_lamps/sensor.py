@@ -1,4 +1,5 @@
 """Sensor platform for Beurer Daylight Lamps."""
+
 from __future__ import annotations
 
 from homeassistant.components.sensor import (
@@ -115,15 +116,19 @@ async def async_setup_entry(
         for description in SENSOR_DESCRIPTIONS
     ]
     # Add therapy tracking sensors
-    entities.extend([
-        BeurerTherapySensor(coordinator, name, description)
-        for description in THERAPY_SENSOR_DESCRIPTIONS
-    ])
+    entities.extend(
+        [
+            BeurerTherapySensor(coordinator, name, description)
+            for description in THERAPY_SENSOR_DESCRIPTIONS
+        ]
+    )
     # Add connection health sensors
-    entities.extend([
-        BeurerConnectionHealthSensor(coordinator, name, description)
-        for description in CONNECTION_HEALTH_SENSOR_DESCRIPTIONS
-    ])
+    entities.extend(
+        [
+            BeurerConnectionHealthSensor(coordinator, name, description)
+            for description in CONNECTION_HEALTH_SENSOR_DESCRIPTIONS
+        ]
+    )
     async_add_entities(entities)
 
 
@@ -233,7 +238,9 @@ class BeurerTherapySensor(CoordinatorEntity[BeurerDataUpdateCoordinator], Sensor
         )
 
 
-class BeurerConnectionHealthSensor(CoordinatorEntity[BeurerDataUpdateCoordinator], SensorEntity):
+class BeurerConnectionHealthSensor(
+    CoordinatorEntity[BeurerDataUpdateCoordinator], SensorEntity
+):
     """Sensor for monitoring connection health metrics.
 
     Provides diagnostic information about BLE connection stability:

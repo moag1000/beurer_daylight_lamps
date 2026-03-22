@@ -1,4 +1,5 @@
 """Test Beurer Daylight Lamps diagnostics."""
+
 from unittest.mock import MagicMock
 
 from homeassistant.const import CONF_MAC, CONF_NAME
@@ -31,10 +32,12 @@ async def test_diagnostics_redacts_mac(hass: HomeAssistant) -> None:
     entry.entry_id = "test_entry"
     entry.data = {CONF_MAC: "AA:BB:CC:DD:EE:FF", CONF_NAME: "Test Lamp"}
     entry.runtime_data = MockRuntimeData(instance=mock_instance)
-    entry.as_dict = MagicMock(return_value={
-        "data": {CONF_MAC: "AA:BB:CC:DD:EE:FF", CONF_NAME: "Test Lamp"},
-        "entry_id": "test_entry",
-    })
+    entry.as_dict = MagicMock(
+        return_value={
+            "data": {CONF_MAC: "AA:BB:CC:DD:EE:FF", CONF_NAME: "Test Lamp"},
+            "entry_id": "test_entry",
+        }
+    )
 
     result = await async_get_config_entry_diagnostics(hass, entry)
 

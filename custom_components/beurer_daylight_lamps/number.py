@@ -1,4 +1,5 @@
 """Number platform for Beurer Daylight Lamps."""
+
 from __future__ import annotations
 
 import asyncio
@@ -85,14 +86,18 @@ async def async_setup_entry(
     # Add WL90-specific volume controls
     instance = entry.runtime_data.instance
     if instance.is_wl90:
-        entities.extend([
-            BeurerWL90Number(coordinator, name, desc)
-            for desc in WL90_NUMBER_DESCRIPTIONS
-        ])
+        entities.extend(
+            [
+                BeurerWL90Number(coordinator, name, desc)
+                for desc in WL90_NUMBER_DESCRIPTIONS
+            ]
+        )
     async_add_entities(entities)
 
 
-class BeurerBrightnessNumber(CoordinatorEntity[BeurerDataUpdateCoordinator], NumberEntity):
+class BeurerBrightnessNumber(
+    CoordinatorEntity[BeurerDataUpdateCoordinator], NumberEntity
+):
     """Representation of a Beurer brightness number."""
 
     _attr_has_entity_name = True
@@ -146,7 +151,12 @@ class BeurerBrightnessNumber(CoordinatorEntity[BeurerDataUpdateCoordinator], Num
         """Set the brightness value."""
         # Convert from 0-100 to 0-255
         brightness = int(value / 100 * 255)
-        LOGGER.debug("Setting %s to %d%% (%d/255)", self.entity_description.key, value, brightness)
+        LOGGER.debug(
+            "Setting %s to %d%% (%d/255)",
+            self.entity_description.key,
+            value,
+            brightness,
+        )
 
         if self.entity_description.key == "white_brightness":
             await self._instance.set_white(brightness)
@@ -229,8 +239,7 @@ class BeurerTimerNumber(CoordinatorEntity[BeurerDataUpdateCoordinator], NumberEn
         was_inactive = not self._instance.timer_active
 
         LOGGER.debug(
-            "Setting timer to %d minutes (was_inactive=%s)",
-            minutes, was_inactive
+            "Setting timer to %d minutes (was_inactive=%s)", minutes, was_inactive
         )
 
         success = await self._instance.set_timer(minutes)
@@ -248,7 +257,9 @@ class BeurerTimerNumber(CoordinatorEntity[BeurerDataUpdateCoordinator], NumberEn
             raise HomeAssistantError(f"Failed to set timer to {minutes} minutes")
 
 
-class BeurerTherapyGoalNumber(CoordinatorEntity[BeurerDataUpdateCoordinator], NumberEntity):
+class BeurerTherapyGoalNumber(
+    CoordinatorEntity[BeurerDataUpdateCoordinator], NumberEntity
+):
     """Configurable daily light exposure goal.
 
     This is a lifestyle/wellness feature for personal tracking, NOT a medical device.

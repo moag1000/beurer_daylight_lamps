@@ -1,4 +1,5 @@
 """Config flow for Beurer Daylight Lamps integration."""
+
 from __future__ import annotations
 
 import asyncio
@@ -97,9 +98,7 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="bluetooth_confirm",
-            data_schema=vol.Schema(
-                {vol.Optional(CONF_NAME, default=self._name): str}
-            ),
+            data_schema=vol.Schema({vol.Optional(CONF_NAME, default=self._name): str}),
             description_placeholders={"name": self._name or "Unknown"},
         )
 
@@ -138,8 +137,12 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
 
         # Get both connectable and non-connectable devices
         # IMPORTANT: We prefer connectable devices as they can actually be connected
-        discovered_connectable = list(async_discovered_service_info(self.hass, connectable=True))
-        discovered_non_connectable = list(async_discovered_service_info(self.hass, connectable=False))
+        discovered_connectable = list(
+            async_discovered_service_info(self.hass, connectable=True)
+        )
+        discovered_non_connectable = list(
+            async_discovered_service_info(self.hass, connectable=False)
+        )
 
         # Combine both lists (use dict to deduplicate by address)
         # PREFER connectable version if both exist
@@ -306,9 +309,7 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    async def async_step_reauth(
-        self, entry_data: dict[str, Any]
-    ) -> ConfigFlowResult:
+    async def async_step_reauth(self, entry_data: dict[str, Any]) -> ConfigFlowResult:
         """Handle reauthorization request."""
         self._reauth_entry = self.hass.config_entries.async_get_entry(
             self.context["entry_id"]
@@ -333,9 +334,7 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
                         CONF_NAME: self._name,
                     },
                 )
-                await self.hass.config_entries.async_reload(
-                    self._reauth_entry.entry_id
-                )
+                await self.hass.config_entries.async_reload(self._reauth_entry.entry_id)
                 return self.async_abort(reason="reauth_successful")
             errors["base"] = "cannot_connect"
 
@@ -386,11 +385,10 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
         if self._ble_device:
             LOGGER.debug(
                 "Using cached BLE device for %s (RSSI: %s)",
-                self._mac, self._rssi,
+                self._mac,
+                self._rssi,
             )
-            self._instance = BeurerInstance(
-                self._ble_device, self._rssi, self.hass
-            )
+            self._instance = BeurerInstance(self._ble_device, self._rssi, self.hass)
             return True
 
         LOGGER.debug("Getting device %s via HA Bluetooth stack...", self._mac)
@@ -414,9 +412,7 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
                 ble_device = non_conn
 
         if not ble_device:
-            LOGGER.error(
-                "Device %s not found via any Bluetooth adapter", self._mac
-            )
+            LOGGER.error("Device %s not found via any Bluetooth adapter", self._mac)
             return False
 
         service_info = bluetooth.async_last_service_info(self.hass, self._mac)
@@ -435,12 +431,18 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
         """Log a detailed error message when connection test times out."""
         if self._mac is None:
             return
-        has_connectable = bluetooth.async_ble_device_from_address(
-            self.hass, self._mac, connectable=True
-        ) is not None
-        has_non_connectable = bluetooth.async_ble_device_from_address(
-            self.hass, self._mac, connectable=False
-        ) is not None
+        has_connectable = (
+            bluetooth.async_ble_device_from_address(
+                self.hass, self._mac, connectable=True
+            )
+            is not None
+        )
+        has_non_connectable = (
+            bluetooth.async_ble_device_from_address(
+                self.hass, self._mac, connectable=False
+            )
+            is not None
+        )
 
         if not has_connectable and has_non_connectable:
             reason = (
@@ -460,12 +462,16 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
 
         adapter_name = (
             getattr(self._ble_device, "name", "unknown")
-            if self._ble_device else "unknown"
+            if self._ble_device
+            else "unknown"
         )
         LOGGER.error(
             "Connection test timed out for %s after 30s. %s "
             "(RSSI: %s dBm, Adapter: %s)",
-            self._mac, reason, self._rssi or "unknown", adapter_name,
+            self._mac,
+            reason,
+            self._rssi or "unknown",
+            adapter_name,
         )
 
     async def _test_connection(self) -> bool:
@@ -482,11 +488,14 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
                 return False
             adapter_name = (
                 getattr(self._ble_device, "name", "unknown")
-                if self._ble_device else "unknown"
+                if self._ble_device
+                else "unknown"
             )
             LOGGER.info(
                 "Testing connection to %s (RSSI: %s dBm, adapter: %s)",
-                self._mac, self._rssi or "unknown", adapter_name,
+                self._mac,
+                self._rssi or "unknown",
+                adapter_name,
             )
 
             try:
@@ -500,7 +509,9 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
 
             # Toggle lamp to confirm it works
             is_on = bool(self._instance.is_on)
-            LOGGER.debug("Device %s is currently %s", self._mac, "on" if is_on else "off")
+            LOGGER.debug(
+                "Device %s is currently %s", self._mac, "on" if is_on else "off"
+            )
 
             if is_on:
                 await self._instance.turn_off()
@@ -513,9 +524,7 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
 
             LOGGER.info("Connection test successful for %s", self._mac)
         except (BleakError, TimeoutError, OSError, ValueError) as err:
-            LOGGER.error(
-                "Error during connection test for %s: %s", self._mac, err
-            )
+            LOGGER.error("Error during connection test for %s: %s", self._mac, err)
             return False
         else:
             return True
@@ -559,7 +568,9 @@ class BeurerOptionsFlowHandler(OptionsFlow):
         # Get current options with defaults
         current_options = self._config_entry.options
         therapy_goal = current_options.get(CONF_THERAPY_GOAL, DEFAULT_THERAPY_GOAL)
-        update_interval = current_options.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL)
+        update_interval = current_options.get(
+            CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL
+        )
         adaptive_lighting = current_options.get(
             CONF_ADAPTIVE_LIGHTING_DEFAULT, DEFAULT_ADAPTIVE_LIGHTING
         )

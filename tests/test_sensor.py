@@ -1,4 +1,5 @@
 """Test Beurer Daylight Lamps sensor entity."""
+
 from unittest.mock import MagicMock
 
 import pytest
@@ -266,7 +267,9 @@ class TestAsyncSetupEntry:
 
         # Verify types
         diagnostic_sensors = [e for e in added_entities if isinstance(e, BeurerSensor)]
-        therapy_sensors = [e for e in added_entities if isinstance(e, BeurerTherapySensor)]
+        therapy_sensors = [
+            e for e in added_entities if isinstance(e, BeurerTherapySensor)
+        ]
 
         assert len(diagnostic_sensors) == 2
         assert len(therapy_sensors) == 3

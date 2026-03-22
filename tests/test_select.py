@@ -1,4 +1,5 @@
 """Tests for the Beurer select platform."""
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
@@ -38,20 +39,26 @@ class TestBeurerEffectSelect:
 
     def test_unique_id(self, mock_coordinator: MagicMock) -> None:
         """Test unique_id generation."""
-        select = BeurerEffectSelect(mock_coordinator, "Test Lamp", SELECT_DESCRIPTIONS[0])
+        select = BeurerEffectSelect(
+            mock_coordinator, "Test Lamp", SELECT_DESCRIPTIONS[0]
+        )
         expected_id = f"{format_mac(mock_coordinator.instance.mac)}_effect"
         assert select.unique_id == expected_id
 
     def test_options(self, mock_coordinator: MagicMock) -> None:
         """Test available options."""
-        select = BeurerEffectSelect(mock_coordinator, "Test Lamp", SELECT_DESCRIPTIONS[0])
+        select = BeurerEffectSelect(
+            mock_coordinator, "Test Lamp", SELECT_DESCRIPTIONS[0]
+        )
         assert select.options == list(SUPPORTED_EFFECTS)
         assert "Rainbow" in select.options
         assert "Pulse" in select.options
 
     def test_current_option(self, mock_coordinator: MagicMock) -> None:
         """Test current option property."""
-        select = BeurerEffectSelect(mock_coordinator, "Test Lamp", SELECT_DESCRIPTIONS[0])
+        select = BeurerEffectSelect(
+            mock_coordinator, "Test Lamp", SELECT_DESCRIPTIONS[0]
+        )
         assert select.current_option == "Off"
 
         mock_coordinator.instance.effect = "Rainbow"
@@ -59,7 +66,9 @@ class TestBeurerEffectSelect:
 
     def test_available(self, mock_coordinator: MagicMock) -> None:
         """Test availability."""
-        select = BeurerEffectSelect(mock_coordinator, "Test Lamp", SELECT_DESCRIPTIONS[0])
+        select = BeurerEffectSelect(
+            mock_coordinator, "Test Lamp", SELECT_DESCRIPTIONS[0]
+        )
         assert select.available is True
 
         mock_coordinator.instance.available = False
@@ -67,21 +76,27 @@ class TestBeurerEffectSelect:
 
     def test_instance_reference(self, mock_coordinator: MagicMock) -> None:
         """Test select correctly references instance from coordinator."""
-        select = BeurerEffectSelect(mock_coordinator, "Test Lamp", SELECT_DESCRIPTIONS[0])
+        select = BeurerEffectSelect(
+            mock_coordinator, "Test Lamp", SELECT_DESCRIPTIONS[0]
+        )
 
         assert select._instance == mock_coordinator.instance
 
     @pytest.mark.asyncio
     async def test_select_option(self, mock_coordinator: MagicMock) -> None:
         """Test selecting an option."""
-        select = BeurerEffectSelect(mock_coordinator, "Test Lamp", SELECT_DESCRIPTIONS[0])
+        select = BeurerEffectSelect(
+            mock_coordinator, "Test Lamp", SELECT_DESCRIPTIONS[0]
+        )
 
         await select.async_select_option("Rainbow")
         mock_coordinator.instance.set_effect.assert_called_once_with("Rainbow")
 
     def test_device_info(self, mock_coordinator: MagicMock) -> None:
         """Test device info."""
-        select = BeurerEffectSelect(mock_coordinator, "Test Lamp", SELECT_DESCRIPTIONS[0])
+        select = BeurerEffectSelect(
+            mock_coordinator, "Test Lamp", SELECT_DESCRIPTIONS[0]
+        )
         info = select.device_info
 
         assert info is not None

@@ -6,6 +6,7 @@ Provides media player entities for WL90-specific features:
 
 These entities are only created for WL90 devices (not TL models).
 """
+
 from __future__ import annotations
 
 from typing import Any

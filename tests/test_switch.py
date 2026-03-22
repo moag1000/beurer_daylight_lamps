@@ -1,4 +1,5 @@
 """Test Beurer Daylight Lamps switch platform."""
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
@@ -146,7 +147,10 @@ class TestBeurerAdaptiveLightingSwitch:
         )
 
         attrs = switch.extra_state_attributes
-        assert attrs["description"] == "Controls whether Adaptive Lighting can adjust this lamp"
+        assert (
+            attrs["description"]
+            == "Controls whether Adaptive Lighting can adjust this lamp"
+        )
         assert attrs["therapy_mode_active"] is False
         assert attrs["current_effect"] is None
 

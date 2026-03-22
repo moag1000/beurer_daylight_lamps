@@ -20,6 +20,7 @@ Notification versions (byte 8 of response):
 - 255: Device off
 - 0: Device shutdown
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -161,10 +162,10 @@ class BeurerInstance:
 
         # Device settings (discovered from APK reverse engineering)
         self._feedback_enabled: bool | None = None  # Device beep/sound on button press
-        self._fade_enabled: bool | None = None      # Smooth brightness transitions
-        self._display_setting: int = 0    # Display mode (stored for settings write-back)
-        self._date_format: int = 0        # Date format (stored for settings write-back)
-        self._time_format: int = 0        # Time format (stored for settings write-back)
+        self._fade_enabled: bool | None = None  # Smooth brightness transitions
+        self._display_setting: int = 0  # Display mode (stored for settings write-back)
+        self._date_format: int = 0  # Date format (stored for settings write-back)
+        self._time_format: int = 0  # Time format (stored for settings write-back)
 
         # Reconnection state - using asyncio.Lock for thread-safety
         self._reconnect_lock: asyncio.Lock = asyncio.Lock()
@@ -178,10 +179,12 @@ class BeurerInstance:
         self._watchdog_task: asyncio.Task[None] | None = None
 
         # Connection health metrics tracking
-        self._reconnect_count: int = 0           # Total reconnections since startup
-        self._command_success_count: int = 0     # Successful commands
-        self._command_failure_count: int = 0     # Failed commands
-        self._connection_start_time: float | None = None  # When current connection started
+        self._reconnect_count: int = 0  # Total reconnections since startup
+        self._command_success_count: int = 0  # Successful commands
+        self._command_failure_count: int = 0  # Failed commands
+        self._connection_start_time: float | None = (
+            None  # When current connection started
+        )
 
         # Reconnect loop tracking - prevents duplicate loops
         self._reconnect_loop_active: bool = False
@@ -202,7 +205,9 @@ class BeurerInstance:
 
         # WL90-specific controller (only initialized for WL90 devices)
         self._is_wl90: bool = is_wl90_model(getattr(device, "name", None))
-        self._wl90: WL90Controller | None = WL90Controller(self) if self._is_wl90 else None
+        self._wl90: WL90Controller | None = (
+            WL90Controller(self) if self._is_wl90 else None
+        )
 
     def update_ble_device(self, device: BLEDevice) -> None:
         """Update the BLE device reference.
@@ -229,19 +234,23 @@ class BeurerInstance:
             self._ble_available = True
             # Reset backoff when device becomes reachable again
             self._reconnect_backoff = RECONNECT_INITIAL_BACKOFF
-            self._safe_create_task(self._trigger_update(), "beurer_ble_reachable_update")
+            self._safe_create_task(
+                self._trigger_update(), "beurer_ble_reachable_update"
+            )
 
         # Auto-reconnect if device needs it
         # The _auto_reconnect method is thread-safe and handles the lock internally
-        should_reconnect = (
-            not self.is_connected
-            and (was_ble_unavailable or not self._available)
+        should_reconnect = not self.is_connected and (
+            was_ble_unavailable or not self._available
         )
 
         # Apply cooldown to prevent queueing too many reconnect attempts
         # from frequent BLE advertisements
         now = time.time()
-        if should_reconnect and (now - self._last_reconnect_attempt) < RECONNECT_MIN_INTERVAL:
+        if (
+            should_reconnect
+            and (now - self._last_reconnect_attempt) < RECONNECT_MIN_INTERVAL
+        ):
             LOGGER.debug(
                 "Device %s reconnect skipped - cooldown active (%.1fs remaining)",
                 self._mac,
@@ -262,7 +271,9 @@ class BeurerInstance:
     def mark_unavailable(self) -> None:
         """Mark the device as unavailable (not seen by any adapter)."""
         if self._ble_available:
-            LOGGER.debug("Device %s marked as unavailable (no BLE advertisements)", self._mac)
+            LOGGER.debug(
+                "Device %s marked as unavailable (no BLE advertisements)", self._mac
+            )
             self._ble_available = False
             self._available = False
             self._safe_create_task(self._trigger_update(), "beurer_unavailable_update")
@@ -349,7 +360,9 @@ class BeurerInstance:
                     )
                     return
 
-                LOGGER.debug("Auto-reconnecting to %s (attempt #%d)", self._mac, max_attempts)
+                LOGGER.debug(
+                    "Auto-reconnecting to %s (attempt #%d)", self._mac, max_attempts
+                )
 
                 try:
                     async with self._reconnect_lock:
@@ -571,8 +584,12 @@ class BeurerInstance:
         # Trigger auto-reconnect after disconnect (if device is still BLE reachable)
         # The _auto_reconnect method is thread-safe and handles concurrency internally
         if self._ble_available:
-            LOGGER.debug("Device %s still BLE reachable, scheduling reconnect", self._mac)
-            self._safe_create_task(self._auto_reconnect(), "beurer_disconnect_reconnect")
+            LOGGER.debug(
+                "Device %s still BLE reachable, scheduling reconnect", self._mac
+            )
+            self._safe_create_task(
+                self._auto_reconnect(), "beurer_disconnect_reconnect"
+            )
 
     def _safe_create_task(
         self, coro: Coroutine[Any, Any, None], name: str | None = None
@@ -595,10 +612,17 @@ class BeurerInstance:
             try:
                 await coro
             except asyncio.CancelledError:
-                LOGGER.debug("Background task '%s' cancelled for %s", task_name, self._mac)
+                LOGGER.debug(
+                    "Background task '%s' cancelled for %s", task_name, self._mac
+                )
                 raise  # Re-raise to properly signal cancellation
             except Exception as err:
-                LOGGER.error("Error in background task '%s' for %s: %s", task_name, self._mac, err)
+                LOGGER.error(
+                    "Error in background task '%s' for %s: %s",
+                    task_name,
+                    self._mac,
+                    err,
+                )
 
         try:
             # Prefer Home Assistant's task creation if available
@@ -611,7 +635,9 @@ class BeurerInstance:
             return asyncio.create_task(_wrapped(), name=task_name)
         except RuntimeError:
             # No event loop running (e.g., during shutdown)
-            LOGGER.debug("Could not create task '%s' - no event loop running", task_name)
+            LOGGER.debug(
+                "Could not create task '%s' - no event loop running", task_name
+            )
             return None
 
     def _start_watchdog(self) -> None:
@@ -630,7 +656,9 @@ class BeurerInstance:
                         await asyncio.sleep(CONNECTION_WATCHDOG_INTERVAL)
 
                         if not self.is_connected:
-                            LOGGER.debug("Watchdog: %s not connected, stopping", self._mac)
+                            LOGGER.debug(
+                                "Watchdog: %s not connected, stopping", self._mac
+                            )
                             break
 
                         time_since_data = time.time() - self._last_seen
@@ -812,7 +840,9 @@ class BeurerInstance:
         try:
             return self._supported_effects.index(effect)
         except ValueError:
-            LOGGER.debug("Effect '%s' not in supported list, defaulting to 'Off'", effect)
+            LOGGER.debug(
+                "Effect '%s' not in supported list, defaulting to 'Off'", effect
+            )
             return 0
 
     def _calculate_checksum(self, length: int, data: list[int]) -> int:
@@ -886,7 +916,9 @@ class BeurerInstance:
         Returns:
             True if packet was sent successfully, False otherwise.
         """
-        if (not self._client or not self._client.is_connected) and not await self.connect():
+        if (
+            not self._client or not self._client.is_connected
+        ) and not await self.connect():
             return False
 
         # Rate limiting: ensure minimum interval between commands
@@ -912,9 +944,20 @@ class BeurerInstance:
         # - Checksum: plen XOR cmd_bytes
         # - Trailer: 55 0D 0A
         packet = bytearray(
-            [0xFE, 0xEF, 0x0A, length + 7, 0xAB, 0xAA, plen,
-             *message,
-             checksum, 0x55, 0x0D, 0x0A]
+            [
+                0xFE,
+                0xEF,
+                0x0A,
+                length + 7,
+                0xAB,
+                0xAA,
+                plen,
+                *message,
+                checksum,
+                0x55,
+                0x0D,
+                0x0A,
+            ]
         )
 
         result = await self._write(packet)
@@ -976,7 +1019,11 @@ class BeurerInstance:
         r, g, b = int(rgb[0]), int(rgb[1]), int(rgb[2])
         LOGGER.debug(
             "Setting color R=%d, G=%d, B=%d with brightness=%s for %s",
-            r, g, b, brightness, self._mac
+            r,
+            g,
+            b,
+            brightness,
+            self._mac,
         )
 
         self._mode = ColorMode.RGB
@@ -1118,18 +1165,22 @@ class BeurerInstance:
         import datetime
 
         now = datetime.datetime.now(tz=datetime.UTC)
-        LOGGER.info("Syncing time to %s: %s", self._mac, now.strftime("%Y-%m-%d %H:%M:%S"))
+        LOGGER.info(
+            "Syncing time to %s: %s", self._mac, now.strftime("%Y-%m-%d %H:%M:%S")
+        )
 
-        result = await self._send_packet([
-            CMD_TIME_SYNC,
-            now.second,
-            now.minute,
-            now.hour,
-            now.isoweekday(),  # 1=Monday, 7=Sunday
-            now.day,
-            now.month,
-            now.year - 2000,
-        ])
+        result = await self._send_packet(
+            [
+                CMD_TIME_SYNC,
+                now.second,
+                now.minute,
+                now.hour,
+                now.isoweekday(),  # 1=Monday, 7=Sunday
+                now.day,
+                now.month,
+                now.year - 2000,
+            ]
+        )
         if result:
             await asyncio.sleep(COMMAND_DELAY)
         return result
@@ -1160,14 +1211,16 @@ class BeurerInstance:
         LOGGER.info("Setting feedback sound to %s on %s", enabled, self._mac)
         # APK inverts the value: 0 = enabled, 1 = disabled
         feedback_value = 0 if enabled else 1
-        result = await self._send_packet([
-            CMD_SETTINGS_WRITE,
-            self._display_setting,
-            self._date_format,
-            self._time_format,
-            feedback_value,
-            0 if (self._fade_enabled or self._fade_enabled is None) else 1,
-        ])
+        result = await self._send_packet(
+            [
+                CMD_SETTINGS_WRITE,
+                self._display_setting,
+                self._date_format,
+                self._time_format,
+                feedback_value,
+                0 if (self._fade_enabled or self._fade_enabled is None) else 1,
+            ]
+        )
         if result:
             self._feedback_enabled = enabled
             await asyncio.sleep(COMMAND_DELAY)
@@ -1186,14 +1239,16 @@ class BeurerInstance:
         LOGGER.info("Setting fade to %s on %s", enabled, self._mac)
         # APK inverts the value: 0 = enabled, 1 = disabled
         fade_value = 0 if enabled else 1
-        result = await self._send_packet([
-            CMD_SETTINGS_WRITE,
-            self._display_setting,
-            self._date_format,
-            self._time_format,
-            0 if (self._feedback_enabled or self._feedback_enabled is None) else 1,
-            fade_value,
-        ])
+        result = await self._send_packet(
+            [
+                CMD_SETTINGS_WRITE,
+                self._display_setting,
+                self._date_format,
+                self._time_format,
+                0 if (self._feedback_enabled or self._feedback_enabled is None) else 1,
+                fade_value,
+            ]
+        )
         if result:
             self._fade_enabled = enabled
             await asyncio.sleep(COMMAND_DELAY)
@@ -1224,7 +1279,8 @@ class BeurerInstance:
             if not self._light_on or self._color_on:
                 LOGGER.debug(
                     "Activating white mode (light_on=%s, color_on=%s)",
-                    self._light_on, self._color_on,
+                    self._light_on,
+                    self._color_on,
                 )
                 await self._send_packet([CMD_MODE, MODE_WHITE])
                 await asyncio.sleep(MODE_CHANGE_DELAY)
@@ -1292,7 +1348,10 @@ class BeurerInstance:
 
         LOGGER.info(
             "Setting timer to %d min for %s (mode=0x%02X, color_mode=%s)",
-            minutes, self._mac, mode_byte, self._mode
+            minutes,
+            self._mac,
+            mode_byte,
+            self._mode,
         )
 
         # First toggle timer on: 0x38 MODE
@@ -1323,7 +1382,9 @@ class BeurerInstance:
 
         LOGGER.info(
             "Cancelling timer for %s (mode=0x%02X, color_mode=%s)",
-            self._mac, mode_byte, self._mode
+            self._mac,
+            mode_byte,
+            self._mode,
         )
 
         result = await self._send_packet([CMD_TIMER_CANCEL, mode_byte])
@@ -1347,7 +1408,9 @@ class BeurerInstance:
             self.is_on,
         )
 
-        if (not self._client or not self._client.is_connected) and not await self.connect():
+        if (
+            not self._client or not self._client.is_connected
+        ) and not await self.connect():
             LOGGER.error("Failed to connect for turn_on")
             return
 
@@ -1437,11 +1500,15 @@ class BeurerInstance:
             # Timer end notifications (from APK: 0xEB=light, 0xEC=moonlight)
             # These have short payloads but carry meaningful state changes
             if resp_cmd in (RESP_LIGHT_TIMER_END, RESP_MOONLIGHT_TIMER_END):
-                timer_type = "light" if resp_cmd == RESP_LIGHT_TIMER_END else "moonlight"
+                timer_type = (
+                    "light" if resp_cmd == RESP_LIGHT_TIMER_END else "moonlight"
+                )
                 result = data[8] if len(data) > 8 else 0
                 LOGGER.info(
                     "Timer end notification from %s: type=%s, result=%d (1=off, 2=cancelled)",
-                    self._mac, timer_type, result,
+                    self._mac,
+                    timer_type,
+                    result,
                 )
                 self._timer_active = False
                 self._timer_minutes = None
@@ -1463,7 +1530,8 @@ class BeurerInstance:
                     LOGGER.warning(
                         "Device permission DENIED on %s (value=%d). "
                         "Another device may be controlling the lamp.",
-                        self._mac, permission_value,
+                        self._mac,
+                        permission_value,
                     )
                 self._last_seen = time.time()
                 return
@@ -1477,11 +1545,19 @@ class BeurerInstance:
             # WL90-specific responses (radio, alarm, music)
             if self._wl90 is not None:
                 wl90_resp_cmds = (
-                    RESP_ALARM, RESP_RADIO_STATUS, RESP_RADIO_INFO,
-                    RESP_RADIO_POWER, RESP_RADIO_PRESET, RESP_RADIO_TUNE,
-                    RESP_RADIO_SAVE, RESP_RADIO_TIMER_END,
-                    RESP_MUSIC_STATUS, RESP_MUSIC_TOGGLE, RESP_MUSIC_TIMER,
-                    RESP_MUSIC_INFO, RESP_MUSIC_TIMER_END,
+                    RESP_ALARM,
+                    RESP_RADIO_STATUS,
+                    RESP_RADIO_INFO,
+                    RESP_RADIO_POWER,
+                    RESP_RADIO_PRESET,
+                    RESP_RADIO_TUNE,
+                    RESP_RADIO_SAVE,
+                    RESP_RADIO_TIMER_END,
+                    RESP_MUSIC_STATUS,
+                    RESP_MUSIC_TOGGLE,
+                    RESP_MUSIC_TIMER,
+                    RESP_MUSIC_INFO,
+                    RESP_MUSIC_TIMER_END,
                 )
                 if resp_cmd in wl90_resp_cmds:
                     handled = self._wl90.handle_notification(resp_cmd, data)
@@ -1498,7 +1574,7 @@ class BeurerInstance:
         if payload_len < 0x08:
             LOGGER.debug(
                 "Short payload (%d bytes), likely ACK/heartbeat - not updating state",
-                payload_len
+                payload_len,
             )
             # Use heartbeat to confirm device is still alive
             self._last_seen = time.time()
@@ -1556,7 +1632,10 @@ class BeurerInstance:
             if len(data) > 12:
                 new_timer_active = data[11] == 1
                 new_timer_minutes = data[12] if new_timer_active else None
-                if self._timer_active != new_timer_active or self._timer_minutes != new_timer_minutes:
+                if (
+                    self._timer_active != new_timer_active
+                    or self._timer_minutes != new_timer_minutes
+                ):
                     self._timer_active = new_timer_active
                     self._timer_minutes = new_timer_minutes
                     trigger_update = True
@@ -1601,7 +1680,10 @@ class BeurerInstance:
             if len(data) > 12:
                 new_timer_active = data[11] == 1
                 new_timer_minutes = data[12] if new_timer_active else None
-                if self._timer_active != new_timer_active or self._timer_minutes != new_timer_minutes:
+                if (
+                    self._timer_active != new_timer_active
+                    or self._timer_minutes != new_timer_minutes
+                ):
                     self._timer_active = new_timer_active
                     self._timer_minutes = new_timer_minutes
                     trigger_update = True
@@ -1623,13 +1705,21 @@ class BeurerInstance:
                 r, g, b = self._rgb_color
                 # Cool light has roughly equal R/G and higher relative values
                 # Therapy-relevant: bright, balanced white (R≈G≈B with high values)
-                is_white_ish = abs(r - g) < 50 and abs(g - b) < 50 and min(r, g, b) > 150
+                is_white_ish = (
+                    abs(r - g) < 50 and abs(g - b) < 50 and min(r, g, b) > 150
+                )
                 brightness_pct = int(self._color_brightness / 255 * 100)
                 # Estimate kelvin (very rough): white-ish light with high brightness
                 estimated_kelvin = 5300 if is_white_ish else 3000
                 self._therapy_tracker.update_session(estimated_kelvin, brightness_pct)
-                if is_white_ish and brightness_pct >= 80 and not self._therapy_tracker.has_active_session:
-                    self._therapy_tracker.start_session(estimated_kelvin, brightness_pct)
+                if (
+                    is_white_ish
+                    and brightness_pct >= 80
+                    and not self._therapy_tracker.has_active_session
+                ):
+                    self._therapy_tracker.start_session(
+                        estimated_kelvin, brightness_pct
+                    )
             elif not self._color_on:
                 # End session when color mode turns off
                 self._therapy_tracker.end_session()
@@ -1652,10 +1742,12 @@ class BeurerInstance:
             # Unknown version - store for reverse engineering
             self._last_unknown_notification = hex_str
             LOGGER.warning(
-                "Unknown notification version %d from %s: hex=%s len=%d "
-                "bytes=[%s]",
-                version, self._mac, hex_str, len(data),
-                ", ".join(f"0x{b:02x}" for b in data)
+                "Unknown notification version %d from %s: hex=%s len=%d bytes=[%s]",
+                version,
+                self._mac,
+                hex_str,
+                len(data),
+                ", ".join(f"0x{b:02x}" for b in data),
             )
             # Still mark as available - device is communicating
             if not self._available:
@@ -1741,7 +1833,9 @@ class BeurerInstance:
 
         for pattern in non_gatt_patterns:
             if pattern in source_lower:
-                LOGGER.debug("Source '%s' is not GATT-capable (passive scanner)", source)
+                LOGGER.debug(
+                    "Source '%s' is not GATT-capable (passive scanner)", source
+                )
                 return False
 
         # ESPHome proxies with "btproxy" in name are GATT-capable
@@ -1750,7 +1844,11 @@ class BeurerInstance:
             return True
 
         # Local adapters are always GATT-capable
-        if source_lower.startswith("hci") or "bcm" in source_lower or "brcm" in source_lower:
+        if (
+            source_lower.startswith("hci")
+            or "bcm" in source_lower
+            or "brcm" in source_lower
+        ):
             LOGGER.debug("Source '%s' is GATT-capable (local adapter)", source)
             return True
 
@@ -1846,7 +1944,9 @@ class BeurerInstance:
 
         if gatt_capable_infos:
             # Pick the one with best RSSI from available GATT-capable sources
-            best = max(gatt_capable_infos, key=lambda x: x[0].advertisement.rssi or -100)
+            best = max(
+                gatt_capable_infos, key=lambda x: x[0].advertisement.rssi or -100
+            )
             LOGGER.info(
                 "Selected GATT-capable adapter '%s' for %s (RSSI: %s, skipped %d non-GATT, %d in cooldown)",
                 best[1],
@@ -1901,7 +2001,9 @@ class BeurerInstance:
             LOGGER.info(
                 "Connecting to %s (device: %s, RSSI: %s dBm)",
                 self._mac,
-                getattr(self._ble_device, "name", "Unknown") if self._ble_device else "None",
+                getattr(self._ble_device, "name", "Unknown")
+                if self._ble_device
+                else "None",
                 self._rssi or "unknown",
             )
             _connect_start = time.time()
@@ -2038,10 +2140,14 @@ class BeurerInstance:
                     self._handle_notification,
                     bluez={"use_start_notify": True},
                 )
-                LOGGER.debug("Notifications started for %s (using StartNotify)", self._mac)
+                LOGGER.debug(
+                    "Notifications started for %s (using StartNotify)", self._mac
+                )
             except TypeError:
                 # bleak < 2.1.0: bluez parameter not supported, use default
-                await self._client.start_notify(self._read_uuid, self._handle_notification)
+                await self._client.start_notify(
+                    self._read_uuid, self._handle_notification
+                )
                 LOGGER.debug("Notifications started for %s", self._mac)
 
             # Check device permission first (APK always sends CMD 0x00 before anything else)
@@ -2068,6 +2174,7 @@ class BeurerInstance:
                     CMD_MUSIC_QUERY,
                     CMD_RADIO_SYNC_STATUS,
                 )
+
                 await asyncio.sleep(STATUS_DELAY)
                 # Query all 3 alarm slots (0x01=slot0, 0x07=slot1, 0x03=slot2)
                 for slot_byte in (0x01, 0x07, 0x03):
@@ -2088,6 +2195,7 @@ class BeurerInstance:
             # Connection successful - clear any adapter failure status
             if self._hass:
                 from homeassistant.components import bluetooth
+
                 service_info = bluetooth.async_last_service_info(
                     self._hass, self._mac, connectable=True
                 )
@@ -2143,6 +2251,7 @@ class BeurerInstance:
         # Mark the adapter that failed so we try a different one next time
         if self._hass:
             from homeassistant.components import bluetooth
+
             service_info = bluetooth.async_last_service_info(
                 self._hass, self._mac, connectable=True
             )
@@ -2156,7 +2265,9 @@ class BeurerInstance:
         """Update device state by requesting current status."""
         LOGGER.debug("Update called for %s", self._mac)
         try:
-            if (not self._client or not self._client.is_connected) and not await self.connect():
+            if (
+                not self._client or not self._client.is_connected
+            ) and not await self.connect():
                 LOGGER.warning("Could not connect to %s for update", self._mac)
                 return
 

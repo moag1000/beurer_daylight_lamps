@@ -3,6 +3,7 @@
 This module implements the Home Assistant diagnostics platform for Gold tier compliance.
 Diagnostics allow users to download troubleshooting information about their device.
 """
+
 from __future__ import annotations
 
 import datetime
@@ -31,7 +32,11 @@ async def async_get_config_entry_diagnostics(
 
     # Format timestamps as ISO strings
     last_seen_ts = instance.last_seen
-    last_seen_str = datetime.datetime.fromtimestamp(last_seen_ts, tz=datetime.UTC).isoformat() if last_seen_ts else None
+    last_seen_str = (
+        datetime.datetime.fromtimestamp(last_seen_ts, tz=datetime.UTC).isoformat()
+        if last_seen_ts
+        else None
+    )
 
     # Gather therapy tracking stats if available
     therapy_info = {}

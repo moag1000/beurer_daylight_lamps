@@ -3,6 +3,7 @@
 This module provides translatable exceptions for better error handling
 following Home Assistant best practices (Gold tier requirement).
 """
+
 from __future__ import annotations
 
 from homeassistant.exceptions import HomeAssistantError

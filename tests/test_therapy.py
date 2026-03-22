@@ -1,4 +1,5 @@
 """Test Beurer Daylight Lamps therapy module."""
+
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -109,7 +110,9 @@ class TestTherapyTracker:
         tracker.start_session(color_temp_kelvin=5300, brightness_pct=100)
 
         # Manually set start time for test
-        tracker._current_session.start_time = datetime.now(tz=UTC) - timedelta(minutes=5)
+        tracker._current_session.start_time = datetime.now(tz=UTC) - timedelta(
+            minutes=5
+        )
 
         session = tracker.end_session()
         assert session is not None
@@ -122,7 +125,9 @@ class TestTherapyTracker:
         tracker.start_session(color_temp_kelvin=3000, brightness_pct=50)
 
         # Manually set start time for test
-        tracker._current_session.start_time = datetime.now(tz=UTC) - timedelta(minutes=5)
+        tracker._current_session.start_time = datetime.now(tz=UTC) - timedelta(
+            minutes=5
+        )
 
         session = tracker.end_session()
         assert session is not None
@@ -361,7 +366,9 @@ class TestSunriseSimulation:
         assert sim.is_running is False
 
     @pytest.mark.asyncio
-    async def test_progress_pct_during_simulation(self, mock_instance: MagicMock) -> None:
+    async def test_progress_pct_during_simulation(
+        self, mock_instance: MagicMock
+    ) -> None:
         """Test progress percentage calculation during simulation."""
         sim = SunriseSimulation(mock_instance)
         sim._running = True
@@ -410,7 +417,9 @@ class TestSunriseSimulationExecution:
         assert mock_instance.set_color_with_brightness_fast.call_count >= 1
 
     @pytest.mark.asyncio
-    async def test_run_sunrise_stops_when_not_running(self, mock_instance: MagicMock) -> None:
+    async def test_run_sunrise_stops_when_not_running(
+        self, mock_instance: MagicMock
+    ) -> None:
         """Test _run_sunrise stops when running flag is cleared."""
         sim = SunriseSimulation(mock_instance)
         sim._running = False  # Simulate stop
@@ -424,7 +433,9 @@ class TestSunriseSimulationExecution:
         assert mock_instance.set_color_with_brightness_fast.call_count == 0
 
     @pytest.mark.asyncio
-    async def test_run_sunrise_handles_cancellation(self, mock_instance: MagicMock) -> None:
+    async def test_run_sunrise_handles_cancellation(
+        self, mock_instance: MagicMock
+    ) -> None:
         """Test _run_sunrise handles cancellation gracefully."""
         import asyncio as aio
 
@@ -434,7 +445,10 @@ class TestSunriseSimulationExecution:
         async def cancel_after_first_step(_):
             raise aio.CancelledError
 
-        with patch("asyncio.sleep", side_effect=cancel_after_first_step), pytest.raises(aio.CancelledError):
+        with (
+            patch("asyncio.sleep", side_effect=cancel_after_first_step),
+            pytest.raises(aio.CancelledError),
+        ):
             sim._running = True
             await sim._run_sunrise(duration_minutes=5, config=config)
 
@@ -447,7 +461,9 @@ class TestSunriseSimulationExecution:
         sim = SunriseSimulation(mock_instance)
         config = SUNRISE_PROFILES[SunriseProfile.NATURAL]
 
-        mock_instance.set_color_with_brightness_fast = AsyncMock(side_effect=Exception("Test error"))
+        mock_instance.set_color_with_brightness_fast = AsyncMock(
+            side_effect=Exception("Test error")
+        )
         sim._running = True
 
         # Should not raise, just log error
@@ -456,7 +472,9 @@ class TestSunriseSimulationExecution:
         assert sim._running is False
 
     @pytest.mark.asyncio
-    async def test_run_sunset_with_color_brightness(self, mock_instance: MagicMock) -> None:
+    async def test_run_sunset_with_color_brightness(
+        self, mock_instance: MagicMock
+    ) -> None:
         """Test _run_sunset uses color_brightness when available."""
         sim = SunriseSimulation(mock_instance)
         mock_instance.color_brightness = 200
@@ -465,10 +483,15 @@ class TestSunriseSimulationExecution:
         with patch("asyncio.sleep", new_callable=AsyncMock):
             await sim._run_sunset(duration_minutes=1, end_brightness_pct=0)
 
-        assert mock_instance.set_color_with_brightness_fast.called or mock_instance.turn_off.called
+        assert (
+            mock_instance.set_color_with_brightness_fast.called
+            or mock_instance.turn_off.called
+        )
 
     @pytest.mark.asyncio
-    async def test_run_sunset_fallback_white_brightness(self, mock_instance: MagicMock) -> None:
+    async def test_run_sunset_fallback_white_brightness(
+        self, mock_instance: MagicMock
+    ) -> None:
         """Test _run_sunset uses white_brightness as fallback."""
         sim = SunriseSimulation(mock_instance)
         mock_instance.color_brightness = None
@@ -495,7 +518,9 @@ class TestSunriseSimulationExecution:
         mock_instance.turn_off.assert_called()
 
     @pytest.mark.asyncio
-    async def test_run_sunset_keeps_light_on_nonzero(self, mock_instance: MagicMock) -> None:
+    async def test_run_sunset_keeps_light_on_nonzero(
+        self, mock_instance: MagicMock
+    ) -> None:
         """Test _run_sunset keeps light on when end_brightness > 0."""
         sim = SunriseSimulation(mock_instance)
         mock_instance.color_brightness = 200
@@ -508,7 +533,9 @@ class TestSunriseSimulationExecution:
         assert mock_instance.set_color_with_brightness_fast.called
 
     @pytest.mark.asyncio
-    async def test_run_sunset_handles_cancellation(self, mock_instance: MagicMock) -> None:
+    async def test_run_sunset_handles_cancellation(
+        self, mock_instance: MagicMock
+    ) -> None:
         """Test _run_sunset handles cancellation gracefully."""
         import asyncio as aio
 
@@ -517,7 +544,10 @@ class TestSunriseSimulationExecution:
         async def cancel_after_first_step(_):
             raise aio.CancelledError
 
-        with patch("asyncio.sleep", side_effect=cancel_after_first_step), pytest.raises(aio.CancelledError):
+        with (
+            patch("asyncio.sleep", side_effect=cancel_after_first_step),
+            pytest.raises(aio.CancelledError),
+        ):
             sim._running = True
             await sim._run_sunset(duration_minutes=5, end_brightness_pct=0)
 
@@ -528,7 +558,9 @@ class TestSunriseSimulationExecution:
         """Test _run_sunset handles errors gracefully."""
         sim = SunriseSimulation(mock_instance)
         mock_instance.color_brightness = 200
-        mock_instance.set_color_with_brightness_fast = AsyncMock(side_effect=Exception("Test error"))
+        mock_instance.set_color_with_brightness_fast = AsyncMock(
+            side_effect=Exception("Test error")
+        )
         sim._running = True
 
         # Should not raise
@@ -537,7 +569,9 @@ class TestSunriseSimulationExecution:
         assert sim._running is False
 
     @pytest.mark.asyncio
-    async def test_run_sunset_stops_when_not_running(self, mock_instance: MagicMock) -> None:
+    async def test_run_sunset_stops_when_not_running(
+        self, mock_instance: MagicMock
+    ) -> None:
         """Test _run_sunset stops when running flag is cleared mid-simulation."""
         sim = SunriseSimulation(mock_instance)
         mock_instance.color_brightness = 200
@@ -595,12 +629,14 @@ class TestTherapyTrackerCurrentSession:
         tracker = TherapyTracker()
 
         # Add historical session
-        tracker.sessions.append(TherapySession(
-            start_time=datetime.now(tz=UTC) - timedelta(days=1, minutes=30),
-            end_time=datetime.now(tz=UTC) - timedelta(days=1, minutes=20),
-            color_temp_kelvin=5300,
-            brightness_pct=100,
-        ))
+        tracker.sessions.append(
+            TherapySession(
+                start_time=datetime.now(tz=UTC) - timedelta(days=1, minutes=30),
+                end_time=datetime.now(tz=UTC) - timedelta(days=1, minutes=20),
+                color_temp_kelvin=5300,
+                brightness_pct=100,
+            )
+        )
 
         # Start a current session
         tracker._current_session = TherapySession(
@@ -617,12 +653,14 @@ class TestTherapyTrackerCurrentSession:
         tracker = TherapyTracker()
 
         # Add historical session
-        tracker.sessions.append(TherapySession(
-            start_time=datetime.now(tz=UTC) - timedelta(days=1, minutes=30),
-            end_time=datetime.now(tz=UTC) - timedelta(days=1, minutes=20),
-            color_temp_kelvin=5300,
-            brightness_pct=100,
-        ))
+        tracker.sessions.append(
+            TherapySession(
+                start_time=datetime.now(tz=UTC) - timedelta(days=1, minutes=30),
+                end_time=datetime.now(tz=UTC) - timedelta(days=1, minutes=20),
+                color_temp_kelvin=5300,
+                brightness_pct=100,
+            )
+        )
 
         # Start a non-therapy current session
         tracker._current_session = TherapySession(

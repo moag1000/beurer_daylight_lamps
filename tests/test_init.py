@@ -1,4 +1,5 @@
 """Test Beurer Daylight Lamps integration setup."""
+
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from homeassistant.const import CONF_MAC, CONF_NAME
@@ -145,9 +146,7 @@ async def test_unload_entry(hass: HomeAssistant) -> None:
     entry.entry_id = "test_entry_id"
     entry.runtime_data = mock_runtime_data
 
-    with patch.object(
-        hass.config_entries, "async_unload_platforms", return_value=True
-    ):
+    with patch.object(hass.config_entries, "async_unload_platforms", return_value=True):
         from custom_components.beurer_daylight_lamps import async_unload_entry
 
         result = await async_unload_entry(hass, entry)

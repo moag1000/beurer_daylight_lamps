@@ -21,6 +21,7 @@ HEADERS = {
     "Content-Type": "application/json",
 }
 
+
 def send_raw_cmd(cmd: str) -> bool:
     """Send raw BLE command."""
     try:
@@ -36,13 +37,14 @@ def send_raw_cmd(cmd: str) -> bool:
     else:
         return r.status_code == 200
 
+
 def get_last_notifications(n: int = 5) -> list:
     """Get last N real notifications (not 0a)."""
     try:
         r = requests.get(
             f"{HA_URL}/api/history/period?filter_entity_id=sensor.tl100_f33d_last_raw_notification",
             headers=HEADERS,
-            timeout=10
+            timeout=10,
         )
         data = r.json()
         if data and len(data) > 0:
@@ -55,6 +57,7 @@ def get_last_notifications(n: int = 5) -> list:
     except Exception as e:
         print(f"Error getting notifications: {e}")
     return []
+
 
 def parse_rgb_notification(hex_str: str) -> dict:
     """Parse RGB status notification."""
@@ -82,6 +85,7 @@ def parse_rgb_notification(hex_str: str) -> dict:
             "timer_active": timer_active,
             "timer_min": timer_min,
         }
+
 
 def test_command(cmd: str) -> dict:
     """Test a command and return the result."""
@@ -112,6 +116,7 @@ def test_command(cmd: str) -> dict:
 
     return {"cmd": cmd, "error": "no RGB notification", "notifs": notifs}
 
+
 def main():
     print("=== Beurer TL100 Timer Command Probe ===\n")
 
@@ -124,13 +129,26 @@ def main():
     # Commands to test
     commands = [
         # Single byte commands
-        "38 0F", "39 0F", "3A 0F", "3B 0F", "3C 0F", "3D 0F", "3E 0F", "3F 0F",
+        "38 0F",
+        "39 0F",
+        "3A 0F",
+        "3B 0F",
+        "3C 0F",
+        "3D 0F",
+        "3E 0F",
+        "3F 0F",
         # With mode byte
-        "38 02 0F", "39 02 0F", "3A 02 0F", "3B 02 0F",
+        "38 02 0F",
+        "39 02 0F",
+        "3A 02 0F",
+        "3B 02 0F",
         # Different formats for 33/36
-        "33 0F", "36 0F",
-        "33 02 0F 01", "36 02 0F 01",
-        "33 0F 02", "36 0F 02",
+        "33 0F",
+        "36 0F",
+        "33 02 0F 01",
+        "36 02 0F 01",
+        "33 0F 02",
+        "36 0F 02",
     ]
 
     results = []
@@ -147,8 +165,13 @@ def main():
 
     print("\n=== Summary ===")
     for r in results:
-        timer_status = f"timer={r.get('timer_active', '?')}:{r.get('timer_min', '?')}" if "timer_active" in r else r.get("error", "unknown")
+        timer_status = (
+            f"timer={r.get('timer_active', '?')}:{r.get('timer_min', '?')}"
+            if "timer_active" in r
+            else r.get("error", "unknown")
+        )
         print(f"{r['cmd']}: {timer_status}")
+
 
 if __name__ == "__main__":
     main()

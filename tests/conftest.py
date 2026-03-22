@@ -1,4 +1,5 @@
 """Fixtures for Beurer Daylight Lamps tests."""
+
 from __future__ import annotations
 
 from collections.abc import Generator
@@ -75,9 +76,7 @@ def mock_ble_device() -> MagicMock:
 @pytest.fixture
 def mock_beurer_instance() -> Generator[MagicMock, None, None]:
     """Create a mock BeurerInstance."""
-    with patch(
-        "custom_components.beurer_daylight_lamps.BeurerInstance"
-    ) as mock_class:
+    with patch("custom_components.beurer_daylight_lamps.BeurerInstance") as mock_class:
         instance = MagicMock()
         instance.mac = "AA:BB:CC:DD:EE:FF"
         instance.is_on = True
@@ -91,8 +90,17 @@ def mock_beurer_instance() -> Generator[MagicMock, None, None]:
         instance.is_connected = True
         instance.ble_available = True
         instance.supported_effects = [
-            "Off", "Random", "Rainbow", "Rainbow Slow", "Fusion",
-            "Pulse", "Wave", "Chill", "Action", "Forest", "Summer"
+            "Off",
+            "Random",
+            "Rainbow",
+            "Rainbow Slow",
+            "Fusion",
+            "Pulse",
+            "Wave",
+            "Chill",
+            "Action",
+            "Forest",
+            "Summer",
         ]
         instance.update = AsyncMock()
         instance.turn_on = AsyncMock()
@@ -123,9 +131,7 @@ def mock_discover() -> Generator[AsyncMock, None, None]:
 @pytest.fixture
 def mock_get_device() -> Generator[AsyncMock, None, None]:
     """Mock get_device function."""
-    with patch(
-        "custom_components.beurer_daylight_lamps.get_device"
-    ) as mock:
+    with patch("custom_components.beurer_daylight_lamps.get_device") as mock:
         device = MagicMock()
         device.address = "AA:BB:CC:DD:EE:FF"
         device.name = "TL100"

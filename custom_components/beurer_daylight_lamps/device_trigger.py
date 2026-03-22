@@ -1,4 +1,5 @@
 """Device triggers for Beurer Daylight Lamps."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -186,6 +187,4 @@ async def async_get_trigger_capabilities(
     Returns:
         Dictionary with extra fields schema
     """
-    return {
-        "extra_fields": vol.Schema({})
-    }
+    return {"extra_fields": vol.Schema({})}

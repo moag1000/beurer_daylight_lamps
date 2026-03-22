@@ -1,4 +1,5 @@
 """Test Beurer BLE communication module."""
+
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -70,7 +71,9 @@ class TestBeurerInstance:
             BeurerInstance,
         )
 
-        with pytest.raises(ValueError, match="Cannot initialize BeurerInstance with None"):
+        with pytest.raises(
+            ValueError, match="Cannot initialize BeurerInstance with None"
+        ):
             BeurerInstance(None)
 
     def test_init_invalid_device_raises(self):
@@ -266,8 +269,8 @@ class TestNotificationParsing:
         data[10] = 100  # brightness 100%
         data[13] = 255  # R
         data[14] = 128  # G
-        data[15] = 64   # B
-        data[16] = 2    # effect index (Rainbow)
+        data[15] = 64  # B
+        data[16] = 2  # effect index (Rainbow)
 
         await instance._handle_notification(char, data)
 
@@ -362,6 +365,7 @@ class TestBeurerDeviceAvailability:
         old_time = instance._last_seen
 
         import time
+
         time.sleep(0.01)
         instance.mark_seen()
 
@@ -951,7 +955,9 @@ class TestBeurerWriteMethod:
         instance = BeurerInstance(mock_device)
         instance._client = MagicMock()
         instance._client.is_connected = True
-        instance._client.write_gatt_char = AsyncMock(side_effect=BleakError("Test error"))
+        instance._client.write_gatt_char = AsyncMock(
+            side_effect=BleakError("Test error")
+        )
         instance._client.disconnect = AsyncMock()
         instance._write_uuid = "test-uuid"
 
@@ -968,7 +974,9 @@ class TestBeurerWriteMethod:
         instance = BeurerInstance(mock_device)
         instance._client = MagicMock()
         instance._client.is_connected = True
-        instance._client.write_gatt_char = AsyncMock(side_effect=TimeoutError("Timeout"))
+        instance._client.write_gatt_char = AsyncMock(
+            side_effect=TimeoutError("Timeout")
+        )
         instance._client.disconnect = AsyncMock()
         instance._write_uuid = "test-uuid"
 
@@ -1592,7 +1600,7 @@ class TestNotificationEdgeCases:
         data[13] = 255  # R
         data[14] = 255  # G
         data[15] = 255  # B
-        data[16] = 0    # effect = Off
+        data[16] = 0  # effect = Off
 
         await instance._handle_notification(char, data)
 
@@ -1617,9 +1625,9 @@ class TestNotificationEdgeCases:
         data[9] = 1  # on
         data[10] = 100  # brightness 100%
         data[13] = 255  # R
-        data[14] = 0    # G
-        data[15] = 0    # B
-        data[16] = 0    # effect = Off
+        data[14] = 0  # G
+        data[15] = 0  # B
+        data[16] = 0  # effect = Off
 
         await instance._handle_notification(char, data)
 
@@ -1894,16 +1902,16 @@ class TestModeSwitchGuard:
         data[6] = payload_len
         data[8] = version
         if version == 1:
-            data[9] = 1   # on
+            data[9] = 1  # on
             data[10] = 50  # brightness 50%
         elif version == 2:
             data[6] = 0x0C  # RGB needs larger payload
-            data[9] = 1     # on
+            data[9] = 1  # on
             data[10] = 100  # brightness 100%
             data[13] = 255  # R
             data[14] = 128  # G
-            data[15] = 64   # B
-            data[16] = 0    # effect = Off
+            data[15] = 64  # B
+            data[16] = 0  # effect = Off
         return data
 
     @pytest.mark.asyncio

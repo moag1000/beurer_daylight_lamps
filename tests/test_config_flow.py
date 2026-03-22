@@ -1,4 +1,5 @@
 """Test the Beurer Daylight Lamps config flow."""
+
 from __future__ import annotations
 
 import asyncio
@@ -442,15 +443,22 @@ async def test_connection_with_non_connectable_device(hass: HomeAssistant) -> No
     flow._mac = "AA:BB:CC:DD:EE:FF"
     flow._ble_device = None  # No cached device
 
-    with patch(
-        "custom_components.beurer_daylight_lamps.config_flow.bluetooth.async_ble_device_from_address",
-        side_effect=[None, mock_device],  # First call returns None, second returns device
-    ), patch(
-        "custom_components.beurer_daylight_lamps.config_flow.bluetooth.async_last_service_info",
-        return_value=None,
-    ), patch(
-        "custom_components.beurer_daylight_lamps.config_flow.BeurerInstance",
-        return_value=mock_instance,
+    with (
+        patch(
+            "custom_components.beurer_daylight_lamps.config_flow.bluetooth.async_ble_device_from_address",
+            side_effect=[
+                None,
+                mock_device,
+            ],  # First call returns None, second returns device
+        ),
+        patch(
+            "custom_components.beurer_daylight_lamps.config_flow.bluetooth.async_last_service_info",
+            return_value=None,
+        ),
+        patch(
+            "custom_components.beurer_daylight_lamps.config_flow.BeurerInstance",
+            return_value=mock_instance,
+        ),
     ):
         result = await flow._test_connection()
 
@@ -572,13 +580,16 @@ async def test_validate_step_connection_success_creates_entry(
     hass: HomeAssistant,
 ) -> None:
     """Test successful validation creates config entry."""
-    with patch(
-        "custom_components.beurer_daylight_lamps.config_flow.BeurerConfigFlow._test_connection",
-        new_callable=AsyncMock,
-        return_value=True,
-    ), patch(
-        "custom_components.beurer_daylight_lamps.config_flow.async_discovered_service_info",
-        return_value=[],
+    with (
+        patch(
+            "custom_components.beurer_daylight_lamps.config_flow.BeurerConfigFlow._test_connection",
+            new_callable=AsyncMock,
+            return_value=True,
+        ),
+        patch(
+            "custom_components.beurer_daylight_lamps.config_flow.async_discovered_service_info",
+            return_value=[],
+        ),
     ):
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": config_entries.SOURCE_USER}
@@ -607,7 +618,9 @@ class TestAsyncStepBluetooth:
     """Tests for async_step_bluetooth."""
 
     @pytest.mark.asyncio
-    async def test_bluetooth_discovery_sets_device_info(self, hass: HomeAssistant) -> None:
+    async def test_bluetooth_discovery_sets_device_info(
+        self, hass: HomeAssistant
+    ) -> None:
         """Test bluetooth discovery extracts device info correctly."""
         from custom_components.beurer_daylight_lamps.config_flow import BeurerConfigFlow
 
@@ -624,9 +637,16 @@ class TestAsyncStepBluetooth:
         flow.hass = hass
         flow.context = {}
 
-        with patch.object(flow, "async_set_unique_id", new_callable=AsyncMock), \
-             patch.object(flow, "_abort_if_unique_id_configured"), \
-             patch.object(flow, "async_step_bluetooth_confirm", new_callable=AsyncMock, return_value={}):
+        with (
+            patch.object(flow, "async_set_unique_id", new_callable=AsyncMock),
+            patch.object(flow, "_abort_if_unique_id_configured"),
+            patch.object(
+                flow,
+                "async_step_bluetooth_confirm",
+                new_callable=AsyncMock,
+                return_value={},
+            ),
+        ):
             await flow.async_step_bluetooth(mock_discovery)
 
         assert flow._mac == "AA:BB:CC:DD:EE:FF"
@@ -649,9 +669,16 @@ class TestAsyncStepBluetooth:
         flow.hass = hass
         flow.context = {}
 
-        with patch.object(flow, "async_set_unique_id", new_callable=AsyncMock), \
-             patch.object(flow, "_abort_if_unique_id_configured"), \
-             patch.object(flow, "async_step_bluetooth_confirm", new_callable=AsyncMock, return_value={}):
+        with (
+            patch.object(flow, "async_set_unique_id", new_callable=AsyncMock),
+            patch.object(flow, "_abort_if_unique_id_configured"),
+            patch.object(
+                flow,
+                "async_step_bluetooth_confirm",
+                new_callable=AsyncMock,
+                return_value={},
+            ),
+        ):
             await flow.async_step_bluetooth(mock_discovery)
 
         # Should use fallback name with last 8 chars of address
@@ -662,7 +689,9 @@ class TestAsyncStepBluetoothConfirm:
     """Tests for async_step_bluetooth_confirm."""
 
     @pytest.mark.asyncio
-    async def test_bluetooth_confirm_no_input_shows_form(self, hass: HomeAssistant) -> None:
+    async def test_bluetooth_confirm_no_input_shows_form(
+        self, hass: HomeAssistant
+    ) -> None:
         """Test bluetooth confirm shows form when no input."""
         from custom_components.beurer_daylight_lamps.config_flow import BeurerConfigFlow
 
@@ -676,7 +705,9 @@ class TestAsyncStepBluetoothConfirm:
         assert result["step_id"] == "bluetooth_confirm"
 
     @pytest.mark.asyncio
-    async def test_bluetooth_confirm_with_custom_name(self, hass: HomeAssistant) -> None:
+    async def test_bluetooth_confirm_with_custom_name(
+        self, hass: HomeAssistant
+    ) -> None:
         """Test bluetooth confirm uses custom name from user input."""
         from custom_components.beurer_daylight_lamps.config_flow import BeurerConfigFlow
 
@@ -684,13 +715,22 @@ class TestAsyncStepBluetoothConfirm:
         flow.hass = hass
         flow._name = "TL100"
 
-        with patch.object(flow, "async_step_validate", new_callable=AsyncMock, return_value={"type": "form"}):
-            await flow.async_step_bluetooth_confirm(user_input={CONF_NAME: "My Custom Lamp"})
+        with patch.object(
+            flow,
+            "async_step_validate",
+            new_callable=AsyncMock,
+            return_value={"type": "form"},
+        ):
+            await flow.async_step_bluetooth_confirm(
+                user_input={CONF_NAME: "My Custom Lamp"}
+            )
 
         assert flow._name == "My Custom Lamp"
 
     @pytest.mark.asyncio
-    async def test_bluetooth_confirm_keeps_default_name(self, hass: HomeAssistant) -> None:
+    async def test_bluetooth_confirm_keeps_default_name(
+        self, hass: HomeAssistant
+    ) -> None:
         """Test bluetooth confirm keeps default name when no custom name provided."""
         from custom_components.beurer_daylight_lamps.config_flow import BeurerConfigFlow
 
@@ -698,7 +738,12 @@ class TestAsyncStepBluetoothConfirm:
         flow.hass = hass
         flow._name = "TL100"
 
-        with patch.object(flow, "async_step_validate", new_callable=AsyncMock, return_value={"type": "form"}):
+        with patch.object(
+            flow,
+            "async_step_validate",
+            new_callable=AsyncMock,
+            return_value={"type": "form"},
+        ):
             await flow.async_step_bluetooth_confirm(user_input={CONF_NAME: ""})
 
         # Name should remain as original
@@ -745,9 +790,16 @@ class TestAsyncStepManual:
         flow = BeurerConfigFlow()
         flow.hass = hass
 
-        with patch.object(flow, "async_set_unique_id", new_callable=AsyncMock), \
-             patch.object(flow, "_abort_if_unique_id_configured"), \
-             patch.object(flow, "async_step_validate", new_callable=AsyncMock, return_value={"type": "form"}):
+        with (
+            patch.object(flow, "async_set_unique_id", new_callable=AsyncMock),
+            patch.object(flow, "_abort_if_unique_id_configured"),
+            patch.object(
+                flow,
+                "async_step_validate",
+                new_callable=AsyncMock,
+                return_value={"type": "form"},
+            ),
+        ):
             await flow.async_step_manual(
                 user_input={CONF_MAC: "aa:bb:cc:dd:ee:ff", CONF_NAME: "Test Lamp"}
             )
@@ -764,9 +816,13 @@ class TestAsyncStepManual:
         flow = BeurerConfigFlow()
         flow.hass = hass
 
-        with patch.object(flow, "async_set_unique_id", new_callable=AsyncMock), \
-             patch.object(flow, "_abort_if_unique_id_configured"), \
-             patch.object(flow, "async_step_validate", new_callable=AsyncMock, return_value={}):
+        with (
+            patch.object(flow, "async_set_unique_id", new_callable=AsyncMock),
+            patch.object(flow, "_abort_if_unique_id_configured"),
+            patch.object(
+                flow, "async_step_validate", new_callable=AsyncMock, return_value={}
+            ),
+        ):
             await flow.async_step_manual(
                 user_input={CONF_MAC: "  aa-bb-cc-dd-ee-ff  ", CONF_NAME: "Test"}
             )
@@ -778,7 +834,9 @@ class TestAsyncStepValidate:
     """Tests for async_step_validate."""
 
     @pytest.mark.asyncio
-    async def test_validate_connection_failure_shows_retry(self, hass: HomeAssistant) -> None:
+    async def test_validate_connection_failure_shows_retry(
+        self, hass: HomeAssistant
+    ) -> None:
         """Test validate shows retry form on connection failure."""
         from custom_components.beurer_daylight_lamps.config_flow import BeurerConfigFlow
 
@@ -791,7 +849,9 @@ class TestAsyncStepValidate:
                 "custom_components.beurer_daylight_lamps.config_flow.bluetooth.async_ble_device_from_address",
                 return_value=MagicMock(),
             ),
-            patch.object(flow, "_test_connection", new_callable=AsyncMock, return_value=False),
+            patch.object(
+                flow, "_test_connection", new_callable=AsyncMock, return_value=False
+            ),
         ):
             result = await flow.async_step_validate(user_input=None)
 
@@ -800,7 +860,9 @@ class TestAsyncStepValidate:
         assert result["errors"]["base"] == "cannot_connect"
 
     @pytest.mark.asyncio
-    async def test_validate_connection_success_shows_flicker(self, hass: HomeAssistant) -> None:
+    async def test_validate_connection_success_shows_flicker(
+        self, hass: HomeAssistant
+    ) -> None:
         """Test validate shows flicker confirmation on success."""
         from custom_components.beurer_daylight_lamps.config_flow import BeurerConfigFlow
 
@@ -813,7 +875,9 @@ class TestAsyncStepValidate:
                 "custom_components.beurer_daylight_lamps.config_flow.bluetooth.async_ble_device_from_address",
                 return_value=MagicMock(),
             ),
-            patch.object(flow, "_test_connection", new_callable=AsyncMock, return_value=True),
+            patch.object(
+                flow, "_test_connection", new_callable=AsyncMock, return_value=True
+            ),
         ):
             result = await flow.async_step_validate(user_input=None)
 
@@ -823,7 +887,9 @@ class TestAsyncStepValidate:
         assert "flicker" in str(result.get("data_schema", ""))
 
     @pytest.mark.asyncio
-    async def test_validate_flicker_confirmed_creates_entry(self, hass: HomeAssistant) -> None:
+    async def test_validate_flicker_confirmed_creates_entry(
+        self, hass: HomeAssistant
+    ) -> None:
         """Test validate creates entry when flicker is confirmed."""
         from custom_components.beurer_daylight_lamps.config_flow import BeurerConfigFlow
 
@@ -840,7 +906,9 @@ class TestAsyncStepValidate:
         assert result["data"][CONF_MAC] == "AA:BB:CC:DD:EE:FF"
 
     @pytest.mark.asyncio
-    async def test_validate_flicker_confirmed_default_name(self, hass: HomeAssistant) -> None:
+    async def test_validate_flicker_confirmed_default_name(
+        self, hass: HomeAssistant
+    ) -> None:
         """Test validate uses default name when none provided."""
         from custom_components.beurer_daylight_lamps.config_flow import BeurerConfigFlow
 
@@ -869,7 +937,9 @@ class TestAsyncStepValidate:
         assert result["reason"] == "cannot_connect"
 
     @pytest.mark.asyncio
-    async def test_validate_reconfigure_updates_entry(self, hass: HomeAssistant) -> None:
+    async def test_validate_reconfigure_updates_entry(
+        self, hass: HomeAssistant
+    ) -> None:
         """Test validate updates entry during reconfigure."""
         from custom_components.beurer_daylight_lamps.config_flow import BeurerConfigFlow
 
@@ -882,10 +952,9 @@ class TestAsyncStepValidate:
         flow._name = "Updated Lamp"
         flow._reconfigure_entry = mock_entry
 
-        with patch.object(
-            hass.config_entries, "async_update_entry"
-        ) as mock_update, patch.object(
-            hass.config_entries, "async_reload", new_callable=AsyncMock
+        with (
+            patch.object(hass.config_entries, "async_update_entry") as mock_update,
+            patch.object(hass.config_entries, "async_reload", new_callable=AsyncMock),
         ):
             result = await flow.async_step_validate(user_input={"flicker": True})
 
@@ -908,7 +977,12 @@ class TestAsyncStepUser:
         flow = BeurerConfigFlow()
         flow.hass = hass
 
-        with patch.object(flow, "async_step_manual", new_callable=AsyncMock, return_value={"type": "form"}):
+        with patch.object(
+            flow,
+            "async_step_manual",
+            new_callable=AsyncMock,
+            return_value={"type": "form"},
+        ):
             result = await flow.async_step_user(
                 user_input={CONF_MAC: MANUAL_MAC, CONF_NAME: "Test"}
             )
@@ -930,9 +1004,13 @@ class TestAsyncStepUser:
         flow.hass = hass
         flow._discovered_devices = {"AA:BB:CC:DD:EE:FF": mock_info}
 
-        with patch.object(flow, "async_set_unique_id", new_callable=AsyncMock), \
-             patch.object(flow, "_abort_if_unique_id_configured"), \
-             patch.object(flow, "async_step_validate", new_callable=AsyncMock, return_value={}):
+        with (
+            patch.object(flow, "async_set_unique_id", new_callable=AsyncMock),
+            patch.object(flow, "_abort_if_unique_id_configured"),
+            patch.object(
+                flow, "async_step_validate", new_callable=AsyncMock, return_value={}
+            ),
+        ):
             await flow.async_step_user(
                 user_input={CONF_MAC: "AA:BB:CC:DD:EE:FF", CONF_NAME: "Test"}
             )
@@ -956,10 +1034,16 @@ class TestAsyncStepReauth:
         flow.hass = hass
         flow.context = {"entry_id": "test_id"}
 
-        with patch.object(
-            hass.config_entries, "async_get_entry", return_value=mock_entry
-        ), patch.object(
-            flow, "async_step_reauth_confirm", new_callable=AsyncMock, return_value={}
+        with (
+            patch.object(
+                hass.config_entries, "async_get_entry", return_value=mock_entry
+            ),
+            patch.object(
+                flow,
+                "async_step_reauth_confirm",
+                new_callable=AsyncMock,
+                return_value={},
+            ),
         ):
             await flow.async_step_reauth(
                 entry_data={CONF_MAC: "AA:BB:CC:DD:EE:FF", CONF_NAME: "Old Lamp"}
@@ -970,7 +1054,9 @@ class TestAsyncStepReauth:
         assert flow._reauth_entry == mock_entry
 
     @pytest.mark.asyncio
-    async def test_reauth_confirm_no_input_shows_form(self, hass: HomeAssistant) -> None:
+    async def test_reauth_confirm_no_input_shows_form(
+        self, hass: HomeAssistant
+    ) -> None:
         """Test reauth confirm shows form when no input."""
         from custom_components.beurer_daylight_lamps.config_flow import BeurerConfigFlow
 
@@ -984,7 +1070,9 @@ class TestAsyncStepReauth:
         assert result["step_id"] == "reauth_confirm"
 
     @pytest.mark.asyncio
-    async def test_reauth_confirm_success_updates_entry(self, hass: HomeAssistant) -> None:
+    async def test_reauth_confirm_success_updates_entry(
+        self, hass: HomeAssistant
+    ) -> None:
         """Test reauth confirm updates entry on success."""
         from custom_components.beurer_daylight_lamps.config_flow import BeurerConfigFlow
 
@@ -997,9 +1085,13 @@ class TestAsyncStepReauth:
         flow._name = "Test Lamp"
         flow._reauth_entry = mock_entry
 
-        with patch.object(flow, "_test_connection", new_callable=AsyncMock, return_value=True), \
-             patch.object(hass.config_entries, "async_update_entry") as mock_update, \
-             patch.object(hass.config_entries, "async_reload", new_callable=AsyncMock):
+        with (
+            patch.object(
+                flow, "_test_connection", new_callable=AsyncMock, return_value=True
+            ),
+            patch.object(hass.config_entries, "async_update_entry") as mock_update,
+            patch.object(hass.config_entries, "async_reload", new_callable=AsyncMock),
+        ):
             result = await flow.async_step_reauth_confirm(user_input={})
 
         assert result["type"] == "abort"
@@ -1007,7 +1099,9 @@ class TestAsyncStepReauth:
         mock_update.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_reauth_confirm_failure_shows_error(self, hass: HomeAssistant) -> None:
+    async def test_reauth_confirm_failure_shows_error(
+        self, hass: HomeAssistant
+    ) -> None:
         """Test reauth confirm shows error on failure."""
         from custom_components.beurer_daylight_lamps.config_flow import BeurerConfigFlow
 
@@ -1015,7 +1109,9 @@ class TestAsyncStepReauth:
         flow.hass = hass
         flow._name = "Test Lamp"
 
-        with patch.object(flow, "_test_connection", new_callable=AsyncMock, return_value=False):
+        with patch.object(
+            flow, "_test_connection", new_callable=AsyncMock, return_value=False
+        ):
             result = await flow.async_step_reauth_confirm(user_input={})
 
         assert result["type"] == "form"
@@ -1037,7 +1133,9 @@ class TestAsyncStepReconfigure:
         flow.hass = hass
         flow.context = {"entry_id": "test_id"}
 
-        with patch.object(hass.config_entries, "async_get_entry", return_value=mock_entry):
+        with patch.object(
+            hass.config_entries, "async_get_entry", return_value=mock_entry
+        ):
             result = await flow.async_step_reconfigure(user_input=None)
 
         assert result["type"] == "form"
@@ -1046,7 +1144,9 @@ class TestAsyncStepReconfigure:
         assert flow._name == "Old Name"
 
     @pytest.mark.asyncio
-    async def test_reconfigure_with_input_updates_name(self, hass: HomeAssistant) -> None:
+    async def test_reconfigure_with_input_updates_name(
+        self, hass: HomeAssistant
+    ) -> None:
         """Test reconfigure updates name from input."""
         from custom_components.beurer_daylight_lamps.config_flow import BeurerConfigFlow
 
@@ -1058,8 +1158,14 @@ class TestAsyncStepReconfigure:
         flow.context = {"entry_id": "test_id"}
         flow._reconfigure_entry = mock_entry
 
-        with patch.object(hass.config_entries, "async_get_entry", return_value=mock_entry), \
-             patch.object(flow, "async_step_validate", new_callable=AsyncMock, return_value={}):
+        with (
+            patch.object(
+                hass.config_entries, "async_get_entry", return_value=mock_entry
+            ),
+            patch.object(
+                flow, "async_step_validate", new_callable=AsyncMock, return_value={}
+            ),
+        ):
             await flow.async_step_reconfigure(user_input={CONF_NAME: "New Name"})
 
         assert flow._name == "New Name"
@@ -1069,7 +1175,9 @@ class TestTestConnectionWithServiceInfo:
     """Tests for _test_connection with service info retrieval."""
 
     @pytest.mark.asyncio
-    async def test_connection_gets_rssi_from_service_info(self, hass: HomeAssistant) -> None:
+    async def test_connection_gets_rssi_from_service_info(
+        self, hass: HomeAssistant
+    ) -> None:
         """Test connection retrieves RSSI from service info."""
         from custom_components.beurer_daylight_lamps.config_flow import BeurerConfigFlow
 
@@ -1091,15 +1199,19 @@ class TestTestConnectionWithServiceInfo:
         flow._mac = "AA:BB:CC:DD:EE:FF"
         flow._ble_device = None  # No cached device
 
-        with patch(
-            "custom_components.beurer_daylight_lamps.config_flow.bluetooth.async_ble_device_from_address",
-            return_value=mock_device,
-        ), patch(
-            "custom_components.beurer_daylight_lamps.config_flow.bluetooth.async_last_service_info",
-            return_value=mock_service_info,
-        ), patch(
-            "custom_components.beurer_daylight_lamps.config_flow.BeurerInstance",
-            return_value=mock_instance,
+        with (
+            patch(
+                "custom_components.beurer_daylight_lamps.config_flow.bluetooth.async_ble_device_from_address",
+                return_value=mock_device,
+            ),
+            patch(
+                "custom_components.beurer_daylight_lamps.config_flow.bluetooth.async_last_service_info",
+                return_value=mock_service_info,
+            ),
+            patch(
+                "custom_components.beurer_daylight_lamps.config_flow.BeurerInstance",
+                return_value=mock_instance,
+            ),
         ):
             result = await flow._test_connection()
 
@@ -1107,7 +1219,9 @@ class TestTestConnectionWithServiceInfo:
         assert flow._rssi == -72
 
     @pytest.mark.asyncio
-    async def test_connection_handles_no_service_info(self, hass: HomeAssistant) -> None:
+    async def test_connection_handles_no_service_info(
+        self, hass: HomeAssistant
+    ) -> None:
         """Test connection handles missing service info."""
         from custom_components.beurer_daylight_lamps.config_flow import BeurerConfigFlow
 
@@ -1126,15 +1240,19 @@ class TestTestConnectionWithServiceInfo:
         flow._mac = "AA:BB:CC:DD:EE:FF"
         flow._ble_device = None
 
-        with patch(
-            "custom_components.beurer_daylight_lamps.config_flow.bluetooth.async_ble_device_from_address",
-            return_value=mock_device,
-        ), patch(
-            "custom_components.beurer_daylight_lamps.config_flow.bluetooth.async_last_service_info",
-            return_value=None,
-        ), patch(
-            "custom_components.beurer_daylight_lamps.config_flow.BeurerInstance",
-            return_value=mock_instance,
+        with (
+            patch(
+                "custom_components.beurer_daylight_lamps.config_flow.bluetooth.async_ble_device_from_address",
+                return_value=mock_device,
+            ),
+            patch(
+                "custom_components.beurer_daylight_lamps.config_flow.bluetooth.async_last_service_info",
+                return_value=None,
+            ),
+            patch(
+                "custom_components.beurer_daylight_lamps.config_flow.BeurerInstance",
+                return_value=mock_instance,
+            ),
         ):
             result = await flow._test_connection()
 
@@ -1142,13 +1260,16 @@ class TestTestConnectionWithServiceInfo:
         assert flow._rssi is None
 
     @pytest.mark.asyncio
-    async def test_connection_timeout_in_asyncio_timeout(self, hass: HomeAssistant) -> None:
+    async def test_connection_timeout_in_asyncio_timeout(
+        self, hass: HomeAssistant
+    ) -> None:
         """Test connection handles asyncio.timeout expiration."""
         from custom_components.beurer_daylight_lamps.config_flow import BeurerConfigFlow
 
         mock_device = MagicMock()
 
         mock_instance = MagicMock()
+
         # Simulate timeout during update()
         async def slow_update():
             await asyncio.sleep(100)  # Very slow
@@ -1192,7 +1313,9 @@ class TestConnectionDisconnectErrors:
         mock_instance.update = AsyncMock()
         mock_instance.turn_on = AsyncMock()
         mock_instance.turn_off = AsyncMock()
-        mock_instance.disconnect = AsyncMock(side_effect=TimeoutError("Disconnect timeout"))
+        mock_instance.disconnect = AsyncMock(
+            side_effect=TimeoutError("Disconnect timeout")
+        )
 
         flow = BeurerConfigFlow()
         flow.hass = hass
@@ -1236,7 +1359,9 @@ class TestConnectionDisconnectErrors:
         assert result is True
 
     @pytest.mark.asyncio
-    async def test_disconnect_asyncio_timeout_error_ignored(self, hass: HomeAssistant) -> None:
+    async def test_disconnect_asyncio_timeout_error_ignored(
+        self, hass: HomeAssistant
+    ) -> None:
         """Test disconnect asyncio.TimeoutError is handled gracefully."""
         from custom_components.beurer_daylight_lamps.config_flow import BeurerConfigFlow
 

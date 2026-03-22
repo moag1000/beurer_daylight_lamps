@@ -1,4 +1,5 @@
 """Test Beurer Daylight Lamps repairs module."""
+
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -248,9 +249,7 @@ class TestAsyncCreateFixFlow:
     """Tests for async_create_fix_flow function."""
 
     @pytest.mark.asyncio
-    async def test_creates_device_not_found_flow(
-        self, hass: HomeAssistant
-    ) -> None:
+    async def test_creates_device_not_found_flow(self, hass: HomeAssistant) -> None:
         """Test creating device not found repair flow."""
         flow = await async_create_fix_flow(
             hass,

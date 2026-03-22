@@ -57,9 +57,20 @@ def packet(payload):
     length = len(payload)
     cs = checksum(length + 2, payload)
     return bytearray(
-        [0xFE, 0xEF, 0x0A, length + 7, 0xAB, 0xAA, length + 2,
-         *payload,
-         cs, 0x55, 0x0D, 0x0A]
+        [
+            0xFE,
+            0xEF,
+            0x0A,
+            length + 7,
+            0xAB,
+            0xAA,
+            length + 2,
+            *payload,
+            cs,
+            0x55,
+            0x0D,
+            0x0A,
+        ]
     )
 
 
@@ -75,7 +86,7 @@ def parse_response(data):
     if version == 2:
         on = data[9] == 1
         brightness = data[10] if len(data) > 10 else 0
-        rgb = (data[13], data[14], data[15]) if len(data) > 15 else (0,0,0)
+        rgb = (data[13], data[14], data[15]) if len(data) > 15 else (0, 0, 0)
         effect = data[16] if len(data) > 16 else 0
         return f"RGB: on={on}, brightness={brightness}%, rgb={rgb}, effect={effect}"
     if version == 255:

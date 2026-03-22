@@ -1,4 +1,5 @@
 """Binary sensor platform for Beurer Daylight Lamps."""
+
 from __future__ import annotations
 
 from homeassistant.components.binary_sensor import (
@@ -59,14 +60,18 @@ async def async_setup_entry(
         for description in BINARY_SENSOR_DESCRIPTIONS
     ]
     # Add therapy goal sensor
-    entities.extend([
-        BeurerTherapyBinarySensor(coordinator, name, description)
-        for description in THERAPY_BINARY_SENSOR_DESCRIPTIONS
-    ])
+    entities.extend(
+        [
+            BeurerTherapyBinarySensor(coordinator, name, description)
+            for description in THERAPY_BINARY_SENSOR_DESCRIPTIONS
+        ]
+    )
     async_add_entities(entities)
 
 
-class BeurerBinarySensor(CoordinatorEntity[BeurerDataUpdateCoordinator], BinarySensorEntity):
+class BeurerBinarySensor(
+    CoordinatorEntity[BeurerDataUpdateCoordinator], BinarySensorEntity
+):
     """Representation of a Beurer binary sensor."""
 
     _attr_has_entity_name = True
@@ -115,7 +120,9 @@ class BeurerBinarySensor(CoordinatorEntity[BeurerDataUpdateCoordinator], BinaryS
         )
 
 
-class BeurerTherapyBinarySensor(CoordinatorEntity[BeurerDataUpdateCoordinator], BinarySensorEntity):
+class BeurerTherapyBinarySensor(
+    CoordinatorEntity[BeurerDataUpdateCoordinator], BinarySensorEntity
+):
     """Binary sensor for tracking therapy goal completion.
 
     NOTE: This is a lifestyle/wellness feature for personal tracking.

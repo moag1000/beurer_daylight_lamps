@@ -1,4 +1,5 @@
 """Test Beurer Daylight Lamps coordinator."""
+
 from __future__ import annotations
 
 from datetime import timedelta
@@ -92,9 +93,7 @@ class TestCoordinatorInitialization:
         self, mock_hass: MagicMock, mock_instance: MagicMock
     ) -> None:
         """Test coordinator initialization."""
-        coordinator = BeurerDataUpdateCoordinator(
-            mock_hass, mock_instance, "Test Lamp"
-        )
+        coordinator = BeurerDataUpdateCoordinator(mock_hass, mock_instance, "Test Lamp")
 
         assert coordinator.instance == mock_instance
         assert coordinator.device_name == "Test Lamp"
@@ -105,9 +104,7 @@ class TestCoordinatorInitialization:
         self, mock_hass: MagicMock, mock_instance: MagicMock
     ) -> None:
         """Test that coordinator registers for push updates."""
-        coordinator = BeurerDataUpdateCoordinator(
-            mock_hass, mock_instance, "Test Lamp"
-        )
+        coordinator = BeurerDataUpdateCoordinator(mock_hass, mock_instance, "Test Lamp")
 
         mock_instance.set_update_callback.assert_called_once_with(
             coordinator._handle_push_update
@@ -168,9 +165,7 @@ class TestGetCurrentData:
         self, mock_hass: MagicMock, mock_instance: MagicMock
     ) -> None:
         """Test that _get_current_data returns all expected fields."""
-        coordinator = BeurerDataUpdateCoordinator(
-            mock_hass, mock_instance, "Test Lamp"
-        )
+        coordinator = BeurerDataUpdateCoordinator(mock_hass, mock_instance, "Test Lamp")
 
         data = coordinator._get_current_data()
 
@@ -260,9 +255,7 @@ class TestPushUpdates:
         self, mock_hass: MagicMock, mock_instance: MagicMock
     ) -> None:
         """Test that push update sets coordinator data."""
-        coordinator = BeurerDataUpdateCoordinator(
-            mock_hass, mock_instance, "Test Lamp"
-        )
+        coordinator = BeurerDataUpdateCoordinator(mock_hass, mock_instance, "Test Lamp")
 
         with patch.object(coordinator, "async_set_updated_data") as mock_set:
             coordinator._handle_push_update()
@@ -330,9 +323,7 @@ class TestPeriodicUpdates:
         self, mock_hass: MagicMock, mock_instance: MagicMock
     ) -> None:
         """Test periodic update calls instance.update when BLE available."""
-        coordinator = BeurerDataUpdateCoordinator(
-            mock_hass, mock_instance, "Test Lamp"
-        )
+        coordinator = BeurerDataUpdateCoordinator(mock_hass, mock_instance, "Test Lamp")
 
         data = await coordinator._async_update_data()
 
@@ -346,9 +337,7 @@ class TestPeriodicUpdates:
     ) -> None:
         """Test periodic update skips when BLE not available."""
         mock_instance.ble_available = False
-        coordinator = BeurerDataUpdateCoordinator(
-            mock_hass, mock_instance, "Test Lamp"
-        )
+        coordinator = BeurerDataUpdateCoordinator(mock_hass, mock_instance, "Test Lamp")
 
         data = await coordinator._async_update_data()
 
@@ -362,9 +351,7 @@ class TestPeriodicUpdates:
     ) -> None:
         """Test periodic update handles exceptions gracefully."""
         mock_instance.update = AsyncMock(side_effect=Exception("BLE error"))
-        coordinator = BeurerDataUpdateCoordinator(
-            mock_hass, mock_instance, "Test Lamp"
-        )
+        coordinator = BeurerDataUpdateCoordinator(mock_hass, mock_instance, "Test Lamp")
 
         # Should not raise, returns current data instead
         data = await coordinator._async_update_data()
@@ -428,9 +415,7 @@ class TestShutdown:
         self, mock_hass: MagicMock, mock_instance: MagicMock
     ) -> None:
         """Test shutdown removes update callback."""
-        coordinator = BeurerDataUpdateCoordinator(
-            mock_hass, mock_instance, "Test Lamp"
-        )
+        coordinator = BeurerDataUpdateCoordinator(mock_hass, mock_instance, "Test Lamp")
 
         with patch.object(
             coordinator.__class__.__bases__[0], "async_shutdown", new_callable=AsyncMock
@@ -472,9 +457,7 @@ class TestConvenienceProperties:
         self, mock_hass: MagicMock, mock_instance: MagicMock
     ) -> None:
         """Test is_on property with data."""
-        coordinator = BeurerDataUpdateCoordinator(
-            mock_hass, mock_instance, "Test Lamp"
-        )
+        coordinator = BeurerDataUpdateCoordinator(mock_hass, mock_instance, "Test Lamp")
         coordinator.data = {"is_on": True}
 
         assert coordinator.is_on is True
@@ -483,9 +466,7 @@ class TestConvenienceProperties:
         self, mock_hass: MagicMock, mock_instance: MagicMock
     ) -> None:
         """Test is_on property without data."""
-        coordinator = BeurerDataUpdateCoordinator(
-            mock_hass, mock_instance, "Test Lamp"
-        )
+        coordinator = BeurerDataUpdateCoordinator(mock_hass, mock_instance, "Test Lamp")
         coordinator.data = None
 
         assert coordinator.is_on is None
@@ -494,9 +475,7 @@ class TestConvenienceProperties:
         self, mock_hass: MagicMock, mock_instance: MagicMock
     ) -> None:
         """Test available property with data."""
-        coordinator = BeurerDataUpdateCoordinator(
-            mock_hass, mock_instance, "Test Lamp"
-        )
+        coordinator = BeurerDataUpdateCoordinator(mock_hass, mock_instance, "Test Lamp")
         coordinator.data = {"available": True}
 
         assert coordinator.available is True
@@ -505,9 +484,7 @@ class TestConvenienceProperties:
         self, mock_hass: MagicMock, mock_instance: MagicMock
     ) -> None:
         """Test available property without data returns False."""
-        coordinator = BeurerDataUpdateCoordinator(
-            mock_hass, mock_instance, "Test Lamp"
-        )
+        coordinator = BeurerDataUpdateCoordinator(mock_hass, mock_instance, "Test Lamp")
         coordinator.data = None
 
         assert coordinator.available is False
@@ -516,9 +493,7 @@ class TestConvenienceProperties:
         self, mock_hass: MagicMock, mock_instance: MagicMock
     ) -> None:
         """Test available property with missing key returns False."""
-        coordinator = BeurerDataUpdateCoordinator(
-            mock_hass, mock_instance, "Test Lamp"
-        )
+        coordinator = BeurerDataUpdateCoordinator(mock_hass, mock_instance, "Test Lamp")
         coordinator.data = {}
 
         assert coordinator.available is False
@@ -527,9 +502,7 @@ class TestConvenienceProperties:
         self, mock_hass: MagicMock, mock_instance: MagicMock
     ) -> None:
         """Test color_mode property with data."""
-        coordinator = BeurerDataUpdateCoordinator(
-            mock_hass, mock_instance, "Test Lamp"
-        )
+        coordinator = BeurerDataUpdateCoordinator(mock_hass, mock_instance, "Test Lamp")
         coordinator.data = {"color_mode": ColorMode.RGB}
 
         assert coordinator.color_mode == ColorMode.RGB
@@ -538,9 +511,7 @@ class TestConvenienceProperties:
         self, mock_hass: MagicMock, mock_instance: MagicMock
     ) -> None:
         """Test color_mode property without data returns WHITE."""
-        coordinator = BeurerDataUpdateCoordinator(
-            mock_hass, mock_instance, "Test Lamp"
-        )
+        coordinator = BeurerDataUpdateCoordinator(mock_hass, mock_instance, "Test Lamp")
         coordinator.data = None
 
         assert coordinator.color_mode == ColorMode.WHITE
@@ -549,9 +520,7 @@ class TestConvenienceProperties:
         self, mock_hass: MagicMock, mock_instance: MagicMock
     ) -> None:
         """Test color_mode property with missing key returns WHITE."""
-        coordinator = BeurerDataUpdateCoordinator(
-            mock_hass, mock_instance, "Test Lamp"
-        )
+        coordinator = BeurerDataUpdateCoordinator(mock_hass, mock_instance, "Test Lamp")
         coordinator.data = {}
 
         assert coordinator.color_mode == ColorMode.WHITE
@@ -560,9 +529,7 @@ class TestConvenienceProperties:
         self, mock_hass: MagicMock, mock_instance: MagicMock
     ) -> None:
         """Test brightness property in white mode."""
-        coordinator = BeurerDataUpdateCoordinator(
-            mock_hass, mock_instance, "Test Lamp"
-        )
+        coordinator = BeurerDataUpdateCoordinator(mock_hass, mock_instance, "Test Lamp")
         coordinator.data = {
             "color_mode": ColorMode.WHITE,
             "white_brightness": 200,
@@ -575,9 +542,7 @@ class TestConvenienceProperties:
         self, mock_hass: MagicMock, mock_instance: MagicMock
     ) -> None:
         """Test brightness property in RGB mode."""
-        coordinator = BeurerDataUpdateCoordinator(
-            mock_hass, mock_instance, "Test Lamp"
-        )
+        coordinator = BeurerDataUpdateCoordinator(mock_hass, mock_instance, "Test Lamp")
         coordinator.data = {
             "color_mode": ColorMode.RGB,
             "white_brightness": 200,
@@ -590,9 +555,7 @@ class TestConvenienceProperties:
         self, mock_hass: MagicMock, mock_instance: MagicMock
     ) -> None:
         """Test brightness property without data."""
-        coordinator = BeurerDataUpdateCoordinator(
-            mock_hass, mock_instance, "Test Lamp"
-        )
+        coordinator = BeurerDataUpdateCoordinator(mock_hass, mock_instance, "Test Lamp")
         coordinator.data = None
 
         assert coordinator.brightness is None
@@ -601,9 +564,7 @@ class TestConvenienceProperties:
         self, mock_hass: MagicMock, mock_instance: MagicMock
     ) -> None:
         """Test rgb_color property with data."""
-        coordinator = BeurerDataUpdateCoordinator(
-            mock_hass, mock_instance, "Test Lamp"
-        )
+        coordinator = BeurerDataUpdateCoordinator(mock_hass, mock_instance, "Test Lamp")
         coordinator.data = {"rgb_color": (255, 128, 64)}
 
         assert coordinator.rgb_color == (255, 128, 64)
@@ -612,9 +573,7 @@ class TestConvenienceProperties:
         self, mock_hass: MagicMock, mock_instance: MagicMock
     ) -> None:
         """Test rgb_color property without data."""
-        coordinator = BeurerDataUpdateCoordinator(
-            mock_hass, mock_instance, "Test Lamp"
-        )
+        coordinator = BeurerDataUpdateCoordinator(mock_hass, mock_instance, "Test Lamp")
         coordinator.data = None
 
         assert coordinator.rgb_color is None
@@ -623,9 +582,7 @@ class TestConvenienceProperties:
         self, mock_hass: MagicMock, mock_instance: MagicMock
     ) -> None:
         """Test effect property with data."""
-        coordinator = BeurerDataUpdateCoordinator(
-            mock_hass, mock_instance, "Test Lamp"
-        )
+        coordinator = BeurerDataUpdateCoordinator(mock_hass, mock_instance, "Test Lamp")
         coordinator.data = {"effect": "Rainbow"}
 
         assert coordinator.effect == "Rainbow"
@@ -634,9 +591,7 @@ class TestConvenienceProperties:
         self, mock_hass: MagicMock, mock_instance: MagicMock
     ) -> None:
         """Test effect property without data."""
-        coordinator = BeurerDataUpdateCoordinator(
-            mock_hass, mock_instance, "Test Lamp"
-        )
+        coordinator = BeurerDataUpdateCoordinator(mock_hass, mock_instance, "Test Lamp")
         coordinator.data = None
 
         assert coordinator.effect is None
@@ -645,9 +600,7 @@ class TestConvenienceProperties:
         self, mock_hass: MagicMock, mock_instance: MagicMock
     ) -> None:
         """Test rssi property with data."""
-        coordinator = BeurerDataUpdateCoordinator(
-            mock_hass, mock_instance, "Test Lamp"
-        )
+        coordinator = BeurerDataUpdateCoordinator(mock_hass, mock_instance, "Test Lamp")
         coordinator.data = {"rssi": -55}
 
         assert coordinator.rssi == -55
@@ -656,9 +609,7 @@ class TestConvenienceProperties:
         self, mock_hass: MagicMock, mock_instance: MagicMock
     ) -> None:
         """Test rssi property without data."""
-        coordinator = BeurerDataUpdateCoordinator(
-            mock_hass, mock_instance, "Test Lamp"
-        )
+        coordinator = BeurerDataUpdateCoordinator(mock_hass, mock_instance, "Test Lamp")
         coordinator.data = None
 
         assert coordinator.rssi is None

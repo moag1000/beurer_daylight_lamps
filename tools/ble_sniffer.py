@@ -82,9 +82,20 @@ def build_packet(message: list[int]) -> bytearray:
     length = len(message)
     checksum = calculate_checksum(length + 2, message)
     return bytearray(
-        [0xFE, 0xEF, 0x0A, length + 7, 0xAB, 0xAA, length + 2,
-         *message,
-         checksum, 0x55, 0x0D, 0x0A]
+        [
+            0xFE,
+            0xEF,
+            0x0A,
+            length + 7,
+            0xAB,
+            0xAA,
+            length + 2,
+            *message,
+            checksum,
+            0x55,
+            0x0D,
+            0x0A,
+        ]
     )
 
 
@@ -138,7 +149,9 @@ class BLESniffer:
         log(f"   Parsed: {parsed}")
 
         if self.log_file:
-            self.log_file.write(f"RECV,{datetime.now(tz=UTC).isoformat()},{data.hex()},{parsed}\n")
+            self.log_file.write(
+                f"RECV,{datetime.now(tz=UTC).isoformat()},{data.hex()},{parsed}\n"
+            )
             self.log_file.flush()
 
     async def send_raw(self, data: list[int], description: str = "") -> None:
@@ -148,7 +161,9 @@ class BLESniffer:
         log(f"   Payload: {data}")
 
         if self.log_file:
-            self.log_file.write(f"SEND,{datetime.now(tz=UTC).isoformat()},{packet.hex()},{data},{description}\n")
+            self.log_file.write(
+                f"SEND,{datetime.now(tz=UTC).isoformat()},{packet.hex()},{data},{description}\n"
+            )
             self.log_file.flush()
 
         await self.client.write_gatt_char(WRITE_UUID, packet)
@@ -222,7 +237,9 @@ class BLESniffer:
             return
         brightness = int(parts[1])
         await self.send_raw([CMD_MODE, MODE_WHITE], "mode white")
-        await self.send_raw([CMD_BRIGHTNESS, MODE_WHITE, brightness], f"brightness {brightness}%")
+        await self.send_raw(
+            [CMD_BRIGHTNESS, MODE_WHITE, brightness], f"brightness {brightness}%"
+        )
 
     async def _cmd_rgb(self, parts: list[str]) -> None:
         if len(parts) < 4:
@@ -249,7 +266,9 @@ class BLESniffer:
         for cmd_byte in [0x33, 0x36, 0x38, 0x39]:
             print(f"\n--- Testing 0x{cmd_byte:02X} ---")
             for second in [0x00, 0x01, 0x02, 0x0A, 0x1E, 0x3C]:
-                await self.send_raw([cmd_byte, second], f"probe 0x{cmd_byte:02X} 0x{second:02X}")
+                await self.send_raw(
+                    [cmd_byte, second], f"probe 0x{cmd_byte:02X} 0x{second:02X}"
+                )
                 await asyncio.sleep(0.5)
 
     async def interactive_mode(self) -> None:

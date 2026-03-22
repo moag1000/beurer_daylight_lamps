@@ -1,4 +1,5 @@
 """Light platform for Beurer Daylight Lamps."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -57,6 +58,7 @@ class BeurerLightExtraStoredData(ExtraStoredData):
         except (KeyError, TypeError):
             return None
 
+
 # Color temperature range (in Kelvin)
 # Beurer TL100 has 5300K daylight, we support warm to cool white
 MIN_COLOR_TEMP_KELVIN = 2700  # Warm white
@@ -80,7 +82,9 @@ async def async_setup_entry(
     async_add_entities([BeurerLight(coordinator, name, entry.entry_id)])
 
 
-class BeurerLight(CoordinatorEntity[BeurerDataUpdateCoordinator], RestoreEntity, LightEntity):
+class BeurerLight(
+    CoordinatorEntity[BeurerDataUpdateCoordinator], RestoreEntity, LightEntity
+):
     """Representation of a Beurer Daylight Lamp.
 
     Uses RestoreEntity to persist color temperature across HA restarts,
@@ -122,7 +126,8 @@ class BeurerLight(CoordinatorEntity[BeurerDataUpdateCoordinator], RestoreEntity,
         # Restore color temperature from previous state
         if (
             (extra_data := await self.async_get_last_extra_data()) is not None
-            and (restored := BeurerLightExtraStoredData.from_dict(extra_data.as_dict())) is not None
+            and (restored := BeurerLightExtraStoredData.from_dict(extra_data.as_dict()))
+            is not None
             and restored.color_temp_kelvin is not None
         ):
             self._color_temp_kelvin = restored.color_temp_kelvin
@@ -229,8 +234,10 @@ class BeurerLight(CoordinatorEntity[BeurerDataUpdateCoordinator], RestoreEntity,
             LOGGER.debug(
                 "Color temp %dK >= %dK, using native white mode "
                 "(current mode=%s, color_on=%s)",
-                kelvin, WHITE_MODE_THRESHOLD_KELVIN,
-                self._instance.color_mode, self._instance.color_on,
+                kelvin,
+                WHITE_MODE_THRESHOLD_KELVIN,
+                self._instance.color_mode,
+                self._instance.color_on,
             )
             await self._instance.set_white(
                 brightness if has_brightness else self._instance.white_brightness
@@ -270,7 +277,9 @@ class BeurerLight(CoordinatorEntity[BeurerDataUpdateCoordinator], RestoreEntity,
         """Turn on the light."""
         LOGGER.debug(
             "Turn on with kwargs: %s, current_mode: %s, is_on: %s",
-            kwargs, self._instance.color_mode, self._instance.is_on,
+            kwargs,
+            self._instance.color_mode,
+            self._instance.is_on,
         )
 
         if not kwargs:
@@ -290,7 +299,9 @@ class BeurerLight(CoordinatorEntity[BeurerDataUpdateCoordinator], RestoreEntity,
                 LOGGER.debug(
                     "Detected white-ish RGB %s, using native white mode "
                     "(current mode=%s, color_on=%s)",
-                    rgb, self._instance.color_mode, self._instance.color_on,
+                    rgb,
+                    self._instance.color_mode,
+                    self._instance.color_on,
                 )
                 self._color_temp_kelvin = WHITE_MODE_THRESHOLD_KELVIN
                 await self._instance.set_white(

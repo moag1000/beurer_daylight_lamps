@@ -1,4 +1,5 @@
 """The Beurer Daylight Lamps integration."""
+
 from __future__ import annotations
 
 import asyncio
@@ -160,15 +161,29 @@ SERVICE_ALARM_SCHEMA = vol.Schema(
     {
         vol.Required(ATTR_SLOT): vol.All(vol.Coerce(int), vol.Range(min=0, max=2)),
         vol.Required(ATTR_ENABLED): cv.boolean,
-        vol.Optional(ATTR_HOUR, default=7): vol.All(vol.Coerce(int), vol.Range(min=0, max=23)),
-        vol.Optional(ATTR_MINUTE, default=0): vol.All(vol.Coerce(int), vol.Range(min=0, max=59)),
+        vol.Optional(ATTR_HOUR, default=7): vol.All(
+            vol.Coerce(int), vol.Range(min=0, max=23)
+        ),
+        vol.Optional(ATTR_MINUTE, default=0): vol.All(
+            vol.Coerce(int), vol.Range(min=0, max=59)
+        ),
         vol.Optional(ATTR_DAYS, default="Mon,Tue,Wed,Thu,Fri"): cv.string,
-        vol.Optional(ATTR_TONE, default=0): vol.All(vol.Coerce(int), vol.Range(min=0, max=11)),
-        vol.Optional(ATTR_VOLUME, default=5): vol.All(vol.Coerce(int), vol.Range(min=0, max=10)),
-        vol.Optional(ATTR_SNOOZE, default=10): vol.All(vol.Coerce(int), vol.In([1, 2, 5, 10, 20, 30])),
+        vol.Optional(ATTR_TONE, default=0): vol.All(
+            vol.Coerce(int), vol.Range(min=0, max=11)
+        ),
+        vol.Optional(ATTR_VOLUME, default=5): vol.All(
+            vol.Coerce(int), vol.Range(min=0, max=10)
+        ),
+        vol.Optional(ATTR_SNOOZE, default=10): vol.All(
+            vol.Coerce(int), vol.In([1, 2, 5, 10, 20, 30])
+        ),
         vol.Optional(ATTR_SUNRISE_ENABLED, default=True): cv.boolean,
-        vol.Optional(ATTR_SUNRISE_TIME, default=20): vol.All(vol.Coerce(int), vol.Range(min=2, max=60)),
-        vol.Optional(ATTR_SUNRISE_BRIGHTNESS, default=50): vol.All(vol.Coerce(int), vol.Range(min=1, max=100)),
+        vol.Optional(ATTR_SUNRISE_TIME, default=20): vol.All(
+            vol.Coerce(int), vol.Range(min=2, max=60)
+        ),
+        vol.Optional(ATTR_SUNRISE_BRIGHTNESS, default=50): vol.All(
+            vol.Coerce(int), vol.Range(min=1, max=100)
+        ),
     }
 )
 
@@ -257,6 +272,7 @@ def _get_or_create_ble_device(
             mac_address,
         )
         from bleak.backends.device import BLEDevice
+
         ble_device = BLEDevice(
             address=mac_address,
             name=device_name,
@@ -390,7 +406,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> bo
     ir.async_delete_issue(hass, DOMAIN, f"device_not_found_{entry.entry_id}")
 
     instance = _create_instance(
-        hass, entry, ble_device, rssi, device_initially_available,
+        hass,
+        entry,
+        ble_device,
+        rssi,
+        device_initially_available,
     )
 
     coordinator = BeurerDataUpdateCoordinator(hass, instance, device_name)
@@ -413,7 +433,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> bo
                 if connected:
                     LOGGER.info("Initial connection to %s successful", mac_address)
                 else:
-                    LOGGER.debug("Initial connection to %s failed, will retry on demand", mac_address)
+                    LOGGER.debug(
+                        "Initial connection to %s failed, will retry on demand",
+                        mac_address,
+                    )
             except Exception as err:
                 LOGGER.debug("Initial connection to %s failed: %s", mac_address, err)
 
@@ -468,7 +491,9 @@ async def _async_get_instances_from_target(
         if entity_entry.platform != DOMAIN:
             LOGGER.debug(
                 "%sEntity %s is not a Beurer entity (platform: %s)",
-                log_prefix, entity_id, entity_entry.platform
+                log_prefix,
+                entity_id,
+                entity_entry.platform,
             )
             continue
 
@@ -539,7 +564,10 @@ def _register_preset_service(hass: HomeAssistant) -> None:
             LOGGER.info("Applied preset '%s' to %s", preset_name, instance.mac)
 
     hass.services.async_register(
-        DOMAIN, SERVICE_APPLY_PRESET, async_apply_preset, schema=SERVICE_SCHEMA,
+        DOMAIN,
+        SERVICE_APPLY_PRESET,
+        async_apply_preset,
+        schema=SERVICE_SCHEMA,
     )
     LOGGER.debug("Registered service %s.%s", DOMAIN, SERVICE_APPLY_PRESET)
 
@@ -560,7 +588,7 @@ def _register_raw_command_service(hass: HomeAssistant) -> None:
 
         try:
             hex_str = command_str.replace(" ", "").replace("0x", "")
-            payload = [int(hex_str[i:i+2], 16) for i in range(0, len(hex_str), 2)]
+            payload = [int(hex_str[i : i + 2], 16) for i in range(0, len(hex_str), 2)]
         except ValueError as err:
             raise ServiceValidationError(
                 translation_domain=DOMAIN,
@@ -587,7 +615,10 @@ def _register_raw_command_service(hass: HomeAssistant) -> None:
             )
 
     hass.services.async_register(
-        DOMAIN, SERVICE_SEND_RAW, async_send_raw_command, schema=SERVICE_RAW_SCHEMA,
+        DOMAIN,
+        SERVICE_SEND_RAW,
+        async_send_raw_command,
+        schema=SERVICE_RAW_SCHEMA,
     )
     LOGGER.debug("Registered service %s.%s", DOMAIN, SERVICE_SEND_RAW)
 
@@ -616,7 +647,10 @@ def _register_timer_service(hass: HomeAssistant) -> None:
                 LOGGER.error("TIMER: Failed to set timer on %s", instance.mac)
 
     hass.services.async_register(
-        DOMAIN, SERVICE_SET_TIMER, async_set_timer, schema=SERVICE_TIMER_SCHEMA,
+        DOMAIN,
+        SERVICE_SET_TIMER,
+        async_set_timer,
+        schema=SERVICE_TIMER_SCHEMA,
     )
     LOGGER.debug("Registered service %s.%s", DOMAIN, SERVICE_SET_TIMER)
 
@@ -642,7 +676,9 @@ def _register_simulation_services(hass: HomeAssistant) -> None:
         for instance in instances:
             LOGGER.info(
                 "SUNRISE: Starting %d min %s sunrise on %s",
-                duration, profile_name, instance.mac
+                duration,
+                profile_name,
+                instance.mac,
             )
             await instance.sunrise_simulation.start_sunrise(duration, profile)
             LOGGER.info("SUNRISE: Started on %s", instance.mac)
@@ -659,7 +695,9 @@ def _register_simulation_services(hass: HomeAssistant) -> None:
         for instance in instances:
             LOGGER.info(
                 "SUNSET: Starting %d min sunset (end: %d%%) on %s",
-                duration, end_brightness, instance.mac
+                duration,
+                end_brightness,
+                instance.mac,
             )
             await instance.sunrise_simulation.start_sunset(duration, end_brightness)
             LOGGER.info("SUNSET: Started on %s", instance.mac)
@@ -676,17 +714,25 @@ def _register_simulation_services(hass: HomeAssistant) -> None:
             LOGGER.info("STOP_SIM: Simulation stopped on %s", instance.mac)
 
     hass.services.async_register(
-        DOMAIN, SERVICE_START_SUNRISE, async_start_sunrise, schema=SERVICE_SUNRISE_SCHEMA,
+        DOMAIN,
+        SERVICE_START_SUNRISE,
+        async_start_sunrise,
+        schema=SERVICE_SUNRISE_SCHEMA,
     )
     LOGGER.debug("Registered service %s.%s", DOMAIN, SERVICE_START_SUNRISE)
 
     hass.services.async_register(
-        DOMAIN, SERVICE_START_SUNSET, async_start_sunset, schema=SERVICE_SUNSET_SCHEMA,
+        DOMAIN,
+        SERVICE_START_SUNSET,
+        async_start_sunset,
+        schema=SERVICE_SUNSET_SCHEMA,
     )
     LOGGER.debug("Registered service %s.%s", DOMAIN, SERVICE_START_SUNSET)
 
     hass.services.async_register(
-        DOMAIN, SERVICE_STOP_SIMULATION, async_stop_simulation,
+        DOMAIN,
+        SERVICE_STOP_SIMULATION,
+        async_stop_simulation,
         schema=SERVICE_STOP_SIMULATION_SCHEMA,
     )
     LOGGER.debug("Registered service %s.%s", DOMAIN, SERVICE_STOP_SIMULATION)
@@ -715,7 +761,7 @@ def _register_alarm_service(hass: HomeAssistant) -> None:
         for day in days_str.split(","):
             stripped_day = day.strip()
             if stripped_day in day_map:
-                days_bitmask |= (1 << day_map[stripped_day])
+                days_bitmask |= 1 << day_map[stripped_day]
 
         alarm = AlarmItem(
             slot=slot,
@@ -738,7 +784,11 @@ def _register_alarm_service(hass: HomeAssistant) -> None:
 
             LOGGER.info(
                 "ALARM: Setting alarm %d on %s: %02d:%02d %s",
-                slot, instance.mac, alarm.hour, alarm.minute, alarm.days_list,
+                slot,
+                instance.mac,
+                alarm.hour,
+                alarm.minute,
+                alarm.days_list,
             )
             success = await instance.wl90.sync_alarm(slot, alarm)
             if success:
@@ -747,7 +797,10 @@ def _register_alarm_service(hass: HomeAssistant) -> None:
                 LOGGER.error("ALARM: Failed to set on %s", instance.mac)
 
     hass.services.async_register(
-        DOMAIN, SERVICE_SET_ALARM, async_set_alarm, schema=SERVICE_ALARM_SCHEMA,
+        DOMAIN,
+        SERVICE_SET_ALARM,
+        async_set_alarm,
+        schema=SERVICE_ALARM_SCHEMA,
     )
     LOGGER.debug("Registered service %s.%s", DOMAIN, SERVICE_SET_ALARM)
 

@@ -1,4 +1,5 @@
 """Test Beurer Daylight Lamps light entity."""
+
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -162,7 +163,9 @@ async def test_turn_on_with_rgb(mock_coordinator: MagicMock) -> None:
     light = BeurerLight(mock_coordinator, "Test", "entry_id")
     await light.async_turn_on(**{ATTR_RGB_COLOR: (255, 128, 64)})
 
-    mock_coordinator.instance.set_color_with_brightness.assert_called_once_with((255, 128, 64), None)
+    mock_coordinator.instance.set_color_with_brightness.assert_called_once_with(
+        (255, 128, 64), None
+    )
 
 
 @pytest.mark.asyncio
@@ -359,7 +362,9 @@ async def test_turn_on_with_effect_and_brightness(mock_coordinator: MagicMock) -
 
 
 @pytest.mark.asyncio
-async def test_turn_on_brightness_only_color_temp_mode(mock_coordinator: MagicMock) -> None:
+async def test_turn_on_brightness_only_color_temp_mode(
+    mock_coordinator: MagicMock,
+) -> None:
     """Test brightness only when in color temp mode."""
     mock_coordinator.instance.color_mode = ColorMode.RGB
 
@@ -415,7 +420,9 @@ class TestAsyncSetupEntry:
         return create_mock_coordinator(mock_instance)
 
     @pytest.mark.asyncio
-    async def test_async_setup_entry_creates_light(self, mock_coordinator: MagicMock) -> None:
+    async def test_async_setup_entry_creates_light(
+        self, mock_coordinator: MagicMock
+    ) -> None:
         """Test that async_setup_entry creates a light entity."""
         from custom_components.beurer_daylight_lamps.light import async_setup_entry
 
@@ -440,7 +447,9 @@ class TestAsyncSetupEntry:
         assert added_entities[0]._device_name == "Test Lamp"
 
     @pytest.mark.asyncio
-    async def test_async_setup_entry_default_name(self, mock_coordinator: MagicMock) -> None:
+    async def test_async_setup_entry_default_name(
+        self, mock_coordinator: MagicMock
+    ) -> None:
         """Test that async_setup_entry uses default name when not provided."""
         from custom_components.beurer_daylight_lamps.light import async_setup_entry
 

@@ -1,4 +1,5 @@
 """Tests for Beurer Daylight Lamps services."""
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -283,7 +284,9 @@ class TestPresetDefinitions:
         """Test all presets define brightness."""
         for name, preset in PRESETS.items():
             assert "brightness" in preset, f"Preset '{name}' missing brightness"
-            assert 0 <= preset["brightness"] <= 255, f"Preset '{name}' has invalid brightness"
+            assert 0 <= preset["brightness"] <= 255, (
+                f"Preset '{name}' has invalid brightness"
+            )
 
     def test_all_presets_have_color(self) -> None:
         """Test all presets define either rgb or color_temp_kelvin."""
@@ -308,7 +311,9 @@ class TestPresetDefinitions:
             if "color_temp_kelvin" in preset:
                 kelvin = preset["color_temp_kelvin"]
                 # Typical range for color temperature
-                assert 2000 <= kelvin <= 7000, f"Preset '{name}' has unusual Kelvin value {kelvin}"
+                assert 2000 <= kelvin <= 7000, (
+                    f"Preset '{name}' has unusual Kelvin value {kelvin}"
+                )
 
     def test_expected_presets_exist(self) -> None:
         """Test expected preset names exist."""
@@ -366,12 +371,13 @@ class TestGetInstancesFromTarget:
         mock_entity_entry = MagicMock()
         mock_entity_entry.platform = "hue"
 
-        with patch(
-            "custom_components.beurer_daylight_lamps.async_extract_entity_ids",
-            return_value={"light.living_room"},
-        ), patch(
-            "custom_components.beurer_daylight_lamps.er.async_get"
-        ) as mock_er:
+        with (
+            patch(
+                "custom_components.beurer_daylight_lamps.async_extract_entity_ids",
+                return_value={"light.living_room"},
+            ),
+            patch("custom_components.beurer_daylight_lamps.er.async_get") as mock_er,
+        ):
             mock_registry = MagicMock()
             mock_registry.async_get.return_value = mock_entity_entry
             mock_er.return_value = mock_registry
@@ -393,17 +399,20 @@ class TestGetInstancesFromTarget:
         mock_config_entry = MagicMock()
         mock_config_entry.runtime_data = mock_runtime_data
 
-        with patch(
-            "custom_components.beurer_daylight_lamps.async_extract_entity_ids",
-            return_value={"light.beurer_lamp"},
-        ), patch(
-            "custom_components.beurer_daylight_lamps.er.async_get"
-        ) as mock_er:
+        with (
+            patch(
+                "custom_components.beurer_daylight_lamps.async_extract_entity_ids",
+                return_value={"light.beurer_lamp"},
+            ),
+            patch("custom_components.beurer_daylight_lamps.er.async_get") as mock_er,
+        ):
             mock_registry = MagicMock()
             mock_registry.async_get.return_value = mock_entity_entry
             mock_er.return_value = mock_registry
 
-            hass.config_entries.async_get_entry = MagicMock(return_value=mock_config_entry)
+            hass.config_entries.async_get_entry = MagicMock(
+                return_value=mock_config_entry
+            )
 
             result = await _async_get_instances_from_target(hass, mock_call, "TEST")
             assert len(result) == 1
@@ -424,17 +433,20 @@ class TestGetInstancesFromTarget:
         mock_config_entry.runtime_data = mock_runtime_data
 
         # Multiple light entities from same config entry
-        with patch(
-            "custom_components.beurer_daylight_lamps.async_extract_entity_ids",
-            return_value={"light.beurer_lamp_1", "light.beurer_lamp_2"},
-        ), patch(
-            "custom_components.beurer_daylight_lamps.er.async_get"
-        ) as mock_er:
+        with (
+            patch(
+                "custom_components.beurer_daylight_lamps.async_extract_entity_ids",
+                return_value={"light.beurer_lamp_1", "light.beurer_lamp_2"},
+            ),
+            patch("custom_components.beurer_daylight_lamps.er.async_get") as mock_er,
+        ):
             mock_registry = MagicMock()
             mock_registry.async_get.return_value = mock_entity_entry
             mock_er.return_value = mock_registry
 
-            hass.config_entries.async_get_entry = MagicMock(return_value=mock_config_entry)
+            hass.config_entries.async_get_entry = MagicMock(
+                return_value=mock_config_entry
+            )
 
             result = await _async_get_instances_from_target(hass, mock_call, "TEST")
             # Should only have one instance even with two entities
@@ -740,7 +752,9 @@ class TestSunriseService:
                 blocking=True,
             )
 
-            mock_simulation.start_sunrise.assert_called_once_with(15, SunriseProfile.NATURAL)
+            mock_simulation.start_sunrise.assert_called_once_with(
+                15, SunriseProfile.NATURAL
+            )
 
     @pytest.mark.asyncio
     async def test_start_sunrise_custom(self, hass: HomeAssistant) -> None:
@@ -770,7 +784,9 @@ class TestSunriseService:
                 blocking=True,
             )
 
-            mock_simulation.start_sunrise.assert_called_once_with(30, SunriseProfile.THERAPY)
+            mock_simulation.start_sunrise.assert_called_once_with(
+                30, SunriseProfile.THERAPY
+            )
 
     @pytest.mark.asyncio
     async def test_start_sunrise_all_profiles(self, hass: HomeAssistant) -> None:
@@ -945,4 +961,6 @@ class TestServiceRegistration:
         ]
 
         for service in expected_services:
-            assert hass.services.has_service(DOMAIN, service), f"Service {service} not registered"
+            assert hass.services.has_service(DOMAIN, service), (
+                f"Service {service} not registered"
+            )

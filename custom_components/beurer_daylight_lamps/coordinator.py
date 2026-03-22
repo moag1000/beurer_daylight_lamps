@@ -8,6 +8,7 @@ For BLE devices, we use a hybrid approach:
 - Periodic refresh ensures state consistency
 - Coordinator manages update distribution to all entities
 """
+
 from __future__ import annotations
 
 from datetime import timedelta
@@ -181,26 +182,28 @@ class BeurerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Add WL90 data if applicable
         if self.instance.wl90:
             wl90 = self.instance.wl90
-            data.update({
-                "radio_on": wl90.radio.is_on,
-                "radio_frequency": wl90.radio.frequency_mhz,
-                "radio_volume": wl90.radio.volume,
-                "radio_channel": wl90.radio.channel,
-                "radio_sleep_timer": wl90.radio.sleep_timer_on,
-                "music_on": wl90.music.is_on,
-                "music_volume": wl90.music.volume,
-                "music_sleep_timer": wl90.music.sleep_timer_on,
-                "alarms": [
-                    {
-                        "slot": a.slot,
-                        "enabled": a.enabled,
-                        "hour": a.hour,
-                        "minute": a.minute,
-                        "days": a.days_list,
-                    }
-                    for a in wl90.alarms
-                ],
-            })
+            data.update(
+                {
+                    "radio_on": wl90.radio.is_on,
+                    "radio_frequency": wl90.radio.frequency_mhz,
+                    "radio_volume": wl90.radio.volume,
+                    "radio_channel": wl90.radio.channel,
+                    "radio_sleep_timer": wl90.radio.sleep_timer_on,
+                    "music_on": wl90.music.is_on,
+                    "music_volume": wl90.music.volume,
+                    "music_sleep_timer": wl90.music.sleep_timer_on,
+                    "alarms": [
+                        {
+                            "slot": a.slot,
+                            "enabled": a.enabled,
+                            "hour": a.hour,
+                            "minute": a.minute,
+                            "days": a.days_list,
+                        }
+                        for a in wl90.alarms
+                    ],
+                }
+            )
 
         return data
 
@@ -271,7 +274,11 @@ class BeurerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     @property
     def color_mode(self) -> ColorMode:
         """Return current color mode."""
-        return self.data.get("color_mode", ColorMode.WHITE) if self.data else ColorMode.WHITE
+        return (
+            self.data.get("color_mode", ColorMode.WHITE)
+            if self.data
+            else ColorMode.WHITE
+        )
 
     @property
     def brightness(self) -> int | None:

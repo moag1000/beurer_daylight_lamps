@@ -1,4 +1,5 @@
 """Button platform for Beurer Daylight Lamps."""
+
 from __future__ import annotations
 
 import asyncio

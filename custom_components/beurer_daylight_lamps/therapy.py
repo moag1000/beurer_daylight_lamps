@@ -4,6 +4,7 @@ This module provides:
 1. Sunrise/Sunset simulation via native services (no YAML required)
 2. Daily light exposure tracking for therapy goals
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -26,10 +27,10 @@ from .const import LOGGER
 class SunriseProfile(Enum):
     """Predefined sunrise profiles."""
 
-    GENTLE = "gentle"      # Very slow, warm start
-    NATURAL = "natural"    # Natural sunrise simulation
+    GENTLE = "gentle"  # Very slow, warm start
+    NATURAL = "natural"  # Natural sunrise simulation
     ENERGIZE = "energize"  # Fast, cool light for alertness
-    THERAPY = "therapy"    # Optimized for light therapy (ends at 5300K)
+    THERAPY = "therapy"  # Optimized for light therapy (ends at 5300K)
 
 
 @dataclass
@@ -357,7 +358,8 @@ class SunriseSimulation:
                     if not self._instance.ble_available:
                         LOGGER.warning(
                             "Device not BLE reachable, skipping connect (attempt %d/%d)",
-                            attempt + 1, max_retries
+                            attempt + 1,
+                            max_retries,
                         )
                         await asyncio.sleep(3)
                         continue
@@ -366,8 +368,7 @@ class SunriseSimulation:
                     connected = await self._instance.connect()
                     if not connected:
                         LOGGER.warning(
-                            "Reconnect failed (attempt %d/%d)",
-                            attempt + 1, max_retries
+                            "Reconnect failed (attempt %d/%d)", attempt + 1, max_retries
                         )
                         await asyncio.sleep(3)
                         continue
@@ -379,8 +380,7 @@ class SunriseSimulation:
                 await action()
             except Exception as err:
                 LOGGER.warning(
-                    "Action failed (attempt %d/%d): %s",
-                    attempt + 1, max_retries, err
+                    "Action failed (attempt %d/%d): %s", attempt + 1, max_retries, err
                 )
                 if attempt < max_retries - 1:
                     await asyncio.sleep(3)
@@ -405,7 +405,9 @@ class SunriseSimulation:
             interval = duration_minutes * 60 / steps  # seconds between steps
 
             kelvin_step = (config.end_kelvin - config.start_kelvin) / steps
-            brightness_step = (config.end_brightness_pct - config.start_brightness_pct) / steps
+            brightness_step = (
+                config.end_brightness_pct - config.start_brightness_pct
+            ) / steps
 
             consecutive_failures = 0
             # Sunrise runs 15-30min; allow ~2min of recovery (8 x 15s retry wait)
@@ -443,7 +445,9 @@ class SunriseSimulation:
                 # mode switches, effect clears, or status requests)
                 # Use default args to bind loop variable values
                 success = await self._apply_with_retry(
-                    lambda _r=rgb, _b=brightness_255: self._instance.set_color_with_brightness_fast(_r, _b)
+                    lambda _r=rgb, _b=brightness_255: (
+                        self._instance.set_color_with_brightness_fast(_r, _b)
+                    )
                 )
 
                 if success:
@@ -452,12 +456,13 @@ class SunriseSimulation:
                     consecutive_failures += 1
                     LOGGER.warning(
                         "Sunrise step %d failed, continuing... (%d consecutive failures)",
-                        i + 1, consecutive_failures
+                        i + 1,
+                        consecutive_failures,
                     )
                     if consecutive_failures >= max_consecutive_failures:
                         LOGGER.error(
                             "Too many consecutive failures (%d), stopping sunrise",
-                            consecutive_failures
+                            consecutive_failures,
                         )
                         break
 
@@ -504,7 +509,10 @@ class SunriseSimulation:
             brightness_255 = int(brightness_pct / 100 * 255)
 
             LOGGER.debug(
-                "Sunset step %d/%d: %d%%", i + 1, steps + 1, brightness_pct,
+                "Sunset step %d/%d: %d%%",
+                i + 1,
+                steps + 1,
+                brightness_pct,
             )
 
             # Use default args to bind loop variable values
@@ -512,7 +520,9 @@ class SunriseSimulation:
                 success = await self._apply_with_retry(self._instance.turn_off)
             else:
                 success = await self._apply_with_retry(
-                    lambda _r=warm_rgb, _b=brightness_255: self._instance.set_color_with_brightness_fast(_r, _b)
+                    lambda _r=warm_rgb, _b=brightness_255: (
+                        self._instance.set_color_with_brightness_fast(_r, _b)
+                    )
                 )
 
             if success:
@@ -521,12 +531,13 @@ class SunriseSimulation:
                 consecutive_failures += 1
                 LOGGER.warning(
                     "Sunset step %d failed, continuing... (%d consecutive failures)",
-                    i + 1, consecutive_failures
+                    i + 1,
+                    consecutive_failures,
                 )
                 if consecutive_failures >= max_consecutive_failures:
                     LOGGER.error(
                         "Too many consecutive failures (%d), stopping sunset",
-                        consecutive_failures
+                        consecutive_failures,
                     )
                     break
 
@@ -562,7 +573,11 @@ class SunriseSimulation:
             )
 
             await self._execute_sunset_steps(
-                steps, interval, start_brightness_pct, brightness_step, warm_rgb,
+                steps,
+                interval,
+                start_brightness_pct,
+                brightness_step,
+                warm_rgb,
             )
 
             # Final turn off if end_brightness is 0
