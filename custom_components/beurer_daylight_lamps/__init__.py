@@ -138,6 +138,36 @@ SERVICE_SUNSET_SCHEMA = vol.Schema(
 
 SERVICE_STOP_SIMULATION_SCHEMA = vol.Schema({})
 
+# WL90-specific services
+SERVICE_SET_ALARM = "set_alarm"
+ATTR_SLOT = "slot"
+ATTR_ENABLED = "enabled"
+ATTR_HOUR = "hour"
+ATTR_MINUTE = "minute"
+ATTR_DAYS = "days"
+ATTR_TONE = "tone"
+ATTR_VOLUME = "volume"
+ATTR_SNOOZE = "snooze"
+ATTR_SUNRISE_ENABLED = "sunrise_enabled"
+ATTR_SUNRISE_TIME = "sunrise_time"
+ATTR_SUNRISE_BRIGHTNESS = "sunrise_brightness"
+
+SERVICE_ALARM_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_SLOT): vol.All(vol.Coerce(int), vol.Range(min=0, max=2)),
+        vol.Required(ATTR_ENABLED): cv.boolean,
+        vol.Optional(ATTR_HOUR, default=7): vol.All(vol.Coerce(int), vol.Range(min=0, max=23)),
+        vol.Optional(ATTR_MINUTE, default=0): vol.All(vol.Coerce(int), vol.Range(min=0, max=59)),
+        vol.Optional(ATTR_DAYS, default="Mon,Tue,Wed,Thu,Fri"): cv.string,
+        vol.Optional(ATTR_TONE, default=0): vol.All(vol.Coerce(int), vol.Range(min=0, max=11)),
+        vol.Optional(ATTR_VOLUME, default=5): vol.All(vol.Coerce(int), vol.Range(min=0, max=10)),
+        vol.Optional(ATTR_SNOOZE, default=10): vol.All(vol.Coerce(int), vol.In([1, 2, 5, 10, 20, 30])),
+        vol.Optional(ATTR_SUNRISE_ENABLED, default=True): cv.boolean,
+        vol.Optional(ATTR_SUNRISE_TIME, default=20): vol.All(vol.Coerce(int), vol.Range(min=2, max=60)),
+        vol.Optional(ATTR_SUNRISE_BRIGHTNESS, default=50): vol.All(vol.Coerce(int), vol.Range(min=1, max=100)),
+    }
+)
+
 from dataclasses import dataclass
 
 
@@ -168,6 +198,7 @@ PLATFORMS: list[Platform] = [
     Platform.NUMBER,
     Platform.BINARY_SENSOR,
     Platform.SWITCH,
+    Platform.MEDIA_PLAYER,
 ]
 
 
@@ -654,6 +685,67 @@ async def _async_setup_services(hass: HomeAssistant) -> None:
         schema=SERVICE_STOP_SIMULATION_SCHEMA,
     )
     LOGGER.debug("Registered service %s.%s", DOMAIN, SERVICE_STOP_SIMULATION)
+
+    # WL90-specific alarm service
+    async def async_set_alarm(call: ServiceCall) -> None:
+        """Set an alarm on a WL90 Wake-up Light.
+
+        Configures one of the 3 alarm slots with time, days,
+        tone, volume, snooze, and optional sunrise simulation.
+        """
+        from .wl90 import AlarmItem
+
+        slot = call.data[ATTR_SLOT]
+
+        instances = await _async_get_instances_from_target(hass, call, "ALARM")
+        if not instances:
+            return
+
+        # Parse days string (e.g., "Mon,Tue,Wed,Thu,Fri")
+        day_map = {"Sun": 0, "Mon": 1, "Tue": 2, "Wed": 3, "Thu": 4, "Fri": 5, "Sat": 6}
+        days_str = call.data.get(ATTR_DAYS, "Mon,Tue,Wed,Thu,Fri")
+        days_bitmask = 0
+        for day in days_str.split(","):
+            day = day.strip()
+            if day in day_map:
+                days_bitmask |= (1 << day_map[day])
+
+        alarm = AlarmItem(
+            slot=slot,
+            enabled=call.data[ATTR_ENABLED],
+            hour=call.data.get(ATTR_HOUR, 7),
+            minute=call.data.get(ATTR_MINUTE, 0),
+            days=days_bitmask,
+            tone=call.data.get(ATTR_TONE, 0),
+            volume=call.data.get(ATTR_VOLUME, 5),
+            snooze_minutes=call.data.get(ATTR_SNOOZE, 10),
+            sunrise_enabled=call.data.get(ATTR_SUNRISE_ENABLED, True),
+            sunrise_time=call.data.get(ATTR_SUNRISE_TIME, 20),
+            sunrise_brightness=call.data.get(ATTR_SUNRISE_BRIGHTNESS, 50),
+        )
+
+        for instance in instances:
+            if not instance.is_wl90 or instance.wl90 is None:
+                LOGGER.warning("Device %s is not a WL90, skipping alarm", instance.mac)
+                continue
+
+            LOGGER.info(
+                "ALARM: Setting alarm %d on %s: %02d:%02d %s",
+                slot, instance.mac, alarm.hour, alarm.minute, alarm.days_list,
+            )
+            success = await instance.wl90.sync_alarm(slot, alarm)
+            if success:
+                LOGGER.info("ALARM: Set successfully on %s", instance.mac)
+            else:
+                LOGGER.error("ALARM: Failed to set on %s", instance.mac)
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SET_ALARM,
+        async_set_alarm,
+        schema=SERVICE_ALARM_SCHEMA,
+    )
+    LOGGER.debug("Registered service %s.%s", DOMAIN, SERVICE_SET_ALARM)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> bool:

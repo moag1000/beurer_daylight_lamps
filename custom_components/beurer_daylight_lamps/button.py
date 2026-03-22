@@ -29,6 +29,12 @@ BUTTON_DESCRIPTIONS: tuple[ButtonEntityDescription, ...] = (
         translation_key="reconnect",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
+    ButtonEntityDescription(
+        key="sync_time",
+        translation_key="sync_time",
+        icon="mdi:clock-sync",
+        entity_category=EntityCategory.CONFIG,
+    ),
 )
 
 
@@ -93,6 +99,8 @@ class BeurerButton(CoordinatorEntity[BeurerDataUpdateCoordinator], ButtonEntity)
             await self._identify()
         elif self.entity_description.key == "reconnect":
             await self._reconnect()
+        elif self.entity_description.key == "sync_time":
+            await self._sync_time()
 
     async def _identify(self) -> None:
         """Flash the lamp to identify it."""
@@ -119,3 +127,12 @@ class BeurerButton(CoordinatorEntity[BeurerDataUpdateCoordinator], ButtonEntity)
         await self._instance.disconnect()
         await asyncio.sleep(0.5)
         await self._instance.connect()
+
+    async def _sync_time(self) -> None:
+        """Sync Home Assistant time to the device clock."""
+        LOGGER.info("Syncing time to %s", self._instance.mac)
+        success = await self._instance.sync_time()
+        if success:
+            LOGGER.info("Time synced successfully to %s", self._instance.mac)
+        else:
+            LOGGER.error("Failed to sync time to %s", self._instance.mac)

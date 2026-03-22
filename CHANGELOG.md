@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.30.0] - 2026-03-22
+
+### Added
+
+- **WL90 Wake-up Light support**: Full support for the Beurer WL90, including auto-discovery via BLE (`WL_90*`/`WL90*` name prefixes)
+- **FM Radio** (WL90): Media player entity with on/off, volume (0-10), preset selection (1-10), auto-seek/fine-tune, sleep timer
+- **Bluetooth Speaker** (WL90): Media player entity with on/off, volume control, sleep timer
+- **Alarm service** (WL90): `set_alarm` service to configure 3 alarm slots with time, weekday selection, 12 alarm tones (Buzzer, Radio, Melody 1-10), snooze (1/2/5/10/20/30 min), and sunrise simulation
+- **Radio/Speaker volume**: Dedicated number slider entities for WL90 radio and speaker volume
+- **Device Permission Check**: Sends CMD 0x00 after connect (like the official app) to detect if another device holds the control lock
+- **Time sync on connect**: Automatically syncs Home Assistant time to the device clock on every connection (prevents clock drift for alarms/timers)
+- **Device settings**: Feedback sound (beep) and Fade transitions as switch entities, read from device via CMD 0x12
+- **Sync Time button**: Manual time sync button entity (EntityCategory.CONFIG)
+- **Timer state from notifications**: BLE status notifications now parsed for timer active/minutes (data[11]/data[12])
+- **Timer end notifications**: Device-initiated timer expiry (0xEB/0xEC light, 0xED/0xEE radio/music) properly handled instead of being ignored as heartbeats
+- **Settings response routing**: Settings notifications (0xE2/0xF2) correctly caught before version-based routing to prevent state corruption
+
+### Changed
+
+- **Protocol documentation**: PROTOCOL.md expanded with all 28 A2D commands and 19 D2A response types discovered from APK reverse engineering
+- **Connect sequence**: Now mirrors the official Beurer LightUp app exactly: Permission → Time sync → Status → Settings → [WL90: Alarms → Radio → Music]
+- **Entity naming**: Remaining hardcoded `name=` fields converted to `translation_key=` for internationalization
+- **Timer range**: services.yaml corrected from 240 to 120 minutes (protocol limit)
+- **Version**: Bumped to 1.30.0
+
+### Fixed
+
+- **Coordinator data unreachable**: WL90 data block was after a `return` statement (never executed)
+- **WL90 notification state corruption**: Radio confirmation responses (0xF8/0xF9/0xFA/0xFE) fell through to version-based routing, causing spurious light state changes
+- **Snooze byte encoding**: Protocol uses index (0-5) not minutes; added mapping table (1/2/5/10/20/30 min)
+- **Radio preset indexing**: Changed from 0-based to 1-based (1-10) per APK protocol
+- **Alarm tone range**: Corrected from 0-10 to 0-11 (12 tones: Buzzer, Radio, Melody 1-10)
+- **Sunrise time minimum**: Corrected from 5 to 2 minutes per APK
+- **Sunrise brightness minimum**: Corrected from 0 to 1 per APK
+- **Timer exception message**: Corrected "1-240" to "1-120"
+- **Sunset service translation**: Fixed wrong field name (`profile` → `end_brightness`) in strings.json
+
 ## [1.27.0] - 2026-02-19
 
 ### Fixed

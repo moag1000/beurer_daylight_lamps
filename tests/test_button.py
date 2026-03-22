@@ -142,8 +142,8 @@ class TestAsyncSetupEntry:
 
         await async_setup_entry(mock_hass, mock_entry, capture_entities)
 
-        # Should create 2 entities: identify and reconnect
-        assert len(added_entities) == 2
+        # Should create 3 entities: identify, reconnect, sync_time
+        assert len(added_entities) == 3
         assert all(isinstance(e, BeurerButton) for e in added_entities)
 
     @pytest.mark.asyncio

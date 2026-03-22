@@ -447,8 +447,8 @@ class TestAsyncSetupEntry:
 
         await async_setup_entry(mock_hass, mock_entry, capture_entities)
 
-        # Should create 1 entity for adaptive lighting
-        assert len(added_entities) == 1
+        # Should create 3 entities: adaptive_lighting + feedback_sound + fade
+        assert len(added_entities) == 3
         assert isinstance(added_entities[0], BeurerAdaptiveLightingSwitch)
 
     @pytest.mark.asyncio

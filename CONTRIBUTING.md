@@ -73,7 +73,7 @@ pytest tests/ -v
 
 ## Testing with a Real Device
 
-If you have a Beurer daylight lamp (TL50, TL70, TL80, TL90, TL100):
+If you have a Beurer daylight lamp (TL50, TL70, TL80, TL90, TL100, WL90):
 
 1. Enable debug logging in Home Assistant:
    ```yaml
@@ -98,9 +98,27 @@ If you have a Beurer daylight lamp (TL50, TL70, TL80, TL90, TL100):
 
 ## Reverse Engineering New Features
 
-There are two main approaches to reverse engineering BLE commands:
-1. **In-app testing** with Home Assistant's diagnostic sensors and raw command service
-2. **Android BLE sniffing** to capture traffic from the official Beurer app
+There are three approaches to reverse engineering BLE commands:
+1. **APK reverse engineering** — decompile the Beurer LightUp APK to read the protocol code directly
+2. **Android BLE sniffing** — capture traffic from the official app
+3. **In-app testing** — use HA's diagnostic sensors and raw command service
+
+### Method 0: APK Reverse Engineering (Most Complete)
+
+This is how all 28 commands and 19 response types were discovered. The Beurer LightUp APK v2.1
+was decompiled using [jadx](https://github.com/skylot/jadx). Key classes:
+- `AppBytes.java` — all command builders (`getBytes()`, `syncTime()`, `queryWL90Light()`, etc.)
+- `BlueOrder.java` — command/response byte constants
+- `globalPool.java` — response parser (`publishBroadcast()`)
+- `SppManager.java` / `ConnectThread.java` — connection handling
+
+The APK and decompiled sources are stored in `../beurer_capture/`:
+- `beurer LightUp_2.1_APKPure.apk` — original APK
+- `decompiled/` — jadx output
+
+**Note:** The APK v2.1 uses Classic BT SPP for data transfer, but the device is dual-mode.
+Newer app versions switched to BLE GATT (confirmed by bugreport analysis). The packet format
+is identical regardless of transport.
 
 ### Method 1: Android BLE Sniffing (Recommended for Discovery)
 
@@ -183,15 +201,16 @@ data:
   command: "33 01 1E"  # Example: Timer test
 ```
 
-### Commands to Investigate
+### Commands Status (after APK analysis)
+
+All commands 0x00-0x38 have been fully mapped from the APK. See `docs/PROTOCOL.md` for the
+complete reference. Only 3 commands remain unknown (not present in the APK):
 
 | Cmd | Status | Notes |
 |-----|--------|-------|
-| `0x3E` | **Discovered** | Timer (1-240 min, RGB mode only) |
-| `0x33` | Unknown | Possibly unused |
-| `0x36` | Unknown | Suspected Sunrise/Sunset |
-| `0x38` | Unknown | Need investigation |
-| `0x39` | Unknown | Need investigation |
+| `0x39` | Unknown | Not in APK, possibly TL100-specific firmware feature |
+| `0x3E` | Unknown | Not in APK, possibly TL100-specific firmware feature |
+| `0x3F` | Unknown | Not in APK, possibly TL100-specific firmware feature |
 | `0x3F` | Unknown | Possibly timer cancel |
 
 ### Example: Reverse Engineering the Timer
