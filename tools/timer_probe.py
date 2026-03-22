@@ -1,17 +1,24 @@
 #!/usr/bin/env python3
 """Probe timer commands for Beurer TL100."""
 
-import requests
-import time
+import os
 import sys
+import time
 
-HA_URL = "http://192.168.2.99:8123"
-HA_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiI4NTljYjkwYThhZmQ0Y2Y4OGY5ZGUyOTQ0YTY3MjNmNiIsImlhdCI6MTc2NTk4NTMwOCwiZXhwIjoyMDgxMzQ1MzA4fQ.RbNNifJSwpqjnB1-DHPT6I9SMLl0g_yoY_Vrg4SCLAE"
-DEVICE_ID = "757db7b50ca2d8708f5c50aee0973c16"
+import requests
+
+HA_URL = os.environ.get("HA_URL", "http://192.168.2.99:8123")
+HA_TOKEN = os.environ.get("HA_TOKEN")
+DEVICE_ID = os.environ.get("HA_DEVICE_ID", "757db7b50ca2d8708f5c50aee0973c16")
+
+if not HA_TOKEN:
+    print("Error: HA_TOKEN environment variable is not set.")
+    print("Export it before running: export HA_TOKEN='your-long-lived-access-token'")
+    sys.exit(1)
 
 HEADERS = {
     "Authorization": f"Bearer {HA_TOKEN}",
-    "Content-Type": "application/json"
+    "Content-Type": "application/json",
 }
 
 def send_raw_cmd(cmd: str) -> bool:
@@ -21,12 +28,13 @@ def send_raw_cmd(cmd: str) -> bool:
             f"{HA_URL}/api/services/beurer_daylight_lamps/send_raw_command",
             headers=HEADERS,
             json={"device_id": DEVICE_ID, "command": cmd},
-            timeout=10
+            timeout=10,
         )
-        return r.status_code == 200
     except Exception as e:
         print(f"Error sending {cmd}: {e}")
         return False
+    else:
+        return r.status_code == 200
 
 def get_last_notifications(n: int = 5) -> list:
     """Get last N real notifications (not 0a)."""
@@ -62,7 +70,9 @@ def parse_rgb_notification(hex_str: str) -> dict:
         brightness = int(hex_str[20:22], 16)
         timer_active = int(hex_str[22:24], 16)
         timer_min = int(hex_str[24:26], 16)
-
+    except Exception as e:
+        return {"raw": hex_str, "error": str(e)}
+    else:
         return {
             "raw": hex_str,
             "payload_len": payload_len,
@@ -72,8 +82,6 @@ def parse_rgb_notification(hex_str: str) -> dict:
             "timer_active": timer_active,
             "timer_min": timer_min,
         }
-    except Exception as e:
-        return {"raw": hex_str, "error": str(e)}
 
 def test_command(cmd: str) -> dict:
     """Test a command and return the result."""
@@ -139,7 +147,7 @@ def main():
 
     print("\n=== Summary ===")
     for r in results:
-        timer_status = f"timer={r.get('timer_active', '?')}:{r.get('timer_min', '?')}" if 'timer_active' in r else r.get('error', 'unknown')
+        timer_status = f"timer={r.get('timer_active', '?')}:{r.get('timer_min', '?')}" if "timer_active" in r else r.get("error", "unknown")
         print(f"{r['cmd']}: {timer_status}")
 
 if __name__ == "__main__":
