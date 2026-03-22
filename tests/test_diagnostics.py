@@ -1,7 +1,6 @@
 """Test Beurer Daylight Lamps diagnostics."""
 from unittest.mock import MagicMock
 
-import pytest
 from homeassistant.const import CONF_MAC, CONF_NAME
 from homeassistant.core import HomeAssistant
 

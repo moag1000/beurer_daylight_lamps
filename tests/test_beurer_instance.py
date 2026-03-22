@@ -1909,10 +1909,11 @@ class TestModeSwitchGuard:
     @pytest.mark.asyncio
     async def test_rgb_notification_ignored_during_white_switch(self, mock_device):
         """Test RGB notification is filtered when switching to white mode."""
+        from homeassistant.components.light import ColorMode
+
         from custom_components.beurer_daylight_lamps.beurer_daylight_lamps import (
             BeurerInstance,
         )
-        from homeassistant.components.light import ColorMode
 
         instance = BeurerInstance(mock_device)
         instance._available = True
@@ -1930,10 +1931,11 @@ class TestModeSwitchGuard:
     @pytest.mark.asyncio
     async def test_white_notification_ignored_during_rgb_switch(self, mock_device):
         """Test white notification is filtered when switching to RGB mode."""
+        from homeassistant.components.light import ColorMode
+
         from custom_components.beurer_daylight_lamps.beurer_daylight_lamps import (
             BeurerInstance,
         )
-        from homeassistant.components.light import ColorMode
 
         instance = BeurerInstance(mock_device)
         instance._light_on = True

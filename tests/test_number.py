@@ -1,7 +1,7 @@
 """Test Beurer Daylight Lamps number platform."""
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from homeassistant.components.light import ColorMode
@@ -10,11 +10,10 @@ from homeassistant.exceptions import HomeAssistantError
 from custom_components.beurer_daylight_lamps.number import (
     NUMBER_DESCRIPTIONS,
     BeurerBrightnessNumber,
-    BeurerTimerNumber,
     BeurerTherapyGoalNumber,
+    BeurerTimerNumber,
 )
 from tests.conftest import create_mock_coordinator
-
 
 # =============================================================================
 # Test BeurerBrightnessNumber Class

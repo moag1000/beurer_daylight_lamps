@@ -1,6 +1,7 @@
 """Light platform for Beurer Daylight Lamps."""
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 from homeassistant.components.light import (  # type: ignore[attr-defined]
@@ -25,8 +26,6 @@ from homeassistant.util.color import (
     color_temperature_to_rgb,
     match_max_scale,
 )
-
-from dataclasses import dataclass
 
 from . import BeurerConfigEntry
 from .const import DOMAIN, LOGGER, VERSION, detect_model
@@ -121,15 +120,17 @@ class BeurerLight(CoordinatorEntity[BeurerDataUpdateCoordinator], RestoreEntity,
         await super().async_added_to_hass()
 
         # Restore color temperature from previous state
-        if (extra_data := await self.async_get_last_extra_data()) is not None:
-            if (restored := BeurerLightExtraStoredData.from_dict(extra_data.as_dict())) is not None:
-                if restored.color_temp_kelvin is not None:
-                    self._color_temp_kelvin = restored.color_temp_kelvin
-                    LOGGER.debug(
-                        "Restored color temperature: %dK for %s",
-                        self._color_temp_kelvin,
-                        self._instance.mac,
-                    )
+        if (
+            (extra_data := await self.async_get_last_extra_data()) is not None
+            and (restored := BeurerLightExtraStoredData.from_dict(extra_data.as_dict())) is not None
+            and restored.color_temp_kelvin is not None
+        ):
+            self._color_temp_kelvin = restored.color_temp_kelvin
+            LOGGER.debug(
+                "Restored color temperature: %dK for %s",
+                self._color_temp_kelvin,
+                self._instance.mac,
+            )
 
         await self._instance.update()
 
@@ -217,40 +218,75 @@ class BeurerLight(CoordinatorEntity[BeurerDataUpdateCoordinator], RestoreEntity,
             connections={(CONNECTION_BLUETOOTH, mac)},
         )
 
+    async def _handle_color_temp(
+        self, kelvin: int, brightness: int | None, has_brightness: bool
+    ) -> None:
+        """Handle color temperature turn-on mode."""
+        kelvin = max(MIN_COLOR_TEMP_KELVIN, min(MAX_COLOR_TEMP_KELVIN, kelvin))
+        self._color_temp_kelvin = kelvin
+
+        if kelvin >= WHITE_MODE_THRESHOLD_KELVIN:
+            LOGGER.debug(
+                "Color temp %dK >= %dK, using native white mode "
+                "(current mode=%s, color_on=%s)",
+                kelvin, WHITE_MODE_THRESHOLD_KELVIN,
+                self._instance.color_mode, self._instance.color_on,
+            )
+            await self._instance.set_white(
+                brightness if has_brightness else self._instance.white_brightness
+            )
+        else:
+            ct_rgb_float = color_temperature_to_rgb(kelvin)
+            ct_rgb: tuple[int, int, int] = (
+                int(ct_rgb_float[0]),
+                int(ct_rgb_float[1]),
+                int(ct_rgb_float[2]),
+            )
+            LOGGER.debug("Color temp %dK -> RGB %s", kelvin, ct_rgb)
+            await self._instance.set_color_with_brightness(
+                ct_rgb,
+                brightness if has_brightness else self._instance.color_brightness,
+            )
+
+    async def _handle_brightness_only(self, brightness: int | None) -> None:
+        """Handle brightness-only turn-on mode."""
+        if (
+            self._color_temp_kelvin is not None
+            or self._instance.color_mode == ColorMode.RGB
+            or self._instance.color_on
+        ):
+            await self._instance.set_color_brightness(brightness)
+        else:
+            await self._instance.set_white(brightness)
+
+    def _is_white_rgb(self, rgb: tuple[int, int, int]) -> bool:
+        """Check if an RGB value is white-ish (from HomeKit/Siri)."""
+        r, g, b = rgb[0], rgb[1], rgb[2]
+        min_val = min(r, g, b)
+        max_val = max(r, g, b)
+        return min_val >= 200 and (max_val - min_val) <= 55
+
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on the light."""
         LOGGER.debug(
             "Turn on with kwargs: %s, current_mode: %s, is_on: %s",
-            kwargs,
-            self._instance.color_mode,
-            self._instance.is_on,
+            kwargs, self._instance.color_mode, self._instance.is_on,
         )
 
-        # No parameters - just turn on with current settings
         if not kwargs:
             await self._instance.turn_on()
             return
 
-        # Determine target mode based on parameters
         has_color = ATTR_RGB_COLOR in kwargs
         has_color_temp = ATTR_COLOR_TEMP_KELVIN in kwargs
         has_effect = ATTR_EFFECT in kwargs
         has_brightness = ATTR_BRIGHTNESS in kwargs
-
-        # Get brightness value (use provided or keep current)
         brightness = kwargs.get(ATTR_BRIGHTNESS)
 
         # Detect "white" RGB values from HomeKit/Siri
-        # When Siri says "cold white", HomeKit sends RGB (255,255,255) or similar
-        # high-white values instead of color temperature
         if has_color and not has_color_temp and not has_effect:
             rgb = kwargs[ATTR_RGB_COLOR]
-            r, g, b = rgb[0], rgb[1], rgb[2]
-            # Check if this is a "white-ish" color (all components high and similar)
-            min_val = min(r, g, b)
-            max_val = max(r, g, b)
-            # If all RGB values are >= 200 and within 55 of each other, treat as white
-            if min_val >= 200 and (max_val - min_val) <= 55:
+            if self._is_white_rgb(rgb):
                 LOGGER.debug(
                     "Detected white-ish RGB %s, using native white mode "
                     "(current mode=%s, color_on=%s)",
@@ -263,69 +299,22 @@ class BeurerLight(CoordinatorEntity[BeurerDataUpdateCoordinator], RestoreEntity,
                 return
 
         if has_color_temp:
-            # Color temperature mode
-            kelvin = kwargs[ATTR_COLOR_TEMP_KELVIN]
-            # Clamp to supported range
-            kelvin = max(MIN_COLOR_TEMP_KELVIN, min(MAX_COLOR_TEMP_KELVIN, kelvin))
-            self._color_temp_kelvin = kelvin
-
-            # For high color temperatures (>= 5000K), use native white mode
-            # This gives the best daylight therapy light quality
-            if kelvin >= WHITE_MODE_THRESHOLD_KELVIN:
-                LOGGER.debug(
-                    "Color temp %dK >= %dK, using native white mode "
-                    "(current mode=%s, color_on=%s)",
-                    kelvin, WHITE_MODE_THRESHOLD_KELVIN,
-                    self._instance.color_mode, self._instance.color_on,
-                )
-                await self._instance.set_white(
-                    brightness if has_brightness else self._instance.white_brightness
-                )
-            else:
-                # For lower color temperatures, simulate via RGB
-                ct_rgb_float = color_temperature_to_rgb(kelvin)
-                ct_rgb: tuple[int, int, int] = (
-                    int(ct_rgb_float[0]),
-                    int(ct_rgb_float[1]),
-                    int(ct_rgb_float[2]),
-                )
-                LOGGER.debug("Color temp %dK -> RGB %s", kelvin, ct_rgb)
-
-                # Use combined method to set color + brightness atomically
-                await self._instance.set_color_with_brightness(
-                    ct_rgb,
-                    brightness if has_brightness else self._instance.color_brightness,
-                )
-
+            await self._handle_color_temp(
+                kwargs[ATTR_COLOR_TEMP_KELVIN], brightness, has_brightness
+            )
         elif has_color:
-            # RGB color mode - clear color temp tracking
             self._color_temp_kelvin = None
-
-            # Use combined method to set color + brightness atomically
             await self._instance.set_color_with_brightness(
                 kwargs[ATTR_RGB_COLOR],
                 brightness if has_brightness else self._instance.color_brightness,
             )
-
         elif has_effect:
-            # Effect mode - clear color temp tracking
             self._color_temp_kelvin = None
             await self._instance.set_effect(kwargs[ATTR_EFFECT])
-            # Apply brightness after effect if provided
             if has_brightness:
                 await self._instance.set_color_brightness(brightness)
-
         elif has_brightness:
-            # Brightness only - determine mode from current state
-            if self._color_temp_kelvin is not None:
-                # We're in color temp mode (simulated via RGB)
-                await self._instance.set_color_brightness(brightness)
-            elif self._instance.color_mode == ColorMode.RGB or self._instance.color_on:
-                # In RGB mode (use public property instead of private _color_on)
-                await self._instance.set_color_brightness(brightness)
-            else:
-                # In White mode
-                await self._instance.set_white(brightness)
+            await self._handle_brightness_only(brightness)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off the light."""

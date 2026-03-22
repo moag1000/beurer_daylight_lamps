@@ -108,7 +108,6 @@ class BeurerButton(CoordinatorEntity[BeurerDataUpdateCoordinator], ButtonEntity)
 
         # Store current state
         was_on = self._instance.is_on
-        current_brightness = self._instance.color_brightness or self._instance.white_brightness
 
         # Flash sequence: blink 3 times
         for _ in range(3):

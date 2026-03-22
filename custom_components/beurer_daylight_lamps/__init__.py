@@ -2,10 +2,11 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
-
 from homeassistant.components import bluetooth
 from homeassistant.components.bluetooth import (
     BluetoothChange,
@@ -18,16 +19,19 @@ from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.exceptions import ConfigEntryNotReady, ServiceValidationError
 from homeassistant.helpers import (
     device_registry as dr,
+)
+from homeassistant.helpers import (
     entity_registry as er,
+)
+from homeassistant.helpers import (
     issue_registry as ir,
 )
-import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.service import async_extract_entity_ids
 
 from .beurer_daylight_lamps import BeurerInstance
 from .const import DOMAIN, LOGGER
 from .coordinator import BeurerDataUpdateCoordinator
-from .exceptions import BeurerInitializationError
+from .exceptions import BeurerInitializationError as BeurerInitializationError
 from .therapy import SunriseProfile
 
 # Service constants
@@ -168,8 +172,6 @@ SERVICE_ALARM_SCHEMA = vol.Schema(
     }
 )
 
-from dataclasses import dataclass
-
 
 @dataclass
 class BeurerRuntimeData:
@@ -184,7 +186,6 @@ class BeurerRuntimeData:
 
 
 if TYPE_CHECKING:
-    from .beurer_daylight_lamps import BeurerInstance as BeurerInstanceType
     # Type alias only evaluated during type checking
     BeurerConfigEntry = ConfigEntry[BeurerRuntimeData]
 else:
@@ -239,16 +240,15 @@ def _get_ble_device_and_rssi(
     return ble_device, rssi
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> bool:
-    """Set up Beurer daylight lamp from a config entry."""
-    mac_address = entry.data[CONF_MAC]
-    device_name = entry.data.get(CONF_NAME, "Beurer Lamp")
-    LOGGER.debug("Setting up Beurer device with MAC: %s", mac_address)
+def _get_or_create_ble_device(
+    hass: HomeAssistant, mac_address: str, device_name: str
+) -> tuple[Any, int | None, bool]:
+    """Get existing BLE device or create a placeholder.
 
-    # Use Home Assistant's Bluetooth stack - this automatically uses all adapters
-    # including ESPHome Bluetooth Proxies for better range and reliability
+    Returns:
+        Tuple of (BLEDevice, RSSI or None, device_initially_available)
+    """
     ble_device, rssi = _get_ble_device_and_rssi(hass, mac_address)
-
     device_initially_available = ble_device is not None
 
     if ble_device is None:
@@ -256,12 +256,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> bo
             "Device %s not currently visible via Bluetooth - will retry when seen",
             mac_address,
         )
-        # Create a dummy BLEDevice for now - passive listening will update it
         from bleak.backends.device import BLEDevice
         ble_device = BLEDevice(
             address=mac_address,
             name=device_name,
-            details={},  # Empty details for placeholder
+            details={},
         )
         LOGGER.info(
             "Created placeholder device for %s - waiting for Bluetooth advertisement",
@@ -274,18 +273,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> bo
             rssi,
         )
 
-    LOGGER.debug(
-        "Device %s initial availability: %s",
-        mac_address,
-        rssi,
-    )
+    return ble_device, rssi, device_initially_available
 
-    # Clear any previous connection issues if we found the device
-    ir.async_delete_issue(hass, DOMAIN, f"device_not_found_{entry.entry_id}")
+
+def _create_instance(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    ble_device: Any,
+    rssi: int | None,
+    device_initially_available: bool,
+) -> BeurerInstance:
+    """Create a BeurerInstance, raising ConfigEntryNotReady on failure."""
+    mac_address: str = entry.data[CONF_MAC]
+    device_name: str = entry.data.get(CONF_NAME, "Beurer Lamp")
 
     try:
         instance = BeurerInstance(ble_device, rssi, hass)
-        # Set initial BLE availability based on whether device was found
         if not device_initially_available:
             instance._ble_available = False
             LOGGER.info("Device %s marked as initially unavailable", mac_address)
@@ -307,20 +310,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> bo
         )
         raise ConfigEntryNotReady(f"Failed to initialize {mac_address}") from err
 
-    # Clear any previous initialization issues
     ir.async_delete_issue(hass, DOMAIN, f"initialization_failed_{entry.entry_id}")
+    return instance
 
-    # Create coordinator for centralized data management
-    coordinator = BeurerDataUpdateCoordinator(hass, instance, device_name)
 
-    # Store both instance and coordinator in runtime_data
-    entry.runtime_data = BeurerRuntimeData(instance=instance, coordinator=coordinator)
+def _register_bluetooth_callbacks(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    instance: BeurerInstance,
+    mac_address: str,
+) -> None:
+    """Register Bluetooth discovery and unavailability callbacks."""
 
-    # Perform initial data fetch
-    await coordinator.async_config_entry_first_refresh()
-
-    # Register callback for real-time Bluetooth updates (RSSI, device presence)
-    # This enables passive listening - we get notified when the device advertises
     @callback
     def _async_device_discovered(
         service_info: BluetoothServiceInfoBleak,
@@ -334,21 +335,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> bo
             change,
             service_info.source,
         )
-        # Update RSSI from advertisement
         if service_info.rssi:
             instance.update_rssi(service_info.rssi)
 
-        # Update the BLE device reference to use the best available adapter
         new_device, _ = _get_ble_device_and_rssi(hass, mac_address)
         if new_device:
             instance.update_ble_device(new_device)
 
-        # Mark device as seen (for availability tracking)
         instance.mark_seen()
 
-    # Register for advertisements from this specific device address
-    # Don't filter by connectable - some devices alternate between
-    # connectable and non-connectable advertisement packets
     entry.async_on_unload(
         bluetooth.async_register_callback(
             hass,
@@ -359,7 +354,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> bo
     )
     LOGGER.debug("Registered Bluetooth callback for %s (passive scanning)", mac_address)
 
-    # Track when device becomes unavailable (not seen for ~5 minutes)
     @callback
     def _async_device_unavailable(
         service_info: BluetoothServiceInfoBleak,
@@ -371,8 +365,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> bo
         )
         instance.mark_unavailable()
 
-    # Don't filter by connectable - some devices alternate between
-    # connectable and non-connectable advertisement packets
     entry.async_on_unload(
         bluetooth.async_track_unavailable(
             hass,
@@ -382,18 +374,39 @@ async def async_setup_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> bo
     )
     LOGGER.debug("Registered unavailability tracker for %s", mac_address)
 
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    # Register services (only once)
+async def async_setup_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> bool:
+    """Set up Beurer daylight lamp from a config entry."""
+    mac_address = entry.data[CONF_MAC]
+    device_name = entry.data.get(CONF_NAME, "Beurer Lamp")
+    LOGGER.debug("Setting up Beurer device with MAC: %s", mac_address)
+
+    ble_device, rssi, device_initially_available = _get_or_create_ble_device(
+        hass, mac_address, device_name
+    )
+
+    LOGGER.debug("Device %s initial availability: %s", mac_address, rssi)
+
+    ir.async_delete_issue(hass, DOMAIN, f"device_not_found_{entry.entry_id}")
+
+    instance = _create_instance(
+        hass, entry, ble_device, rssi, device_initially_available,
+    )
+
+    coordinator = BeurerDataUpdateCoordinator(hass, instance, device_name)
+    entry.runtime_data = BeurerRuntimeData(instance=instance, coordinator=coordinator)
+    await coordinator.async_config_entry_first_refresh()
+
+    _register_bluetooth_callbacks(hass, entry, instance, mac_address)
+
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     await _async_setup_services(hass)
 
-    # Auto-connect after setup to get initial state
-    # This runs in the background to not block the setup
+    # Auto-connect after setup to get initial state (runs in background)
     async def _async_initial_connect() -> None:
         """Try to connect and get initial state."""
-        # Only wait if device is initially available - otherwise don't waste time
         if device_initially_available:
-            await asyncio.sleep(2)  # Give BLE stack time to settle
+            await asyncio.sleep(2)
             LOGGER.debug("Attempting initial connection to %s", mac_address)
             try:
                 connected = await instance.connect()
@@ -404,7 +417,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> bo
             except Exception as err:
                 LOGGER.debug("Initial connection to %s failed: %s", mac_address, err)
 
-    # Use async_create_background_task for proper task tracking and error handling
     entry.async_create_background_task(
         hass,
         _async_initial_connect(),
@@ -485,6 +497,16 @@ async def _async_setup_services(hass: HomeAssistant) -> None:
     if hass.services.has_service(DOMAIN, SERVICE_APPLY_PRESET):
         return  # Already registered
 
+    _register_preset_service(hass)
+    _register_raw_command_service(hass)
+    _register_timer_service(hass)
+    _register_simulation_services(hass)
+    _register_alarm_service(hass)
+
+
+def _register_preset_service(hass: HomeAssistant) -> None:
+    """Register the apply_preset service."""
+
     async def async_apply_preset(call: ServiceCall) -> None:
         """Apply a preset to a Beurer lamp."""
         preset_name = call.data[ATTR_PRESET]
@@ -495,7 +517,6 @@ async def _async_setup_services(hass: HomeAssistant) -> None:
 
         preset = PRESETS[preset_name]
 
-        # Apply preset settings
         from homeassistant.util.color import color_temperature_to_rgb
 
         for instance in instances:
@@ -518,12 +539,13 @@ async def _async_setup_services(hass: HomeAssistant) -> None:
             LOGGER.info("Applied preset '%s' to %s", preset_name, instance.mac)
 
     hass.services.async_register(
-        DOMAIN,
-        SERVICE_APPLY_PRESET,
-        async_apply_preset,
-        schema=SERVICE_SCHEMA,
+        DOMAIN, SERVICE_APPLY_PRESET, async_apply_preset, schema=SERVICE_SCHEMA,
     )
     LOGGER.debug("Registered service %s.%s", DOMAIN, SERVICE_APPLY_PRESET)
+
+
+def _register_raw_command_service(hass: HomeAssistant) -> None:
+    """Register the send_raw_command service."""
 
     async def async_send_raw_command(call: ServiceCall) -> None:
         """Send a raw BLE command to a Beurer lamp (Expert mode)."""
@@ -536,7 +558,6 @@ async def _async_setup_services(hass: HomeAssistant) -> None:
                 translation_key="no_target_entities",
             )
 
-        # Parse hex bytes from command string (e.g., "33 01 1E" or "33011E")
         try:
             hex_str = command_str.replace(" ", "").replace("0x", "")
             payload = [int(hex_str[i:i+2], 16) for i in range(0, len(hex_str), 2)]
@@ -566,12 +587,13 @@ async def _async_setup_services(hass: HomeAssistant) -> None:
             )
 
     hass.services.async_register(
-        DOMAIN,
-        SERVICE_SEND_RAW,
-        async_send_raw_command,
-        schema=SERVICE_RAW_SCHEMA,
+        DOMAIN, SERVICE_SEND_RAW, async_send_raw_command, schema=SERVICE_RAW_SCHEMA,
     )
     LOGGER.debug("Registered service %s.%s", DOMAIN, SERVICE_SEND_RAW)
+
+
+def _register_timer_service(hass: HomeAssistant) -> None:
+    """Register the set_timer service."""
 
     async def async_set_timer(call: ServiceCall) -> None:
         """Set a timer on a Beurer lamp (requires RGB mode).
@@ -594,20 +616,16 @@ async def _async_setup_services(hass: HomeAssistant) -> None:
                 LOGGER.error("TIMER: Failed to set timer on %s", instance.mac)
 
     hass.services.async_register(
-        DOMAIN,
-        SERVICE_SET_TIMER,
-        async_set_timer,
-        schema=SERVICE_TIMER_SCHEMA,
+        DOMAIN, SERVICE_SET_TIMER, async_set_timer, schema=SERVICE_TIMER_SCHEMA,
     )
     LOGGER.debug("Registered service %s.%s", DOMAIN, SERVICE_SET_TIMER)
 
-    # Sunrise/Sunset simulation services
-    async def async_start_sunrise(call: ServiceCall) -> None:
-        """Start a sunrise simulation on a Beurer lamp.
 
-        Gradually increases brightness and color temperature to simulate
-        natural sunrise. This is a lifestyle feature, not a medical device.
-        """
+def _register_simulation_services(hass: HomeAssistant) -> None:
+    """Register sunrise, sunset, and stop simulation services."""
+
+    async def async_start_sunrise(call: ServiceCall) -> None:
+        """Start a sunrise simulation on a Beurer lamp."""
         duration = call.data.get(ATTR_DURATION, 15)
         profile_name = call.data.get(ATTR_PROFILE, "natural")
 
@@ -615,7 +633,6 @@ async def _async_setup_services(hass: HomeAssistant) -> None:
         if not instances:
             return
 
-        # Convert profile name to enum
         try:
             profile = SunriseProfile(profile_name)
         except ValueError:
@@ -630,20 +647,8 @@ async def _async_setup_services(hass: HomeAssistant) -> None:
             await instance.sunrise_simulation.start_sunrise(duration, profile)
             LOGGER.info("SUNRISE: Started on %s", instance.mac)
 
-    hass.services.async_register(
-        DOMAIN,
-        SERVICE_START_SUNRISE,
-        async_start_sunrise,
-        schema=SERVICE_SUNRISE_SCHEMA,
-    )
-    LOGGER.debug("Registered service %s.%s", DOMAIN, SERVICE_START_SUNRISE)
-
     async def async_start_sunset(call: ServiceCall) -> None:
-        """Start a sunset simulation on a Beurer lamp.
-
-        Gradually decreases brightness and shifts to warm light to simulate
-        natural sunset. This is a lifestyle feature, not a medical device.
-        """
+        """Start a sunset simulation on a Beurer lamp."""
         duration = call.data.get(ATTR_DURATION, 30)
         end_brightness = call.data.get(ATTR_END_BRIGHTNESS, 0)
 
@@ -659,14 +664,6 @@ async def _async_setup_services(hass: HomeAssistant) -> None:
             await instance.sunrise_simulation.start_sunset(duration, end_brightness)
             LOGGER.info("SUNSET: Started on %s", instance.mac)
 
-    hass.services.async_register(
-        DOMAIN,
-        SERVICE_START_SUNSET,
-        async_start_sunset,
-        schema=SERVICE_SUNSET_SCHEMA,
-    )
-    LOGGER.debug("Registered service %s.%s", DOMAIN, SERVICE_START_SUNSET)
-
     async def async_stop_simulation(call: ServiceCall) -> None:
         """Stop any running sunrise/sunset simulation."""
         instances = await _async_get_instances_from_target(hass, call, "STOP_SIM")
@@ -679,14 +676,25 @@ async def _async_setup_services(hass: HomeAssistant) -> None:
             LOGGER.info("STOP_SIM: Simulation stopped on %s", instance.mac)
 
     hass.services.async_register(
-        DOMAIN,
-        SERVICE_STOP_SIMULATION,
-        async_stop_simulation,
+        DOMAIN, SERVICE_START_SUNRISE, async_start_sunrise, schema=SERVICE_SUNRISE_SCHEMA,
+    )
+    LOGGER.debug("Registered service %s.%s", DOMAIN, SERVICE_START_SUNRISE)
+
+    hass.services.async_register(
+        DOMAIN, SERVICE_START_SUNSET, async_start_sunset, schema=SERVICE_SUNSET_SCHEMA,
+    )
+    LOGGER.debug("Registered service %s.%s", DOMAIN, SERVICE_START_SUNSET)
+
+    hass.services.async_register(
+        DOMAIN, SERVICE_STOP_SIMULATION, async_stop_simulation,
         schema=SERVICE_STOP_SIMULATION_SCHEMA,
     )
     LOGGER.debug("Registered service %s.%s", DOMAIN, SERVICE_STOP_SIMULATION)
 
-    # WL90-specific alarm service
+
+def _register_alarm_service(hass: HomeAssistant) -> None:
+    """Register the WL90-specific alarm service."""
+
     async def async_set_alarm(call: ServiceCall) -> None:
         """Set an alarm on a WL90 Wake-up Light.
 
@@ -701,14 +709,13 @@ async def _async_setup_services(hass: HomeAssistant) -> None:
         if not instances:
             return
 
-        # Parse days string (e.g., "Mon,Tue,Wed,Thu,Fri")
         day_map = {"Sun": 0, "Mon": 1, "Tue": 2, "Wed": 3, "Thu": 4, "Fri": 5, "Sat": 6}
         days_str = call.data.get(ATTR_DAYS, "Mon,Tue,Wed,Thu,Fri")
         days_bitmask = 0
         for day in days_str.split(","):
-            day = day.strip()
-            if day in day_map:
-                days_bitmask |= (1 << day_map[day])
+            stripped_day = day.strip()
+            if stripped_day in day_map:
+                days_bitmask |= (1 << day_map[stripped_day])
 
         alarm = AlarmItem(
             slot=slot,
@@ -740,10 +747,7 @@ async def _async_setup_services(hass: HomeAssistant) -> None:
                 LOGGER.error("ALARM: Failed to set on %s", instance.mac)
 
     hass.services.async_register(
-        DOMAIN,
-        SERVICE_SET_ALARM,
-        async_set_alarm,
-        schema=SERVICE_ALARM_SCHEMA,
+        DOMAIN, SERVICE_SET_ALARM, async_set_alarm, schema=SERVICE_ALARM_SCHEMA,
     )
     LOGGER.debug("Registered service %s.%s", DOMAIN, SERVICE_SET_ALARM)
 

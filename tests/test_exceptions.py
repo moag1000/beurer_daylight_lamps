@@ -6,17 +6,16 @@ from homeassistant.exceptions import HomeAssistantError
 
 from custom_components.beurer_daylight_lamps.const import DOMAIN
 from custom_components.beurer_daylight_lamps.exceptions import (
-    BeurerError,
+    BeurerCommandError,
     BeurerConnectionError,
     BeurerDeviceNotFoundError,
-    BeurerCommandError,
-    BeurerWriteError,
-    BeurerTimerError,
     BeurerDeviceUnavailableError,
-    BeurerReconnectError,
+    BeurerError,
     BeurerInitializationError,
+    BeurerReconnectError,
+    BeurerTimerError,
+    BeurerWriteError,
 )
-
 
 # =============================================================================
 # Test BeurerError Base Class

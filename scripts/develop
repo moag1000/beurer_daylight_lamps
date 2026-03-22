@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+# Start Home Assistant with the integration loaded
+python3 -m homeassistant -c config

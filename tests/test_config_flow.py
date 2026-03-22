@@ -6,14 +6,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from bleak import BleakError
-
 from homeassistant import config_entries
 from homeassistant.const import CONF_MAC, CONF_NAME
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 
 from custom_components.beurer_daylight_lamps.const import DOMAIN
-
 
 # =============================================================================
 # MAC Validation Tests (No HA dependencies - Pure Unit Tests)
@@ -132,7 +130,6 @@ def test_config_flow_version() -> None:
 
 def test_config_flow_domain() -> None:
     """Test config flow domain is set correctly."""
-    from custom_components.beurer_daylight_lamps.config_flow import BeurerConfigFlow
 
     # Check DOMAIN constant
     assert DOMAIN == "beurer_daylight_lamps"
@@ -260,7 +257,7 @@ async def test_connection_asyncio_timeout(hass: HomeAssistant) -> None:
 
     mock_device = MagicMock()
     mock_instance = MagicMock()
-    mock_instance.update = AsyncMock(side_effect=asyncio.TimeoutError())
+    mock_instance.update = AsyncMock(side_effect=TimeoutError())
     mock_instance.disconnect = AsyncMock()
 
     flow = BeurerConfigFlow()
@@ -903,7 +900,10 @@ class TestAsyncStepUser:
     @pytest.mark.asyncio
     async def test_user_step_manual_mac_redirects(self, hass: HomeAssistant) -> None:
         """Test user step redirects to manual when MANUAL_MAC selected."""
-        from custom_components.beurer_daylight_lamps.config_flow import BeurerConfigFlow, MANUAL_MAC
+        from custom_components.beurer_daylight_lamps.config_flow import (
+            MANUAL_MAC,
+            BeurerConfigFlow,
+        )
 
         flow = BeurerConfigFlow()
         flow.hass = hass
@@ -1167,7 +1167,7 @@ class TestTestConnectionWithServiceInfo:
                 "custom_components.beurer_daylight_lamps.config_flow.BeurerInstance",
                 return_value=mock_instance,
             ),
-            patch("asyncio.timeout", side_effect=asyncio.TimeoutError()),
+            patch("asyncio.timeout", side_effect=TimeoutError()),
             patch(
                 "custom_components.beurer_daylight_lamps.config_flow.bluetooth.async_ble_device_from_address",
                 return_value=None,
@@ -1246,7 +1246,7 @@ class TestConnectionDisconnectErrors:
         mock_instance.update = AsyncMock()
         mock_instance.turn_on = AsyncMock()
         mock_instance.turn_off = AsyncMock()
-        mock_instance.disconnect = AsyncMock(side_effect=asyncio.TimeoutError())
+        mock_instance.disconnect = AsyncMock(side_effect=TimeoutError())
 
         flow = BeurerConfigFlow()
         flow.hass = hass

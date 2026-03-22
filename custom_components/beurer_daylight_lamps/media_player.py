@@ -27,7 +27,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import BeurerConfigEntry
-from .const import DOMAIN, LOGGER, VERSION, detect_model
+from .const import DOMAIN, VERSION, detect_model
 from .coordinator import BeurerDataUpdateCoordinator
 
 

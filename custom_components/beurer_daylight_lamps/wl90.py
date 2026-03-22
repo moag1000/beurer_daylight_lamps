@@ -11,40 +11,40 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from .const import (
-    LOGGER,
     ALARM_SLOT_MAP,
     CMD_ALARM_SYNC,
-    CMD_RADIO_POWER,
-    CMD_RADIO_VOLUME,
-    CMD_RADIO_PRESET,
-    CMD_RADIO_TUNE,
-    CMD_RADIO_TIMER_TOGGLE,
-    CMD_RADIO_TIMER_VALUE,
-    CMD_RADIO_SAVE_FREQ,
-    CMD_RADIO_SYNC_STATUS,
-    CMD_MUSIC_TOGGLE,
-    CMD_MUSIC_VOLUME,
+    CMD_MUSIC_CLOSE,
+    CMD_MUSIC_QUERY,
     CMD_MUSIC_TIMER_TOGGLE,
     CMD_MUSIC_TIMER_VALUE,
-    CMD_MUSIC_QUERY,
-    CMD_MUSIC_CLOSE,
+    CMD_MUSIC_TOGGLE,
+    CMD_MUSIC_VOLUME,
+    CMD_RADIO_POWER,
+    CMD_RADIO_PRESET,
+    CMD_RADIO_SAVE_FREQ,
+    CMD_RADIO_SYNC_STATUS,
+    CMD_RADIO_TIMER_TOGGLE,
+    CMD_RADIO_TIMER_VALUE,
+    CMD_RADIO_TUNE,
+    CMD_RADIO_VOLUME,
     COMMAND_DELAY,
+    LOGGER,
     RESP_ALARM,
-    RESP_RADIO_STATUS,
-    RESP_RADIO_INFO,
-    RESP_MUSIC_STATUS,
     RESP_MUSIC_INFO,
-    RESP_MUSIC_TOGGLE,
+    RESP_MUSIC_STATUS,
     RESP_MUSIC_TIMER,
-    RESP_RADIO_TIMER_END,
     RESP_MUSIC_TIMER_END,
+    RESP_MUSIC_TOGGLE,
+    RESP_RADIO_INFO,
     RESP_RADIO_POWER,
     RESP_RADIO_PRESET,
-    RESP_RADIO_TUNE,
     RESP_RADIO_SAVE,
+    RESP_RADIO_STATUS,
+    RESP_RADIO_TIMER_END,
+    RESP_RADIO_TUNE,
 )
 
 if TYPE_CHECKING:
@@ -328,6 +328,25 @@ class WL90Controller:
 
     # --- Notification Handling ---
 
+    def _handle_timer_end(self, resp_cmd: int) -> None:
+        """Handle radio/music timer end notifications."""
+        timer_type = "radio" if resp_cmd == RESP_RADIO_TIMER_END else "music"
+        LOGGER.info("WL90 %s timer ended on %s", timer_type, self._instance.mac)
+        if resp_cmd == RESP_RADIO_TIMER_END:
+            self.radio.sleep_timer_on = False
+        else:
+            self.music.sleep_timer_on = False
+
+    def _handle_radio_confirmation(self, resp_cmd: int) -> None:
+        """Handle radio confirmation responses."""
+        confirmation_messages = {
+            RESP_RADIO_POWER: "Radio power confirmation from %s",
+            RESP_RADIO_PRESET: "Radio preset confirmation from %s",
+            RESP_RADIO_TUNE: "Radio tune/seek confirmation from %s",
+            RESP_RADIO_SAVE: "Radio frequency save confirmation from %s",
+        }
+        LOGGER.debug(confirmation_messages[resp_cmd], self._instance.mac)
+
     def handle_notification(self, resp_cmd: int, data: bytearray) -> bool:
         """Handle WL90-specific notification responses.
 
@@ -338,44 +357,31 @@ class WL90Controller:
         Returns:
             True if the notification was handled, False if not a WL90 response.
         """
-        if resp_cmd == RESP_RADIO_STATUS:
-            self._parse_radio_status(data)
+        # Data-parsing responses
+        parsers: dict[int, Any] = {
+            RESP_RADIO_STATUS: lambda: self._parse_radio_status(data),
+            RESP_RADIO_INFO: lambda: self._parse_radio_info(data),
+            RESP_ALARM: lambda: self._parse_alarm_response(data),
+            RESP_MUSIC_TIMER: lambda: self._parse_music_timer(data),
+        }
+
+        if resp_cmd in parsers:
+            parsers[resp_cmd]()
             return True
-        elif resp_cmd == RESP_RADIO_INFO:
-            self._parse_radio_info(data)
-            return True
-        elif resp_cmd == RESP_ALARM:
-            self._parse_alarm_response(data)
-            return True
-        elif resp_cmd in (RESP_MUSIC_STATUS, RESP_MUSIC_INFO, RESP_MUSIC_TOGGLE):
+
+        if resp_cmd in (RESP_MUSIC_STATUS, RESP_MUSIC_INFO, RESP_MUSIC_TOGGLE):
             self._parse_music_response(resp_cmd, data)
             return True
-        elif resp_cmd == RESP_MUSIC_TIMER:
-            self._parse_music_timer(data)
-            return True
-        elif resp_cmd in (RESP_RADIO_TIMER_END, RESP_MUSIC_TIMER_END):
-            timer_type = "radio" if resp_cmd == RESP_RADIO_TIMER_END else "music"
-            LOGGER.info("WL90 %s timer ended on %s", timer_type, self._instance.mac)
-            if resp_cmd == RESP_RADIO_TIMER_END:
-                self.radio.sleep_timer_on = False
-            else:
-                self.music.sleep_timer_on = False
+
+        if resp_cmd in (RESP_RADIO_TIMER_END, RESP_MUSIC_TIMER_END):
+            self._handle_timer_end(resp_cmd)
             return True
 
         # Radio confirmation responses (must be caught to prevent
         # fall-through to version-based status routing which would corrupt state)
-        if resp_cmd == RESP_RADIO_POWER:
-            # Radio power toggle confirmation - request fresh status
-            LOGGER.debug("Radio power confirmation from %s", self._instance.mac)
-            return True
-        elif resp_cmd == RESP_RADIO_PRESET:
-            LOGGER.debug("Radio preset confirmation from %s", self._instance.mac)
-            return True
-        elif resp_cmd == RESP_RADIO_TUNE:
-            LOGGER.debug("Radio tune/seek confirmation from %s", self._instance.mac)
-            return True
-        elif resp_cmd == RESP_RADIO_SAVE:
-            LOGGER.debug("Radio frequency save confirmation from %s", self._instance.mac)
+        radio_confirmations = {RESP_RADIO_POWER, RESP_RADIO_PRESET, RESP_RADIO_TUNE, RESP_RADIO_SAVE}
+        if resp_cmd in radio_confirmations:
+            self._handle_radio_confirmation(resp_cmd)
             return True
 
         return False

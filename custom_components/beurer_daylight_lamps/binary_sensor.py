@@ -89,7 +89,7 @@ class BeurerBinarySensor(CoordinatorEntity[BeurerDataUpdateCoordinator], BinaryS
         """Return True if the binary sensor is on."""
         if self.entity_description.key == "connected":
             return self._instance.is_connected
-        elif self.entity_description.key == "ble_available":
+        if self.entity_description.key == "ble_available":
             return self._instance.ble_available
         return None
 

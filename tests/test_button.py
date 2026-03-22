@@ -4,12 +4,11 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import format_mac
 
 from custom_components.beurer_daylight_lamps.button import (
-    BeurerButton,
     BUTTON_DESCRIPTIONS,
+    BeurerButton,
 )
 from tests.conftest import create_mock_coordinator
 

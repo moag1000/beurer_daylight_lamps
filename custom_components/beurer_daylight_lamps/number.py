@@ -8,7 +8,7 @@ from homeassistant.components.number import (
     NumberEntityDescription,
     NumberMode,
 )
-from homeassistant.const import EntityCategory, PERCENTAGE, UnitOfTime
+from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.device_registry import (
@@ -337,7 +337,7 @@ class BeurerWL90Number(CoordinatorEntity[BeurerDataUpdateCoordinator], NumberEnt
             return None
         if self.entity_description.key == "radio_volume":
             return wl90.radio.volume
-        elif self.entity_description.key == "music_volume":
+        if self.entity_description.key == "music_volume":
             return wl90.music.volume
         return None
 

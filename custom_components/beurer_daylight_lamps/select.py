@@ -12,7 +12,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import BeurerConfigEntry
-from .const import DOMAIN, LOGGER, VERSION, detect_model, SUPPORTED_EFFECTS
+from .const import DOMAIN, LOGGER, SUPPORTED_EFFECTS, VERSION, detect_model
 from .coordinator import BeurerDataUpdateCoordinator
 
 SELECT_DESCRIPTIONS: tuple[SelectEntityDescription, ...] = (

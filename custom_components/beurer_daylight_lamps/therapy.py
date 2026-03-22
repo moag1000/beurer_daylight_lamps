@@ -7,15 +7,17 @@ This module provides:
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass, field, asdict
-from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Any
+import contextlib
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 from enum import Enum
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.util.color import color_temperature_to_rgb
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
+
     from .beurer_daylight_lamps import BeurerInstance
 
 from .const import LOGGER
@@ -86,7 +88,7 @@ class TherapySession:
     @property
     def duration_minutes(self) -> float:
         """Calculate session duration in minutes."""
-        end = self.end_time or datetime.now()
+        end = self.end_time or datetime.now(tz=UTC)
         return (end - self.start_time).total_seconds() / 60
 
     @property
@@ -118,7 +120,7 @@ class TherapyTracker:
             self.end_session()
 
         self._current_session = TherapySession(
-            start_time=datetime.now(),
+            start_time=datetime.now(tz=UTC),
             color_temp_kelvin=color_temp_kelvin,
             brightness_pct=brightness_pct,
         )
@@ -147,7 +149,7 @@ class TherapyTracker:
         if self._current_session is None:
             return None
 
-        self._current_session.end_time = datetime.now()
+        self._current_session.end_time = datetime.now(tz=UTC)
         session = self._current_session
 
         # Only track sessions that qualify as therapy
@@ -163,13 +165,13 @@ class TherapyTracker:
 
     def cleanup_old_sessions(self) -> None:
         """Remove sessions older than 7 days."""
-        cutoff = datetime.now() - timedelta(days=7)
+        cutoff = datetime.now(tz=UTC) - timedelta(days=7)
         self.sessions = [s for s in self.sessions if s.start_time > cutoff]
 
     @property
     def today_minutes(self) -> float:
         """Calculate total therapy minutes today."""
-        today = datetime.now().date()
+        today = datetime.now(tz=UTC).date()
         total = 0.0
 
         for session in self.sessions:
@@ -189,7 +191,8 @@ class TherapyTracker:
     @property
     def week_minutes(self) -> float:
         """Calculate total therapy minutes this week."""
-        week_start = datetime.now() - timedelta(days=datetime.now().weekday())
+        now = datetime.now(tz=UTC)
+        week_start = now - timedelta(days=now.weekday())
         week_start = week_start.replace(hour=0, minute=0, second=0, microsecond=0)
 
         total = 0.0
@@ -325,10 +328,8 @@ class SunriseSimulation:
         self._running = False
         if self._task and not self._task.done():
             self._task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._task
-            except asyncio.CancelledError:
-                pass
         self._task = None
         self._current_step = 0
         self._total_steps = 0
@@ -352,6 +353,15 @@ class SunriseSimulation:
             try:
                 # Check connection status and reconnect if needed
                 if not self._instance.is_connected:
+                    # Check BLE availability before attempting connect
+                    if not self._instance.ble_available:
+                        LOGGER.warning(
+                            "Device not BLE reachable, skipping connect (attempt %d/%d)",
+                            attempt + 1, max_retries
+                        )
+                        await asyncio.sleep(3)
+                        continue
+
                     LOGGER.debug("Not connected, attempting reconnect...")
                     connected = await self._instance.connect()
                     if not connected:
@@ -359,20 +369,23 @@ class SunriseSimulation:
                             "Reconnect failed (attempt %d/%d)",
                             attempt + 1, max_retries
                         )
-                        await asyncio.sleep(1)
+                        await asyncio.sleep(3)
                         continue
+
+                    # Pause after successful reconnect to let BLE stabilize
+                    await asyncio.sleep(1)
 
                 # Execute the action
                 await action()
-                return True
-
             except Exception as err:
                 LOGGER.warning(
                     "Action failed (attempt %d/%d): %s",
                     attempt + 1, max_retries, err
                 )
                 if attempt < max_retries - 1:
-                    await asyncio.sleep(1)
+                    await asyncio.sleep(3)
+            else:
+                return True
 
         return False
 
@@ -395,7 +408,8 @@ class SunriseSimulation:
             brightness_step = (config.end_brightness_pct - config.start_brightness_pct) / steps
 
             consecutive_failures = 0
-            max_consecutive_failures = 5
+            # Sunrise runs 15-30min; allow ~2min of recovery (8 x 15s retry wait)
+            max_consecutive_failures = 8
 
             for i in range(steps + 1):
                 if not self._running:
@@ -427,10 +441,9 @@ class SunriseSimulation:
                 # Apply to lamp with retry logic
                 # Use fast method optimized for sequential updates (no redundant
                 # mode switches, effect clears, or status requests)
-                # Capture values for lambda to avoid late binding issues
-                _rgb, _brightness = rgb, brightness_255
+                # Use default args to bind loop variable values
                 success = await self._apply_with_retry(
-                    lambda: self._instance.set_color_with_brightness_fast(_rgb, _brightness)
+                    lambda _r=rgb, _b=brightness_255: self._instance.set_color_with_brightness_fast(_r, _b)
                 )
 
                 if success:
@@ -458,7 +471,7 @@ class SunriseSimulation:
                 try:
                     await self._instance._request_status()
                 except Exception:
-                    pass  # Non-critical
+                    LOGGER.debug("Non-critical: failed to request status after sunrise")
 
             LOGGER.info("Sunrise simulation completed")
 
@@ -470,6 +483,56 @@ class SunriseSimulation:
             self._current_step = 0
             self._total_steps = 0
 
+    async def _execute_sunset_steps(
+        self,
+        steps: int,
+        interval: float,
+        start_brightness_pct: int,
+        brightness_step: float,
+        warm_rgb: tuple[int, int, int],
+    ) -> None:
+        """Execute the individual steps of a sunset simulation."""
+        consecutive_failures = 0
+        max_consecutive_failures = 5
+
+        for i in range(steps + 1):
+            if not self._running:
+                break
+
+            self._current_step = i
+            brightness_pct = int(start_brightness_pct - brightness_step * i)
+            brightness_255 = int(brightness_pct / 100 * 255)
+
+            LOGGER.debug(
+                "Sunset step %d/%d: %d%%", i + 1, steps + 1, brightness_pct,
+            )
+
+            # Use default args to bind loop variable values
+            if brightness_pct <= 0:
+                success = await self._apply_with_retry(self._instance.turn_off)
+            else:
+                success = await self._apply_with_retry(
+                    lambda _r=warm_rgb, _b=brightness_255: self._instance.set_color_with_brightness_fast(_r, _b)
+                )
+
+            if success:
+                consecutive_failures = 0
+            else:
+                consecutive_failures += 1
+                LOGGER.warning(
+                    "Sunset step %d failed, continuing... (%d consecutive failures)",
+                    i + 1, consecutive_failures
+                )
+                if consecutive_failures >= max_consecutive_failures:
+                    LOGGER.error(
+                        "Too many consecutive failures (%d), stopping sunset",
+                        consecutive_failures
+                    )
+                    break
+
+            if i < steps:
+                await asyncio.sleep(interval)
+
     async def _run_sunset(
         self,
         duration_minutes: int,
@@ -480,21 +543,17 @@ class SunriseSimulation:
         Resilient to connection issues - will retry and continue on errors.
         """
         try:
-            # Get current brightness
             current_brightness = self._instance.color_brightness
             if current_brightness is None:
                 current_brightness = self._instance.white_brightness or 255
 
             start_brightness_pct = int(current_brightness / 255 * 100)
 
-            # Calculate steps (one per minute)
             steps = max(1, duration_minutes)
             self._total_steps = steps
             interval = duration_minutes * 60 / steps
-
             brightness_step = (start_brightness_pct - end_brightness_pct) / steps
 
-            # Use warm light for sunset (convert floats to ints)
             warm_rgb_float = color_temperature_to_rgb(2700)
             warm_rgb: tuple[int, int, int] = (
                 int(warm_rgb_float[0]),
@@ -502,66 +561,20 @@ class SunriseSimulation:
                 int(warm_rgb_float[2]),
             )
 
-            consecutive_failures = 0
-            max_consecutive_failures = 5
-
-            for i in range(steps + 1):
-                if not self._running:
-                    break
-
-                self._current_step = i
-                brightness_pct = int(start_brightness_pct - brightness_step * i)
-                brightness_255 = int(brightness_pct / 100 * 255)
-
-                LOGGER.debug(
-                    "Sunset step %d/%d: %d%%",
-                    i + 1,
-                    steps + 1,
-                    brightness_pct,
-                )
-
-                # Apply with retry logic
-                # Use fast method optimized for sequential updates
-                if brightness_pct <= 0:
-                    success = await self._apply_with_retry(
-                        lambda: self._instance.turn_off()
-                    )
-                else:
-                    # Capture values for lambda
-                    _rgb, _brightness = warm_rgb, brightness_255
-                    success = await self._apply_with_retry(
-                        lambda: self._instance.set_color_with_brightness_fast(_rgb, _brightness)
-                    )
-
-                if success:
-                    consecutive_failures = 0
-                else:
-                    consecutive_failures += 1
-                    LOGGER.warning(
-                        "Sunset step %d failed, continuing... (%d consecutive failures)",
-                        i + 1, consecutive_failures
-                    )
-                    if consecutive_failures >= max_consecutive_failures:
-                        LOGGER.error(
-                            "Too many consecutive failures (%d), stopping sunset",
-                            consecutive_failures
-                        )
-                        break
-
-                if i < steps:
-                    # Wait for next step
-                    await asyncio.sleep(interval)
+            await self._execute_sunset_steps(
+                steps, interval, start_brightness_pct, brightness_step, warm_rgb,
+            )
 
             # Final turn off if end_brightness is 0
             if end_brightness_pct == 0 and self._running:
-                await self._apply_with_retry(lambda: self._instance.turn_off())
+                await self._apply_with_retry(self._instance.turn_off)
 
             # Request final status to sync state after simulation
             if self._running:
                 try:
                     await self._instance._request_status()
                 except Exception:
-                    pass  # Non-critical
+                    LOGGER.debug("Non-critical: failed to request status after sunset")
 
             LOGGER.info("Sunset simulation completed")
 

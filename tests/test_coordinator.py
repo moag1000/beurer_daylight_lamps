@@ -8,16 +8,15 @@ import pytest
 from homeassistant.components.light import ColorMode
 from homeassistant.core import HomeAssistant
 
+from custom_components.beurer_daylight_lamps.const import (
+    POLL_INTERVAL_LIGHT_OFF,
+    POLL_INTERVAL_LIGHT_ON,
+    POLL_INTERVAL_UNAVAILABLE,
+)
 from custom_components.beurer_daylight_lamps.coordinator import (
     DEFAULT_UPDATE_INTERVAL,
     BeurerDataUpdateCoordinator,
 )
-from custom_components.beurer_daylight_lamps.const import (
-    POLL_INTERVAL_LIGHT_ON,
-    POLL_INTERVAL_LIGHT_OFF,
-    POLL_INTERVAL_UNAVAILABLE,
-)
-
 
 # =============================================================================
 # Test Constants
@@ -29,7 +28,7 @@ class TestConstants:
 
     def test_default_update_interval(self) -> None:
         """Test default update interval is 5 minutes (POLL_INTERVAL_LIGHT_OFF)."""
-        assert DEFAULT_UPDATE_INTERVAL == timedelta(seconds=POLL_INTERVAL_LIGHT_OFF)
+        assert timedelta(seconds=POLL_INTERVAL_LIGHT_OFF) == DEFAULT_UPDATE_INTERVAL
 
     def test_poll_interval_constants(self) -> None:
         """Test polling interval constants are properly defined."""

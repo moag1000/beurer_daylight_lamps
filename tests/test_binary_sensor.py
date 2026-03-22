@@ -1,10 +1,9 @@
 """Test Beurer Daylight Lamps binary sensor platform."""
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
-
 from homeassistant.components.binary_sensor import BinarySensorDeviceClass
 from homeassistant.helpers.entity import EntityCategory
 
@@ -15,7 +14,6 @@ from custom_components.beurer_daylight_lamps.binary_sensor import (
     BeurerTherapyBinarySensor,
 )
 from tests.conftest import create_mock_coordinator
-
 
 # =============================================================================
 # Test Binary Sensor Descriptions
@@ -287,7 +285,9 @@ class TestAsyncSetupEntry:
     @pytest.mark.asyncio
     async def test_creates_all_sensors(self, mock_instance: MagicMock) -> None:
         """Test that async_setup_entry creates all expected sensors."""
-        from custom_components.beurer_daylight_lamps.binary_sensor import async_setup_entry
+        from custom_components.beurer_daylight_lamps.binary_sensor import (
+            async_setup_entry,
+        )
 
         mock_coordinator = create_mock_coordinator(mock_instance)
         mock_runtime_data = MagicMock()
@@ -320,7 +320,9 @@ class TestAsyncSetupEntry:
     @pytest.mark.asyncio
     async def test_uses_default_name(self, mock_instance: MagicMock) -> None:
         """Test that async_setup_entry uses default name when not provided."""
-        from custom_components.beurer_daylight_lamps.binary_sensor import async_setup_entry
+        from custom_components.beurer_daylight_lamps.binary_sensor import (
+            async_setup_entry,
+        )
 
         mock_coordinator = create_mock_coordinator(mock_instance)
         mock_runtime_data = MagicMock()

@@ -1,12 +1,11 @@
 """Test Beurer Daylight Lamps switch platform."""
 from __future__ import annotations
 
-from dataclasses import dataclass
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from homeassistant.components.switch import SwitchEntityDescription
-from homeassistant.core import HomeAssistant, State
+from homeassistant.core import State
 
 from custom_components.beurer_daylight_lamps.switch import (
     SWITCH_DESCRIPTIONS,
@@ -14,7 +13,6 @@ from custom_components.beurer_daylight_lamps.switch import (
     async_setup_entry,
 )
 from tests.conftest import create_mock_coordinator
-
 
 # =============================================================================
 # Test Switch Descriptions
@@ -184,8 +182,8 @@ class TestBeurerAdaptiveLightingSwitch:
         """Test extra_state_attributes when instance has no _therapy_active attr."""
         mock_coordinator.instance.effect = "Off"
         # Remove _therapy_active attribute
-        if hasattr(mock_coordinator.instance, '_therapy_active'):
-            delattr(mock_coordinator.instance, '_therapy_active')
+        if hasattr(mock_coordinator.instance, "_therapy_active"):
+            delattr(mock_coordinator.instance, "_therapy_active")
         switch = BeurerAdaptiveLightingSwitch(
             mock_coordinator, "Test Lamp", "entry_123", description
         )
@@ -256,7 +254,7 @@ class TestBeurerAdaptiveLightingSwitch:
 
         await switch.async_will_remove_from_hass()
 
-        assert not hasattr(mock_coordinator.instance, 'adaptive_lighting_switch')
+        assert not hasattr(mock_coordinator.instance, "adaptive_lighting_switch")
 
     @pytest.mark.asyncio
     async def test_async_will_remove_from_hass_no_attr(
@@ -388,8 +386,8 @@ class TestShouldBlockAdaptiveLighting:
     ) -> None:
         """Test doesn't block when no therapy attribute exists."""
         mock_coordinator.instance.effect = "Off"
-        if hasattr(mock_coordinator.instance, '_therapy_active'):
-            delattr(mock_coordinator.instance, '_therapy_active')
+        if hasattr(mock_coordinator.instance, "_therapy_active"):
+            delattr(mock_coordinator.instance, "_therapy_active")
         switch = BeurerAdaptiveLightingSwitch(
             mock_coordinator, "Test Lamp", "entry_123", description
         )

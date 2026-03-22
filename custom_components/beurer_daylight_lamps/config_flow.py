@@ -4,10 +4,9 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from bleak.exc import BleakError
-from bleak.backends.device import BLEDevice
 import voluptuous as vol
-
+from bleak.backends.device import BLEDevice
+from bleak.exc import BleakError
 from homeassistant.components import bluetooth
 from homeassistant.components.bluetooth import (
     BluetoothServiceInfoBleak,
@@ -21,6 +20,10 @@ from homeassistant.config_entries import (
 )
 from homeassistant.const import CONF_MAC, CONF_NAME
 from homeassistant.core import callback
+from homeassistant.helpers.device_registry import format_mac
+
+from .beurer_daylight_lamps import BeurerInstance
+from .const import DEVICE_NAME_PREFIXES, DOMAIN, LOGGER
 
 # Option constants
 CONF_THERAPY_GOAL = "therapy_goal"
@@ -30,10 +33,6 @@ CONF_ADAPTIVE_LIGHTING_DEFAULT = "adaptive_lighting_default"
 DEFAULT_THERAPY_GOAL = 30
 DEFAULT_UPDATE_INTERVAL = 60
 DEFAULT_ADAPTIVE_LIGHTING = True
-from homeassistant.helpers.device_registry import format_mac
-
-from .beurer_daylight_lamps import BeurerInstance
-from .const import DEVICE_NAME_PREFIXES, DOMAIN, LOGGER
 
 MANUAL_MAC = "manual"
 
@@ -142,9 +141,6 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
         discovered_connectable = list(async_discovered_service_info(self.hass, connectable=True))
         discovered_non_connectable = list(async_discovered_service_info(self.hass, connectable=False))
 
-        # Track which devices are connectable
-        connectable_addresses = {info.address for info in discovered_connectable}
-
         # Combine both lists (use dict to deduplicate by address)
         # PREFER connectable version if both exist
         all_discovered: dict[str, tuple[BluetoothServiceInfoBleak, bool]] = {}
@@ -164,7 +160,7 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
         # Filter for Beurer TL devices by name prefix and cache them
         self._discovered_devices = {}
         self._device_connectable = {}  # Track if device is connectable
-        for addr, (info, is_connectable) in all_discovered.items():
+        for info, is_connectable in all_discovered.values():
             if (
                 info.name
                 and info.name.lower().startswith(DEVICE_NAME_PREFIXES)
@@ -329,19 +325,18 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             success = await self._test_connection()
-            if success:
-                if self._reauth_entry:
-                    self.hass.config_entries.async_update_entry(
-                        self._reauth_entry,
-                        data={
-                            CONF_MAC: self._mac,
-                            CONF_NAME: self._name,
-                        },
-                    )
-                    await self.hass.config_entries.async_reload(
-                        self._reauth_entry.entry_id
-                    )
-                    return self.async_abort(reason="reauth_successful")
+            if success and self._reauth_entry:
+                self.hass.config_entries.async_update_entry(
+                    self._reauth_entry,
+                    data={
+                        CONF_MAC: self._mac,
+                        CONF_NAME: self._name,
+                    },
+                )
+                await self.hass.config_entries.async_reload(
+                    self._reauth_entry.entry_id
+                )
+                return self.async_abort(reason="reauth_successful")
             errors["base"] = "cannot_connect"
 
         return self.async_show_form(
@@ -379,6 +374,96 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
             description_placeholders={"mac": self._mac or "Unknown"},
         )
 
+    def _ensure_instance_from_bluetooth(self) -> bool:
+        """Ensure a BeurerInstance exists by finding device via Bluetooth.
+
+        Returns:
+            True if instance was created or already exists, False if device not found.
+        """
+        if self._instance:
+            return True
+
+        if self._ble_device:
+            LOGGER.debug(
+                "Using cached BLE device for %s (RSSI: %s)",
+                self._mac, self._rssi,
+            )
+            self._instance = BeurerInstance(
+                self._ble_device, self._rssi, self.hass
+            )
+            return True
+
+        LOGGER.debug("Getting device %s via HA Bluetooth stack...", self._mac)
+
+        ble_device = bluetooth.async_ble_device_from_address(
+            self.hass, self._mac, connectable=True
+        )
+
+        if not ble_device:
+            non_conn = bluetooth.async_ble_device_from_address(
+                self.hass, self._mac, connectable=False
+            )
+            if non_conn:
+                LOGGER.warning(
+                    "Device %s found but NOT connectable - "
+                    "may be in sleep mode or out of range",
+                    self._mac,
+                )
+                ble_device = non_conn
+
+        if not ble_device:
+            LOGGER.error(
+                "Device %s not found via any Bluetooth adapter", self._mac
+            )
+            return False
+
+        service_info = bluetooth.async_last_service_info(self.hass, self._mac)
+        if not service_info:
+            service_info = bluetooth.async_last_service_info(
+                self.hass, self._mac, connectable=False
+            )
+        rssi = service_info.rssi if service_info else None
+
+        self._ble_device = ble_device
+        self._rssi = rssi
+        self._instance = BeurerInstance(ble_device, rssi, self.hass)
+        return True
+
+    def _handle_connection_timeout(self) -> None:
+        """Log a detailed error message when connection test times out."""
+        has_connectable = bluetooth.async_ble_device_from_address(
+            self.hass, self._mac, connectable=True
+        ) is not None
+        has_non_connectable = bluetooth.async_ble_device_from_address(
+            self.hass, self._mac, connectable=False
+        ) is not None
+
+        if not has_connectable and has_non_connectable:
+            reason = (
+                "Device visible but no GATT-capable adapter available. "
+                "Consider adding an ESPHome Bluetooth Proxy with 'active: true'."
+            )
+        elif not has_connectable and not has_non_connectable:
+            reason = (
+                "Device not visible by any Bluetooth adapter. "
+                "Ensure lamp is powered on and within range."
+            )
+        else:
+            reason = (
+                "GATT connection failed - BLE connection slots may be full. "
+                "Try power cycling the lamp or reducing other BLE devices."
+            )
+
+        adapter_name = (
+            getattr(self._ble_device, "name", "unknown")
+            if self._ble_device else "unknown"
+        )
+        LOGGER.error(
+            "Connection test timed out for %s after 30s. %s "
+            "(RSSI: %s dBm, Adapter: %s)",
+            self._mac, reason, self._rssi or "unknown", adapter_name,
+        )
+
     async def _test_connection(self) -> bool:
         """Test connection by toggling the lamp."""
         if not self._mac:
@@ -386,109 +471,25 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
             return False
 
         try:
-            if not self._instance:
-                # Use cached BLE device if available (faster, no scan needed)
-                if self._ble_device:
-                    LOGGER.debug(
-                        "Using cached BLE device for %s (RSSI: %s)",
-                        self._mac,
-                        self._rssi,
-                    )
-                    self._instance = BeurerInstance(
-                        self._ble_device, self._rssi, self.hass
-                    )
-                else:
-                    # Use HA Bluetooth stack to find device (includes all proxies)
-                    # Try both connectable and non-connectable devices
-                    LOGGER.debug(
-                        "Getting device %s via HA Bluetooth stack...", self._mac
-                    )
+            if not self._ensure_instance_from_bluetooth():
+                return False
 
-                    # Try to get a CONNECTABLE device first (required for connection)
-                    ble_device = bluetooth.async_ble_device_from_address(
-                        self.hass, self._mac, connectable=True
-                    )
-
-                    # If not found as connectable, check if visible as non-connectable
-                    if not ble_device:
-                        non_conn = bluetooth.async_ble_device_from_address(
-                            self.hass, self._mac, connectable=False
-                        )
-                        if non_conn:
-                            LOGGER.warning(
-                                "Device %s found but NOT connectable - "
-                                "may be in sleep mode or out of range",
-                                self._mac,
-                            )
-                            # Use it anyway, connection will fail with clear error
-                            ble_device = non_conn
-
-                    if not ble_device:
-                        LOGGER.error(
-                            "Device %s not found via any Bluetooth adapter", self._mac
-                        )
-                        return False
-
-                    # Get RSSI from service info (try both types)
-                    service_info = bluetooth.async_last_service_info(
-                        self.hass, self._mac
-                    )
-                    if not service_info:
-                        service_info = bluetooth.async_last_service_info(
-                            self.hass, self._mac, connectable=False
-                        )
-                    rssi = service_info.rssi if service_info else None
-
-                    self._ble_device = ble_device
-                    self._rssi = rssi
-                    self._instance = BeurerInstance(ble_device, rssi, self.hass)
-
+            adapter_name = (
+                getattr(self._ble_device, "name", "unknown")
+                if self._ble_device else "unknown"
+            )
             LOGGER.info(
                 "Testing connection to %s (RSSI: %s dBm, adapter: %s)",
-                self._mac,
-                self._rssi if self._rssi else "unknown",
-                getattr(self._ble_device, "name", "unknown") if self._ble_device else "unknown",
+                self._mac, self._rssi or "unknown", adapter_name,
             )
-            # Add timeout - ESPHome proxies can connect even to "non-connectable" devices
-            # but we need a reasonable timeout to prevent hanging forever.
-            # Use 30s (reduced from 45s) with max_attempts=3 for faster feedback.
+
             try:
                 async with asyncio.timeout(30):
                     await self._instance.update()
-            except asyncio.TimeoutError:
-                # Determine likely cause for a more specific error message
-                has_connectable = bluetooth.async_ble_device_from_address(
-                    self.hass, self._mac, connectable=True
-                ) is not None
-                has_non_connectable = bluetooth.async_ble_device_from_address(
-                    self.hass, self._mac, connectable=False
-                ) is not None
-
-                if not has_connectable and has_non_connectable:
-                    reason = (
-                        "Device visible but no GATT-capable adapter available. "
-                        "Consider adding an ESPHome Bluetooth Proxy with 'active: true'."
-                    )
-                elif not has_connectable and not has_non_connectable:
-                    reason = (
-                        "Device not visible by any Bluetooth adapter. "
-                        "Ensure lamp is powered on and within range."
-                    )
-                else:
-                    reason = (
-                        "GATT connection failed - BLE connection slots may be full. "
-                        "Try power cycling the lamp or reducing other BLE devices."
-                    )
-
-                LOGGER.error(
-                    "Connection test timed out for %s after 30s. %s "
-                    "(RSSI: %s dBm, Adapter: %s)",
-                    self._mac,
-                    reason,
-                    self._rssi if self._rssi else "unknown",
-                    getattr(self._ble_device, "name", "unknown") if self._ble_device else "unknown",
-                )
+            except TimeoutError:
+                self._handle_connection_timeout()
                 return False
+
             await asyncio.sleep(0.5)
 
             # Toggle lamp to confirm it works
@@ -505,26 +506,18 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
                 await self._instance.turn_off()
 
             LOGGER.info("Connection test successful for %s", self._mac)
+        except (BleakError, TimeoutError, OSError, ValueError) as err:
+            LOGGER.error(
+                "Error during connection test for %s: %s", self._mac, err
+            )
+            return False
+        else:
             return True
-
-        except BleakError as err:
-            LOGGER.error("BLE error during connection test for %s: %s", self._mac, err)
-            return False
-        except (TimeoutError, asyncio.TimeoutError) as err:
-            LOGGER.error("Timeout during connection test for %s: %s", self._mac, err)
-            return False
-        except OSError as err:
-            LOGGER.error("OS error during connection test for %s: %s", self._mac, err)
-            return False
-        except ValueError as err:
-            LOGGER.error("Invalid device during connection test for %s: %s", self._mac, err)
-            return False
-
         finally:
             if self._instance:
                 try:
                     await self._instance.disconnect()
-                except (BleakError, TimeoutError, asyncio.TimeoutError, OSError) as err:
+                except (BleakError, TimeoutError, OSError) as err:
                     LOGGER.debug("Disconnect error: %s", err)
                 self._instance = None
 
@@ -536,9 +529,10 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
             return False
         try:
             int(mac, 16)
-            return True
         except ValueError:
             return False
+        else:
+            return True
 
 
 class BeurerOptionsFlowHandler(OptionsFlow):

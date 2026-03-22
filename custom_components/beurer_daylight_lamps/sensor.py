@@ -7,7 +7,11 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.const import SIGNAL_STRENGTH_DECIBELS_MILLIWATT, UnitOfTime, PERCENTAGE
+from homeassistant.const import (
+    PERCENTAGE,
+    SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
+    UnitOfTime,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import (
     CONNECTION_BLUETOOTH,
@@ -150,7 +154,7 @@ class BeurerSensor(CoordinatorEntity[BeurerDataUpdateCoordinator], SensorEntity)
         """Return the sensor value."""
         if self.entity_description.key == "rssi":
             return self._instance.rssi
-        elif self.entity_description.key == "last_notification":
+        if self.entity_description.key == "last_notification":
             return self._instance.last_raw_notification
         return None
 
@@ -204,9 +208,9 @@ class BeurerTherapySensor(CoordinatorEntity[BeurerDataUpdateCoordinator], Sensor
         key = self.entity_description.key
         if key == "therapy_today":
             return round(self._instance.therapy_today_minutes, 1)
-        elif key == "therapy_week":
+        if key == "therapy_week":
             return round(self._instance.therapy_week_minutes, 1)
-        elif key == "therapy_progress":
+        if key == "therapy_progress":
             return self._instance.therapy_goal_progress_pct
         return None
 
@@ -262,9 +266,9 @@ class BeurerConnectionHealthSensor(CoordinatorEntity[BeurerDataUpdateCoordinator
         key = self.entity_description.key
         if key == "reconnect_count":
             return self._instance.reconnect_count
-        elif key == "command_success_rate":
+        if key == "command_success_rate":
             return self._instance.command_success_rate
-        elif key == "connection_uptime":
+        if key == "connection_uptime":
             return self._instance.connection_uptime_seconds
         return None
 

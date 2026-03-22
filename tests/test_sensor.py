@@ -3,14 +3,18 @@ from unittest.mock import MagicMock
 
 import pytest
 from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
-from homeassistant.const import SIGNAL_STRENGTH_DECIBELS_MILLIWATT, UnitOfTime, PERCENTAGE
+from homeassistant.const import (
+    PERCENTAGE,
+    SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
+    UnitOfTime,
+)
 from homeassistant.helpers.entity import EntityCategory
 
 from custom_components.beurer_daylight_lamps.sensor import (
-    BeurerSensor,
-    BeurerTherapySensor,
     SENSOR_DESCRIPTIONS,
     THERAPY_SENSOR_DESCRIPTIONS,
+    BeurerSensor,
+    BeurerTherapySensor,
 )
 from tests.conftest import create_mock_coordinator
 

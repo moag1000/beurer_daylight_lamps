@@ -1,5 +1,5 @@
 """Test Beurer Daylight Lamps light entity."""
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from homeassistant.components.light import (
@@ -8,7 +8,6 @@ from homeassistant.components.light import (
     ATTR_RGB_COLOR,
     ColorMode,
 )
-from homeassistant.core import HomeAssistant
 
 from custom_components.beurer_daylight_lamps.const import detect_model
 from custom_components.beurer_daylight_lamps.light import BeurerLight

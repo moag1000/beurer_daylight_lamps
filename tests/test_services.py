@@ -2,9 +2,9 @@
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 import voluptuous as vol
-
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import ServiceValidationError
 
@@ -33,7 +33,6 @@ from custom_components.beurer_daylight_lamps import (
 )
 from custom_components.beurer_daylight_lamps.const import DOMAIN
 from custom_components.beurer_daylight_lamps.therapy import SunriseProfile
-
 
 # =============================================================================
 # SCHEMA VALIDATION TESTS (Pure unit tests - no Home Assistant required)

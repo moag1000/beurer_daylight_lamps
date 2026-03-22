@@ -6,11 +6,11 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from homeassistant.helpers.device_registry import format_mac
 
-from custom_components.beurer_daylight_lamps.select import (
-    BeurerEffectSelect,
-    SELECT_DESCRIPTIONS,
-)
 from custom_components.beurer_daylight_lamps.const import SUPPORTED_EFFECTS
+from custom_components.beurer_daylight_lamps.select import (
+    SELECT_DESCRIPTIONS,
+    BeurerEffectSelect,
+)
 from tests.conftest import create_mock_coordinator
 
 

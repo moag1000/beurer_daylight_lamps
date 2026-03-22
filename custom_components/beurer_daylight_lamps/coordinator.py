@@ -15,13 +15,12 @@ from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.light import ColorMode  # type: ignore[attr-defined]
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import (
-    DOMAIN,
     LOGGER,
-    POLL_INTERVAL_LIGHT_ON,
     POLL_INTERVAL_LIGHT_OFF,
+    POLL_INTERVAL_LIGHT_ON,
     POLL_INTERVAL_UNAVAILABLE,
 )
 
@@ -234,9 +233,6 @@ class BeurerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             # Adjust polling interval after each update
             self._adjust_polling_interval()
-
-            return data
-
         except Exception as err:
             LOGGER.debug(
                 "Update failed for %s: %s",
@@ -250,6 +246,8 @@ class BeurerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # out of range, and we don't want to mark entities unavailable
             # The availability is managed by the BLE stack
             return self._get_current_data()
+        else:
+            return data
 
     async def async_shutdown(self) -> None:
         """Shutdown the coordinator.

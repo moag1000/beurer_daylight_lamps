@@ -19,7 +19,6 @@ from . import BeurerConfigEntry
 from .const import DOMAIN, LOGGER, VERSION, detect_model
 from .coordinator import BeurerDataUpdateCoordinator
 
-
 SWITCH_DESCRIPTIONS = [
     SwitchEntityDescription(
         key="adaptive_lighting",
@@ -119,8 +118,8 @@ class BeurerAdaptiveLightingSwitch(
     async def async_will_remove_from_hass(self) -> None:
         """Run when entity will be removed from hass."""
         await super().async_will_remove_from_hass()
-        if hasattr(self._instance, 'adaptive_lighting_switch'):
-            delattr(self._instance, 'adaptive_lighting_switch')
+        if hasattr(self._instance, "adaptive_lighting_switch"):
+            delattr(self._instance, "adaptive_lighting_switch")
 
     @property
     def available(self) -> bool:
@@ -150,7 +149,7 @@ class BeurerAdaptiveLightingSwitch(
         """Return extra state attributes."""
         return {
             "description": "Controls whether Adaptive Lighting can adjust this lamp",
-            "therapy_mode_active": self._instance._therapy_active if hasattr(self._instance, '_therapy_active') else False,
+            "therapy_mode_active": self._instance._therapy_active if hasattr(self._instance, "_therapy_active") else False,
             "current_effect": self._instance.effect if self._instance.effect != "Off" else None,
         }
 
@@ -183,10 +182,7 @@ class BeurerAdaptiveLightingSwitch(
             return True
 
         # Therapy mode active - don't override
-        if hasattr(self._instance, '_therapy_active') and self._instance._therapy_active:
-            return True
-
-        return False
+        return hasattr(self._instance, "_therapy_active") and self._instance._therapy_active
 
 
 class BeurerDeviceSwitch(
@@ -226,7 +222,7 @@ class BeurerDeviceSwitch(
         """Return True if the device setting is enabled."""
         if self.entity_description.key == "feedback_sound":
             return self._instance.feedback_enabled
-        elif self.entity_description.key == "fade":
+        if self.entity_description.key == "fade":
             return self._instance.fade_enabled
         return None
 

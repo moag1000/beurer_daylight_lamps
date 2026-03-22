@@ -8,7 +8,6 @@ from __future__ import annotations
 from typing import Any
 
 import voluptuous as vol
-
 from homeassistant import data_entry_flow
 from homeassistant.components import bluetooth
 from homeassistant.components.repairs import RepairsFlow
@@ -16,7 +15,6 @@ from homeassistant.const import CONF_MAC, CONF_NAME
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
 
-from .beurer_daylight_lamps import BeurerInstance
 from .const import DOMAIN, LOGGER
 
 
@@ -163,7 +161,7 @@ async def async_create_fix_flow(
 
     if issue_id.startswith("device_not_found_"):
         return DeviceNotFoundRepairFlow(issue_id, data or {})
-    elif issue_id.startswith("initialization_failed_"):
+    if issue_id.startswith("initialization_failed_"):
         return InitializationFailedRepairFlow(issue_id, data or {})
 
     # Fallback - shouldn't happen

@@ -1,14 +1,14 @@
 """Test Beurer Daylight Lamps therapy module."""
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from custom_components.beurer_daylight_lamps.therapy import (
+    SUNRISE_PROFILES,
     SunriseConfig,
     SunriseProfile,
     SunriseSimulation,
-    SUNRISE_PROFILES,
     TherapySession,
     TherapyTracker,
 )
@@ -20,14 +20,14 @@ class TestTherapySession:
     def test_duration_minutes_ongoing(self) -> None:
         """Test duration calculation for ongoing session."""
         session = TherapySession(
-            start_time=datetime.now() - timedelta(minutes=10),
+            start_time=datetime.now(tz=UTC) - timedelta(minutes=10),
         )
         assert 9.9 < session.duration_minutes < 10.1
 
     def test_duration_minutes_completed(self) -> None:
         """Test duration calculation for completed session."""
-        start = datetime.now() - timedelta(minutes=30)
-        end = datetime.now()
+        start = datetime.now(tz=UTC) - timedelta(minutes=30)
+        end = datetime.now(tz=UTC)
         session = TherapySession(
             start_time=start,
             end_time=end,
@@ -37,7 +37,7 @@ class TestTherapySession:
     def test_is_therapy_light_true(self) -> None:
         """Test therapy light detection for qualifying session."""
         session = TherapySession(
-            start_time=datetime.now(),
+            start_time=datetime.now(tz=UTC),
             color_temp_kelvin=5300,
             brightness_pct=100,
         )
@@ -46,7 +46,7 @@ class TestTherapySession:
     def test_is_therapy_light_too_dim(self) -> None:
         """Test therapy light detection for too dim session."""
         session = TherapySession(
-            start_time=datetime.now(),
+            start_time=datetime.now(tz=UTC),
             color_temp_kelvin=5300,
             brightness_pct=50,  # Below 80%
         )
@@ -55,7 +55,7 @@ class TestTherapySession:
     def test_is_therapy_light_too_warm(self) -> None:
         """Test therapy light detection for too warm session."""
         session = TherapySession(
-            start_time=datetime.now(),
+            start_time=datetime.now(tz=UTC),
             color_temp_kelvin=3000,  # Below 5000K
             brightness_pct=100,
         )
@@ -109,7 +109,7 @@ class TestTherapyTracker:
         tracker.start_session(color_temp_kelvin=5300, brightness_pct=100)
 
         # Manually set start time for test
-        tracker._current_session.start_time = datetime.now() - timedelta(minutes=5)
+        tracker._current_session.start_time = datetime.now(tz=UTC) - timedelta(minutes=5)
 
         session = tracker.end_session()
         assert session is not None
@@ -122,7 +122,7 @@ class TestTherapyTracker:
         tracker.start_session(color_temp_kelvin=3000, brightness_pct=50)
 
         # Manually set start time for test
-        tracker._current_session.start_time = datetime.now() - timedelta(minutes=5)
+        tracker._current_session.start_time = datetime.now(tz=UTC) - timedelta(minutes=5)
 
         session = tracker.end_session()
         assert session is not None
@@ -134,8 +134,8 @@ class TestTherapyTracker:
 
         # Add a session from today
         session = TherapySession(
-            start_time=datetime.now() - timedelta(minutes=20),
-            end_time=datetime.now() - timedelta(minutes=10),
+            start_time=datetime.now(tz=UTC) - timedelta(minutes=20),
+            end_time=datetime.now(tz=UTC) - timedelta(minutes=10),
             color_temp_kelvin=5300,
             brightness_pct=100,
         )
@@ -149,7 +149,7 @@ class TestTherapyTracker:
         tracker = TherapyTracker()
 
         # Add a session from yesterday
-        yesterday = datetime.now() - timedelta(days=1)
+        yesterday = datetime.now(tz=UTC) - timedelta(days=1)
         session = TherapySession(
             start_time=yesterday - timedelta(minutes=20),
             end_time=yesterday - timedelta(minutes=10),
@@ -171,8 +171,8 @@ class TestTherapyTracker:
         # Add sessions from this week
         for i in range(3):
             session = TherapySession(
-                start_time=datetime.now() - timedelta(days=i, minutes=20),
-                end_time=datetime.now() - timedelta(days=i, minutes=10),
+                start_time=datetime.now(tz=UTC) - timedelta(days=i, minutes=20),
+                end_time=datetime.now(tz=UTC) - timedelta(days=i, minutes=10),
                 color_temp_kelvin=5300,
                 brightness_pct=100,
             )
@@ -187,8 +187,8 @@ class TestTherapyTracker:
 
         # Add session that meets goal
         session = TherapySession(
-            start_time=datetime.now() - timedelta(minutes=20),
-            end_time=datetime.now() - timedelta(minutes=4),
+            start_time=datetime.now(tz=UTC) - timedelta(minutes=20),
+            end_time=datetime.now(tz=UTC) - timedelta(minutes=4),
             color_temp_kelvin=5300,
             brightness_pct=100,
         )
@@ -202,8 +202,8 @@ class TestTherapyTracker:
 
         # Add session that doesn't meet goal
         session = TherapySession(
-            start_time=datetime.now() - timedelta(minutes=20),
-            end_time=datetime.now() - timedelta(minutes=10),
+            start_time=datetime.now(tz=UTC) - timedelta(minutes=20),
+            end_time=datetime.now(tz=UTC) - timedelta(minutes=10),
             color_temp_kelvin=5300,
             brightness_pct=100,
         )
@@ -217,8 +217,8 @@ class TestTherapyTracker:
 
         # Add 10-minute session (50% of goal)
         session = TherapySession(
-            start_time=datetime.now() - timedelta(minutes=20),
-            end_time=datetime.now() - timedelta(minutes=10),
+            start_time=datetime.now(tz=UTC) - timedelta(minutes=20),
+            end_time=datetime.now(tz=UTC) - timedelta(minutes=10),
             color_temp_kelvin=5300,
             brightness_pct=100,
         )
@@ -232,7 +232,7 @@ class TestTherapyTracker:
 
         # Add 20-minute session (200% of goal)
         # Use noon today to avoid midnight boundary issues in CI
-        now = datetime.now().replace(hour=12, minute=0, second=0, microsecond=0)
+        now = datetime.now(tz=UTC).replace(hour=12, minute=0, second=0, microsecond=0)
         session = TherapySession(
             start_time=now - timedelta(minutes=30),
             end_time=now - timedelta(minutes=10),
@@ -249,8 +249,8 @@ class TestTherapyTracker:
 
         # Add old session
         old_session = TherapySession(
-            start_time=datetime.now() - timedelta(days=10),
-            end_time=datetime.now() - timedelta(days=10) + timedelta(minutes=10),
+            start_time=datetime.now(tz=UTC) - timedelta(days=10),
+            end_time=datetime.now(tz=UTC) - timedelta(days=10) + timedelta(minutes=10),
             color_temp_kelvin=5300,
             brightness_pct=100,
         )
@@ -258,8 +258,8 @@ class TestTherapyTracker:
 
         # Add recent session
         recent_session = TherapySession(
-            start_time=datetime.now() - timedelta(days=1),
-            end_time=datetime.now() - timedelta(days=1) + timedelta(minutes=10),
+            start_time=datetime.now(tz=UTC) - timedelta(days=1),
+            end_time=datetime.now(tz=UTC) - timedelta(days=1) + timedelta(minutes=10),
             color_temp_kelvin=5300,
             brightness_pct=100,
         )
@@ -283,7 +283,7 @@ class TestSunriseProfiles:
 
     def test_profile_values_valid(self) -> None:
         """Test all profile values are within valid ranges."""
-        for profile, config in SUNRISE_PROFILES.items():
+        for config in SUNRISE_PROFILES.values():
             assert 2000 <= config.start_kelvin <= 7000
             assert 2000 <= config.end_kelvin <= 7000
             assert 0 <= config.start_brightness_pct <= 100
@@ -432,12 +432,11 @@ class TestSunriseSimulationExecution:
         config = SUNRISE_PROFILES[SunriseProfile.NATURAL]
 
         async def cancel_after_first_step(_):
-            raise aio.CancelledError()
+            raise aio.CancelledError
 
-        with patch("asyncio.sleep", side_effect=cancel_after_first_step):
-            with pytest.raises(aio.CancelledError):
-                sim._running = True
-                await sim._run_sunrise(duration_minutes=5, config=config)
+        with patch("asyncio.sleep", side_effect=cancel_after_first_step), pytest.raises(aio.CancelledError):
+            sim._running = True
+            await sim._run_sunrise(duration_minutes=5, config=config)
 
         # Should be cleaned up
         assert sim._running is False
@@ -516,12 +515,11 @@ class TestSunriseSimulationExecution:
         sim = SunriseSimulation(mock_instance)
 
         async def cancel_after_first_step(_):
-            raise aio.CancelledError()
+            raise aio.CancelledError
 
-        with patch("asyncio.sleep", side_effect=cancel_after_first_step):
-            with pytest.raises(aio.CancelledError):
-                sim._running = True
-                await sim._run_sunset(duration_minutes=5, end_brightness_pct=0)
+        with patch("asyncio.sleep", side_effect=cancel_after_first_step), pytest.raises(aio.CancelledError):
+            sim._running = True
+            await sim._run_sunset(duration_minutes=5, end_brightness_pct=0)
 
         assert sim._running is False
 
@@ -571,7 +569,7 @@ class TestTherapyTrackerCurrentSession:
 
         # Start a current session with therapy light
         tracker._current_session = TherapySession(
-            start_time=datetime.now() - timedelta(minutes=15),
+            start_time=datetime.now(tz=UTC) - timedelta(minutes=15),
             color_temp_kelvin=5300,
             brightness_pct=100,
         )
@@ -585,7 +583,7 @@ class TestTherapyTrackerCurrentSession:
 
         # Start a non-therapy current session
         tracker._current_session = TherapySession(
-            start_time=datetime.now() - timedelta(minutes=15),
+            start_time=datetime.now(tz=UTC) - timedelta(minutes=15),
             color_temp_kelvin=3000,  # Too warm
             brightness_pct=50,  # Too dim
         )
@@ -598,15 +596,15 @@ class TestTherapyTrackerCurrentSession:
 
         # Add historical session
         tracker.sessions.append(TherapySession(
-            start_time=datetime.now() - timedelta(days=1, minutes=30),
-            end_time=datetime.now() - timedelta(days=1, minutes=20),
+            start_time=datetime.now(tz=UTC) - timedelta(days=1, minutes=30),
+            end_time=datetime.now(tz=UTC) - timedelta(days=1, minutes=20),
             color_temp_kelvin=5300,
             brightness_pct=100,
         ))
 
         # Start a current session
         tracker._current_session = TherapySession(
-            start_time=datetime.now() - timedelta(minutes=15),
+            start_time=datetime.now(tz=UTC) - timedelta(minutes=15),
             color_temp_kelvin=5300,
             brightness_pct=100,
         )
@@ -620,15 +618,15 @@ class TestTherapyTrackerCurrentSession:
 
         # Add historical session
         tracker.sessions.append(TherapySession(
-            start_time=datetime.now() - timedelta(days=1, minutes=30),
-            end_time=datetime.now() - timedelta(days=1, minutes=20),
+            start_time=datetime.now(tz=UTC) - timedelta(days=1, minutes=30),
+            end_time=datetime.now(tz=UTC) - timedelta(days=1, minutes=20),
             color_temp_kelvin=5300,
             brightness_pct=100,
         ))
 
         # Start a non-therapy current session
         tracker._current_session = TherapySession(
-            start_time=datetime.now() - timedelta(minutes=15),
+            start_time=datetime.now(tz=UTC) - timedelta(minutes=15),
             color_temp_kelvin=3000,
             brightness_pct=50,
         )
@@ -660,7 +658,7 @@ class TestTherapyEdgeCases:
         """Test therapy session at boundary values."""
         # Exactly at threshold
         session = TherapySession(
-            start_time=datetime.now(),
+            start_time=datetime.now(tz=UTC),
             color_temp_kelvin=5000,  # Minimum for therapy
             brightness_pct=80,  # Minimum for therapy
         )
@@ -668,14 +666,14 @@ class TestTherapyEdgeCases:
 
         # Just below threshold
         session2 = TherapySession(
-            start_time=datetime.now(),
+            start_time=datetime.now(tz=UTC),
             color_temp_kelvin=4999,  # Below minimum
             brightness_pct=80,
         )
         assert session2.is_therapy_light is False
 
         session3 = TherapySession(
-            start_time=datetime.now(),
+            start_time=datetime.now(tz=UTC),
             color_temp_kelvin=5000,
             brightness_pct=79,  # Below minimum
         )

@@ -1,0 +1,71 @@
+# Ruff linter configuration
+# Based on https://github.com/home-assistant/core/blob/dev/pyproject.toml
+
+target-version = "py312"
+
+[lint]
+select = [
+    "ALL",
+]
+
+ignore = [
+    "ANN401",  # Dynamically typed expressions (typing.Any) are disallowed
+    "D203",    # no-blank-line-before-class (incompatible with formatter)
+    "D212",    # multi-line-summary-first-line (incompatible with formatter)
+    "D213",    # multi-line-summary-second-line (conflicts with D212)
+    "D413",    # missing-blank-line-after-last-section (too strict for us)
+    "COM812",  # incompatible with formatter
+    "ISC001",  # incompatible with formatter
+    "E501",    # line-too-long (formatter handles this, some BLE hex lines are long)
+    "PLC0415", # import-outside-top-level (we use conditional imports for TYPE_CHECKING)
+    "PLR2004", # magic-value-comparison (BLE protocol uses raw byte values)
+    "FBT001",  # boolean-type-hint-positional-argument (common in HA integrations)
+    "FBT002",  # boolean-default-value-positional-argument
+    "TRY003",  # raise-vanilla-args (we use translated exceptions)
+    "EM101",   # raw-string-in-exception
+    "EM102",   # f-string-in-exception
+    "BLE001",  # blind-except (needed for robust BLE error handling)
+    "TC001",   # typing-only-first-party-import (conflicts with runtime needs)
+    "TC002",   # typing-only-third-party-import
+    "TC003",   # typing-only-standard-library-import
+    "RUF012",  # mutable-class-default (dataclass fields)
+    "SLF001",  # private-member-access (common in HA integrations for internal state)
+    "ARG001",  # unused-function-argument (HA callback signatures require specific params)
+    "ARG002",  # unused-method-argument (HA platform method signatures)
+]
+
+[lint.per-file-ignores]
+"tests/**" = [
+    "S101",    # assert allowed in tests
+    "S110",    # try-except-pass allowed in tests
+    "D",       # docstrings optional in tests
+    "ANN",     # annotations optional in tests
+    "SLF001",  # private member access allowed in tests
+    "PLR2004", # magic values allowed in tests
+    "DTZ005",  # datetime.now() without tz in tests is fine
+    "DTZ006",  # datetime.fromtimestamp() without tz in tests
+    "ARG001",  # unused function args (fixtures)
+    "ARG002",  # unused method args (fixtures)
+    "F811",    # redefined while unused (test fixtures)
+    "F841",    # unused variable (test setups)
+    "B023",    # function-uses-loop-variable
+    "PT012",   # pytest-raises-with-multiple-statements
+    "PLW0108", # unnecessary-lambda
+    "E402",    # module-import-not-at-top-of-file (conditional test imports)
+    "B007",    # unused-loop-control-variable
+]
+"custom_components/**/beurer_daylight_lamps.py" = [
+    "PLR0911", # too-many-return-statements (notification handler has many branches)
+    "PLR0912", # too-many-branches (notification handler)
+    "PLR0915", # too-many-statements (connect method is complex by necessity)
+    "C901",    # complex-structure (BLE protocol handling is inherently complex)
+]
+
+[lint.flake8-pytest-style]
+fixture-parentheses = false
+
+[lint.pyupgrade]
+keep-runtime-typing = true
+
+[lint.mccabe]
+max-complexity = 25
