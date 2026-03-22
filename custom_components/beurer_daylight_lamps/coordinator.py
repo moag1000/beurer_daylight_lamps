@@ -172,6 +172,9 @@ class BeurerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "command_success_rate": self.instance.command_success_rate,
             "connection_uptime": self.instance.connection_uptime_seconds,
             "total_commands": self.instance.total_commands,
+            # Device settings
+            "feedback_enabled": self.instance.feedback_enabled,
+            "fade_enabled": self.instance.fade_enabled,
         }
 
     async def _async_update_data(self) -> dict[str, Any]:

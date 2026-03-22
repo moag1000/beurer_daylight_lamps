@@ -26,7 +26,7 @@ from .coordinator import BeurerDataUpdateCoordinator
 NUMBER_DESCRIPTIONS: tuple[NumberEntityDescription, ...] = (
     NumberEntityDescription(
         key="white_brightness",
-        name="White brightness",
+        translation_key="white_brightness",
         icon="mdi:brightness-6",
         native_min_value=1,
         native_max_value=100,
@@ -35,7 +35,7 @@ NUMBER_DESCRIPTIONS: tuple[NumberEntityDescription, ...] = (
     ),
     NumberEntityDescription(
         key="color_brightness",
-        name="Color brightness",
+        translation_key="color_brightness",
         icon="mdi:brightness-7",
         native_min_value=1,
         native_max_value=100,

@@ -27,7 +27,7 @@ apply_preset:
 
 send_raw_command:
   name: Send raw command (Expert)
-  description: "Send a raw BLE command to the lamp. For reverse engineering and testing. Format: hex bytes separated by spaces (e.g., '3E 1E' for 30-min timer)"
+  description: "Send a raw BLE command to the lamp. For reverse engineering and testing. Format: hex bytes separated by spaces (e.g., '33 01 1E' for 30-min timer)"
   target:
     entity:
       integration: beurer_daylight_lamps
@@ -35,15 +35,15 @@ send_raw_command:
   fields:
     command:
       name: Command bytes
-      description: "Hex bytes to send (e.g., '3E 1E' for timer). Known: 30=status, 31=brightness, 32=color, 34=effect, 35=off, 37=mode, 3E=timer. Unknown: 33, 36, 38, 39"
+      description: "Hex bytes to send (e.g., '33 01 1E' for timer). Known: 00=permission, 01=time_sync, 02=settings_write, 12=settings_read, 30=status, 31=brightness, 32=color, 33=timer_value, 34=effect, 35=off, 36=timer_cancel, 37=mode, 38=timer_toggle"
       required: true
-      example: "3E 1E"
+      example: "33 01 1E"
       selector:
         text:
 
 set_timer:
   name: Set Timer
-  description: "Set an auto-off timer on the lamp. Timer only works in RGB mode - the lamp will automatically switch to RGB mode if needed. Range: 1-240 minutes."
+  description: "Set an auto-off timer on the lamp. Works in both White and RGB mode. Range: 1-120 minutes."
   target:
     entity:
       integration: beurer_daylight_lamps
@@ -51,12 +51,12 @@ set_timer:
   fields:
     minutes:
       name: Minutes
-      description: "Timer duration in minutes (1-240). Popular values: 15, 21, 30, 60 minutes for therapy sessions."
+      description: "Timer duration in minutes (1-120). Popular values: 15, 21, 30, 60 minutes for therapy sessions."
       required: true
       selector:
         number:
           min: 1
-          max: 240
+          max: 120
           step: 1
           unit_of_measurement: "min"
           mode: slider

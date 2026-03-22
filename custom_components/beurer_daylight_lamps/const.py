@@ -5,15 +5,20 @@ import logging
 from typing import Final
 
 DOMAIN: Final = "beurer_daylight_lamps"
-VERSION: Final = "1.27.0"
+VERSION: Final = "1.29.0"
 LOGGER = logging.getLogger(__package__)
 
 # BLE Characteristic UUIDs
 WRITE_CHARACTERISTIC_UUID: Final = "8b00ace7-eb0b-49b0-bbe9-9aee0a26e1a3"
 READ_CHARACTERISTIC_UUID: Final = "0734594a-a8e7-4b1a-a6b1-cd5243059a57"
 
-# BLE Protocol Commands
+# BLE Protocol Commands (from APK reverse engineering)
 # These are the first byte of the command payload
+CMD_DEVICE_PERMISSION: Final = 0x00  # Request device control permission
+CMD_TIME_SYNC: Final = 0x01         # Sync time to device
+CMD_SETTINGS_WRITE: Final = 0x02    # Write device settings
+CMD_SETTINGS_READ: Final = 0x12     # Read device settings
+
 CMD_STATUS: Final = 0x30      # Request current status
 CMD_BRIGHTNESS: Final = 0x31  # Set brightness (0-100%)
 CMD_COLOR: Final = 0x32       # Set RGB color
@@ -23,6 +28,14 @@ CMD_MODE: Final = 0x37        # Set mode (white/rgb)
 CMD_TIMER_VALUE: Final = 0x33   # Set timer duration: 0x33 MODE MINUTES (slider)
 CMD_TIMER_CANCEL: Final = 0x36  # Cancel timer: 0x36 MODE
 CMD_TIMER_TOGGLE: Final = 0x38  # Toggle timer on/off: 0x38 MODE
+
+# BLE Protocol Response Command Bytes (byte 7 of notification)
+RESP_DEVICE_PERMISSION: Final = 0xF0     # Response to CMD_DEVICE_PERMISSION
+RESP_STATUS: Final = 0xD0               # Status response
+RESP_SETTINGS_FROM_DEVICE: Final = 0xE2  # Settings read response
+RESP_SETTINGS_SYNC: Final = 0xF2        # Settings write confirmation
+RESP_LIGHT_TIMER_END: Final = 0xEB      # Light timer expired
+RESP_MOONLIGHT_TIMER_END: Final = 0xEC  # Moonlight timer expired
 
 # Mode identifiers (second byte after CMD_MODE, CMD_BRIGHTNESS, CMD_OFF, CMD_STATUS)
 MODE_WHITE: Final = 0x01

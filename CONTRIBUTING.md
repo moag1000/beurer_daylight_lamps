@@ -73,7 +73,7 @@ pytest tests/ -v
 
 ## Testing with a Real Device
 
-If you have a Beurer daylight lamp (TL50, TL70, TL80, TL90, TL100):
+If you have a Beurer daylight lamp (TL50, TL70, TL80, TL90, TL100, WL90):
 
 1. Enable debug logging in Home Assistant:
    ```yaml
@@ -98,9 +98,44 @@ If you have a Beurer daylight lamp (TL50, TL70, TL80, TL90, TL100):
 
 ## Reverse Engineering New Features
 
-There are two main approaches to reverse engineering BLE commands:
-1. **In-app testing** with Home Assistant's diagnostic sensors and raw command service
-2. **Android BLE sniffing** to capture traffic from the official Beurer app
+There are three approaches to reverse engineering BLE commands:
+0. **APK decompilation** to discover all possible commands from the official app source
+1. **Android BLE sniffing** to capture actual traffic from the official Beurer app
+2. **In-app testing** with Home Assistant's diagnostic sensors and raw command service
+
+### Method 0: APK Reverse Engineering (Most Complete)
+
+Decompile the official Beurer LightUp APK to discover ALL possible commands, including ones not easily triggered via the app UI.
+
+#### Step 1: Get the APK
+
+Download the Beurer LightUp APK from APKPure, APKMirror, or extract from your phone:
+```bash
+adb shell pm list packages | grep beurer
+adb shell pm path com.beurer.connect.lightup
+adb pull /data/app/.../base.apk beurer_lightup.apk
+```
+
+#### Step 2: Decompile with jadx
+
+```bash
+jadx beurer_lightup.apk -d decompiled/
+```
+
+#### Step 3: Search for BLE Commands
+
+```bash
+# Find command byte definitions
+grep -r "0x30\|0x31\|0x32\|0x33\|0x34\|0x35\|0x36\|0x37\|0x38" decompiled/ --include="*.java"
+
+# Find characteristic UUIDs
+grep -r "8b00ace7\|0734594a" decompiled/ --include="*.java"
+
+# Find command construction methods
+grep -r "sendCommand\|writeCharacteristic\|bleWrite" decompiled/ --include="*.java"
+```
+
+This is how commands 0x00 (permission), 0x01 (time sync), 0x02/0x12 (settings), and all response types (0xF0, 0xE2, 0xF2, 0xEB, 0xEC) were discovered.
 
 ### Method 1: Android BLE Sniffing (Recommended for Discovery)
 
@@ -187,12 +222,15 @@ data:
 
 | Cmd | Status | Notes |
 |-----|--------|-------|
-| `0x3E` | **Discovered** | Timer (1-240 min, RGB mode only) |
-| `0x33` | Unknown | Possibly unused |
-| `0x36` | Unknown | Suspected Sunrise/Sunset |
-| `0x38` | Unknown | Need investigation |
+| `0x00` | **Discovered** | Device permission (response must be 2) |
+| `0x01` | **Discovered** | Time sync (sec/min/hour/weekday/day/month/year) |
+| `0x02` | **Discovered** | Settings write (display/date/time/feedback/fade) |
+| `0x12` | **Discovered** | Settings read |
+| `0x33` | **Discovered** | Timer value (mode, minutes 1-120) |
+| `0x36` | **Discovered** | Timer cancel (mode) |
+| `0x38` | **Discovered** | Timer toggle on (mode) |
 | `0x39` | Unknown | Need investigation |
-| `0x3F` | Unknown | Possibly timer cancel |
+| `0x3F` | Unknown | Need investigation |
 
 ### Example: Reverse Engineering the Timer
 

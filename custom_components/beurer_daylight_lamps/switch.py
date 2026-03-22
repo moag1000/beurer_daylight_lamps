@@ -1,9 +1,10 @@
-"""Switch platform for Beurer Daylight Lamps - Adaptive Lighting Control."""
+"""Switch platform for Beurer Daylight Lamps - Adaptive Lighting & Device Settings."""
 from __future__ import annotations
 
 from typing import Any
 
 from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import (
     CONNECTION_BLUETOOTH,
@@ -27,6 +28,21 @@ SWITCH_DESCRIPTIONS = [
     ),
 ]
 
+DEVICE_SWITCH_DESCRIPTIONS: tuple[SwitchEntityDescription, ...] = (
+    SwitchEntityDescription(
+        key="feedback_sound",
+        translation_key="feedback_sound",
+        icon="mdi:volume-high",
+        entity_category=EntityCategory.CONFIG,
+    ),
+    SwitchEntityDescription(
+        key="fade",
+        translation_key="fade",
+        icon="mdi:transition-masked",
+        entity_category=EntityCategory.CONFIG,
+    ),
+)
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -38,10 +54,16 @@ async def async_setup_entry(
     coordinator = entry.runtime_data.coordinator
     name = entry.data.get("name", "Beurer Lamp")
 
-    entities = [
+    entities: list[SwitchEntity] = [
         BeurerAdaptiveLightingSwitch(coordinator, name, entry.entry_id, desc)
         for desc in SWITCH_DESCRIPTIONS
     ]
+
+    # Add device setting switches (feedback sound, fade)
+    entities.extend(
+        BeurerDeviceSwitch(coordinator, name, desc)
+        for desc in DEVICE_SWITCH_DESCRIPTIONS
+    )
 
     async_add_entities(entities)
 
@@ -165,3 +187,69 @@ class BeurerAdaptiveLightingSwitch(
             return True
 
         return False
+
+
+class BeurerDeviceSwitch(
+    CoordinatorEntity[BeurerDataUpdateCoordinator], SwitchEntity
+):
+    """Switch for hardware device settings (feedback sound, fade).
+
+    These control actual device settings via BLE commands,
+    unlike the adaptive lighting switch which is software-only.
+    """
+
+    _attr_has_entity_name: bool = True
+
+    def __init__(
+        self,
+        coordinator: BeurerDataUpdateCoordinator,
+        name: str,
+        description: SwitchEntityDescription,
+    ) -> None:
+        """Initialize the device switch."""
+        super().__init__(coordinator)
+        self._instance = coordinator.instance
+        self._device_name = name
+        self.entity_description = description
+        self._attr_unique_id = f"{format_mac(self._instance.mac)}_{description.key}"
+
+    @property
+    def available(self) -> bool:
+        """Return True if entity is available."""
+        return self._instance.available
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return True if the device setting is enabled."""
+        if self.entity_description.key == "feedback_sound":
+            return self._instance.feedback_enabled
+        if self.entity_description.key == "fade":
+            return self._instance.fade_enabled
+        return None
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device info for device registry."""
+        mac = format_mac(self._instance.mac)
+        return DeviceInfo(
+            identifiers={(DOMAIN, mac)},
+            name=self._device_name,
+            manufacturer="Beurer",
+            model=detect_model(self._device_name),
+            sw_version=VERSION,
+            connections={(CONNECTION_BLUETOOTH, mac)},
+        )
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Enable the device setting."""
+        if self.entity_description.key == "feedback_sound":
+            await self._instance.set_feedback(True)
+        elif self.entity_description.key == "fade":
+            await self._instance.set_fade(True)
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Disable the device setting."""
+        if self.entity_description.key == "feedback_sound":
+            await self._instance.set_feedback(False)
+        elif self.entity_description.key == "fade":
+            await self._instance.set_fade(False)

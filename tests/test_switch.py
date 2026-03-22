@@ -34,6 +34,9 @@ class TestSwitchDescriptions:
 
     def test_number_of_descriptions(self) -> None:
         """Test correct number of switch descriptions."""
+        # SWITCH_DESCRIPTIONS only contains adaptive_lighting (1)
+        # DEVICE_SWITCH_DESCRIPTIONS contains feedback_sound and fade (2)
+        # Total entities created by async_setup_entry = 3
         assert len(SWITCH_DESCRIPTIONS) == 1
 
 
@@ -447,8 +450,8 @@ class TestAsyncSetupEntry:
 
         await async_setup_entry(mock_hass, mock_entry, capture_entities)
 
-        # Should create 1 entity for adaptive lighting
-        assert len(added_entities) == 1
+        # Should create 3 entities: adaptive_lighting + feedback_sound + fade
+        assert len(added_entities) == 3
         assert isinstance(added_entities[0], BeurerAdaptiveLightingSwitch)
 
     @pytest.mark.asyncio

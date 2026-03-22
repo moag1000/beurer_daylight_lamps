@@ -47,6 +47,7 @@ from .const import (
     SUPPORTED_EFFECTS,
     WRITE_CHARACTERISTIC_UUID,
     # Protocol commands
+    CMD_DEVICE_PERMISSION,
     CMD_STATUS,
     CMD_BRIGHTNESS,
     CMD_COLOR,
@@ -56,6 +57,16 @@ from .const import (
     CMD_TIMER_VALUE,
     CMD_TIMER_TOGGLE,
     CMD_TIMER_CANCEL,
+    # APK-discovered commands
+    CMD_TIME_SYNC,
+    CMD_SETTINGS_WRITE,
+    CMD_SETTINGS_READ,
+    # Response command bytes
+    RESP_DEVICE_PERMISSION,
+    RESP_LIGHT_TIMER_END,
+    RESP_MOONLIGHT_TIMER_END,
+    RESP_SETTINGS_FROM_DEVICE,
+    RESP_SETTINGS_SYNC,
     # Timing constants
     COMMAND_DELAY,
     MODE_CHANGE_DELAY,
@@ -128,6 +139,16 @@ class BeurerInstance:
         # Timer state tracking (discovered via reverse engineering)
         self._timer_active: bool = False
         self._timer_minutes: int | None = None
+
+        # Device control permission (from APK: CMD 0x00, response must be 2)
+        self._device_permission_granted: bool = False
+
+        # Device settings (discovered from APK reverse engineering)
+        self._feedback_enabled: bool | None = None  # Device beep/sound on button press
+        self._fade_enabled: bool | None = None      # Smooth brightness transitions
+        self._display_setting: int = 0    # Display mode (stored for settings write-back)
+        self._date_format: int = 0        # Date format (stored for settings write-back)
+        self._time_format: int = 0        # Time format (stored for settings write-back)
 
         # Reconnection state - using asyncio.Lock for thread-safety
         self._reconnect_lock: asyncio.Lock = asyncio.Lock()
@@ -405,6 +426,17 @@ class BeurerInstance:
     def timer_minutes(self) -> int | None:
         """Return remaining timer minutes if active."""
         return self._timer_minutes if self._timer_active else None
+
+    # Device settings properties (from APK reverse engineering)
+    @property
+    def feedback_enabled(self) -> bool | None:
+        """Return True if device feedback sound is enabled, None if unknown."""
+        return self._feedback_enabled
+
+    @property
+    def fade_enabled(self) -> bool | None:
+        """Return True if smooth fade transitions are enabled, None if unknown."""
+        return self._fade_enabled
 
     # Therapy tracking properties
     @property
@@ -1029,6 +1061,100 @@ class BeurerInstance:
         await asyncio.sleep(COMMAND_DELAY)
         await self._request_status()
 
+    async def sync_time(self) -> bool:
+        """Sync current time from Home Assistant to the device.
+
+        Sends the current date/time so the device clock stays accurate.
+        Format: CMD_TIME_SYNC SEC MIN HOUR WEEKDAY DAY MONTH YEAR(offset from 2000)
+
+        Returns:
+            True if time sync command was sent successfully.
+        """
+        import datetime
+
+        now = datetime.datetime.now()
+        LOGGER.info("Syncing time to %s: %s", self._mac, now.strftime("%Y-%m-%d %H:%M:%S"))
+
+        result = await self._send_packet([
+            CMD_TIME_SYNC,
+            now.second,
+            now.minute,
+            now.hour,
+            now.isoweekday(),  # 1=Monday, 7=Sunday
+            now.day,
+            now.month,
+            now.year - 2000,
+        ])
+        if result:
+            await asyncio.sleep(COMMAND_DELAY)
+        return result
+
+    async def query_settings(self) -> bool:
+        """Query device settings (feedback, fade, display, date/time format).
+
+        Response will be handled by _handle_settings_notification.
+
+        Returns:
+            True if settings query was sent successfully.
+        """
+        LOGGER.debug("Querying settings from %s", self._mac)
+        result = await self._send_packet([CMD_SETTINGS_READ])
+        if result:
+            await asyncio.sleep(COMMAND_DELAY)
+        return result
+
+    async def set_feedback(self, enabled: bool) -> bool:
+        """Set device feedback sound (beep on button press).
+
+        Args:
+            enabled: True to enable feedback sound, False to disable.
+
+        Returns:
+            True if settings command was sent successfully.
+        """
+        LOGGER.info("Setting feedback sound to %s on %s", enabled, self._mac)
+        # APK inverts the value: 0 = enabled, 1 = disabled
+        feedback_value = 0 if enabled else 1
+        result = await self._send_packet([
+            CMD_SETTINGS_WRITE,
+            self._display_setting,
+            self._date_format,
+            self._time_format,
+            feedback_value,
+            0 if (self._fade_enabled or self._fade_enabled is None) else 1,
+        ])
+        if result:
+            self._feedback_enabled = enabled
+            await asyncio.sleep(COMMAND_DELAY)
+            await self._trigger_update()
+        return result
+
+    async def set_fade(self, enabled: bool) -> bool:
+        """Set smooth fade transitions.
+
+        Args:
+            enabled: True to enable fade transitions, False to disable.
+
+        Returns:
+            True if settings command was sent successfully.
+        """
+        LOGGER.info("Setting fade to %s on %s", enabled, self._mac)
+        # APK inverts the value: 0 = enabled, 1 = disabled
+        fade_value = 0 if enabled else 1
+        result = await self._send_packet([
+            CMD_SETTINGS_WRITE,
+            self._display_setting,
+            self._date_format,
+            self._time_format,
+            0 if (self._feedback_enabled or self._feedback_enabled is None) else 1,
+            fade_value,
+        ])
+        if result:
+            self._fade_enabled = enabled
+            await asyncio.sleep(COMMAND_DELAY)
+            await self._trigger_update()
+        return result
+
     async def set_white(
         self, intensity: int | float | None, _from_turn_on: bool = False
     ) -> None:
@@ -1259,6 +1385,51 @@ class BeurerInstance:
             LOGGER.debug("Short notification (%d bytes), ignoring", len(data))
             return
 
+        # Check response command byte (data[7]) for special response types
+        # that may have short payloads but are NOT heartbeats
+        if len(data) > 7:
+            resp_cmd = data[7]
+
+            # Timer end notifications (from APK: 0xEB=light, 0xEC=moonlight)
+            # These have short payloads but carry meaningful state changes
+            if resp_cmd in (RESP_LIGHT_TIMER_END, RESP_MOONLIGHT_TIMER_END):
+                timer_type = "light" if resp_cmd == RESP_LIGHT_TIMER_END else "moonlight"
+                result = data[8] if len(data) > 8 else 0
+                LOGGER.info(
+                    "Timer end notification from %s: type=%s, result=%d (1=off, 2=cancelled)",
+                    self._mac, timer_type, result,
+                )
+                self._timer_active = False
+                self._timer_minutes = None
+                self._last_seen = time.time()
+                if result == 1:
+                    # Timer expired - light turned off
+                    self._light_on = False
+                    self._color_on = False
+                await self._trigger_update()
+                return
+
+            # Device permission response (from APK: 0xF0)
+            if resp_cmd == RESP_DEVICE_PERMISSION:
+                permission_value = data[8] if len(data) > 8 else 0
+                self._device_permission_granted = permission_value == 2
+                if self._device_permission_granted:
+                    LOGGER.debug("Device permission granted on %s", self._mac)
+                else:
+                    LOGGER.warning(
+                        "Device permission DENIED on %s (value=%d). "
+                        "Another device may be controlling the lamp.",
+                        self._mac, permission_value,
+                    )
+                self._last_seen = time.time()
+                return
+
+            # Settings responses (from APK: 0xE2=read, 0xF2=write confirm)
+            # Must be caught before version-based routing to avoid misinterpretation
+            if resp_cmd in (RESP_SETTINGS_FROM_DEVICE, RESP_SETTINGS_SYNC):
+                self._handle_settings_notification(data)
+                return
+
         # Check payload length (byte 6) to determine packet type
         # Full status packets have payload_len >= 0x08
         # Short ACK/heartbeat packets have payload_len 0x04 and should be ignored
@@ -1305,10 +1476,21 @@ class BeurerInstance:
             if self._light_on:
                 self._mode = ColorMode.WHITE
 
+            # Parse timer state from notification (APK: data[11]=enabled, data[12]=minutes)
+            if len(data) > 12:
+                new_timer_active = data[11] == 1
+                new_timer_minutes = data[12] if new_timer_active else None
+                if self._timer_active != new_timer_active or self._timer_minutes != new_timer_minutes:
+                    self._timer_active = new_timer_active
+                    self._timer_minutes = new_timer_minutes
+                    trigger_update = True
+
             LOGGER.debug(
-                "White status: on=%s, brightness=%s",
+                "White status: on=%s, brightness=%s, timer=%s/%s",
                 self._light_on,
                 self._brightness,
+                self._timer_active,
+                self._timer_minutes,
             )
 
         elif version == 2:  # RGB mode status
@@ -1339,12 +1521,23 @@ class BeurerInstance:
             if self._color_on:
                 self._mode = ColorMode.RGB
 
+            # Parse timer state from notification (APK: data[11]=enabled, data[12]=minutes)
+            if len(data) > 12:
+                new_timer_active = data[11] == 1
+                new_timer_minutes = data[12] if new_timer_active else None
+                if self._timer_active != new_timer_active or self._timer_minutes != new_timer_minutes:
+                    self._timer_active = new_timer_active
+                    self._timer_minutes = new_timer_minutes
+                    trigger_update = True
+
             LOGGER.debug(
-                "RGB status: on=%s, brightness=%s, rgb=%s, effect=%s",
+                "RGB status: on=%s, brightness=%s, rgb=%s, effect=%s, timer=%s/%s",
                 self._color_on,
                 self._color_brightness,
                 self._rgb_color,
                 self._effect,
+                self._timer_active,
+                self._timer_minutes,
             )
 
             # Track therapy exposure based on current RGB state
@@ -1402,6 +1595,44 @@ class BeurerInstance:
 
         if trigger_update:
             await self._trigger_update()
+
+    def _handle_settings_notification(self, data: bytearray) -> None:
+        """Handle a settings response notification.
+
+        Settings response format (from APK reverse engineering):
+        - data[8]: display setting
+        - data[9]: date format
+        - data[10]: time format
+        - data[11]: feedback (inverted: 0=enabled, 1=disabled)
+        - data[12]: fade (inverted: 0=enabled, 1=disabled)
+
+        Args:
+            data: Raw notification bytes
+        """
+        if len(data) < 13:
+            LOGGER.debug("Settings notification too short (%d bytes)", len(data))
+            return
+
+        self._display_setting = data[8]
+        self._date_format = data[9]
+        self._time_format = data[10]
+        # APK inverts feedback/fade: 0 means ON, 1 means OFF
+        self._feedback_enabled = data[11] == 0
+        self._fade_enabled = data[12] == 0
+
+        LOGGER.info(
+            "Settings from %s: display=%d, date_fmt=%d, time_fmt=%d, "
+            "feedback=%s, fade=%s",
+            self._mac,
+            self._display_setting,
+            self._date_format,
+            self._time_format,
+            self._feedback_enabled,
+            self._fade_enabled,
+        )
+
+        self._last_seen = time.time()
+        self._safe_create_task(self._trigger_update(), "beurer_settings_update")
 
     def _is_gatt_capable_source(self, source: str) -> bool:
         """Check if a Bluetooth source is capable of GATT connections.
@@ -1739,8 +1970,22 @@ class BeurerInstance:
                 await self._client.start_notify(self._read_uuid, self._handle_notification)
                 LOGGER.debug("Notifications started for %s", self._mac)
 
+            # Check device permission first (APK always sends CMD 0x00 before anything else)
+            # Response must be 2 to allow control; otherwise another device may hold the lock
+            await self._send_packet([CMD_DEVICE_PERMISSION])
+            await asyncio.sleep(STATUS_DELAY)
+
             # Get initial status
             await self._request_status()
+
+            # Sync time on every connect (APK does this too - prevents clock drift)
+            await asyncio.sleep(STATUS_DELAY)
+            await self.sync_time()
+
+            # Query device settings (feedback, fade, etc.) on first connect
+            if self._feedback_enabled is None:
+                await asyncio.sleep(STATUS_DELAY)
+                await self._send_packet([CMD_SETTINGS_READ])
 
             # Mark as available - we have a working connection
             # (Don't wait for notification response, connection itself proves device is there)

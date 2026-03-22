@@ -18,7 +18,7 @@ from .coordinator import BeurerDataUpdateCoordinator
 SELECT_DESCRIPTIONS: tuple[SelectEntityDescription, ...] = (
     SelectEntityDescription(
         key="effect",
-        name="Effect",
+        translation_key="effect",
         icon="mdi:palette",
     ),
 )

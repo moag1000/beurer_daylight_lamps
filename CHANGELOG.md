@@ -5,6 +5,65 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.29.0] - 2026-03-22
+
+### Added
+
+- **Device Permission Check**: Connection sequence now sends `CMD 0x00` (device permission) before any other command, matching APK behavior. Logs a warning if another device holds the control lock.
+
+- **Time Sync**: New "Sync time" button entity syncs Home Assistant's clock to the device on every connect (prevents clock drift). Can also be triggered manually.
+
+- **Device Settings**: New switch entities for hardware settings discovered from APK reverse engineering:
+  - **Feedback Sound** switch - Enable/disable device beep on button press
+  - **Fade** switch - Enable/disable smooth brightness transitions
+  - Settings are queried on first connect and persisted on the device
+
+- **Timer State Parsing**: Status notifications now parse timer state from bytes 11-12 (timer active flag and remaining minutes). Previously timer state was only tracked locally.
+
+- **Timer End Notifications**: The integration now handles `RESP 0xEB` (light timer end) and `RESP 0xEC` (moonlight timer end) notifications, properly updating state when timers expire.
+
+- **Settings Response Handling**: New `_handle_settings_notification()` method processes settings responses (`RESP 0xE2` for read, `RESP 0xF2` for write confirmation).
+
+### Fixed
+
+- **Timer range**: Fixed timer_invalid_range error message from "240" to "120" minutes
+- **Timer service**: Fixed set_timer service description and max value from 240 to 120 minutes
+- **Sunset service strings**: Fixed sunset service field name from "profile" to "end_brightness" in strings.json to match services.yaml
+- **Entity names**: Switched white_brightness, color_brightness, and effect entity descriptions from `name` to `translation_key` for proper i18n support
+- **Raw command description**: Updated known commands list in send_raw_command service
+
+### Technical Details
+
+New constants in `const.py`:
+- `CMD_DEVICE_PERMISSION = 0x00` - Request device control permission
+- `CMD_TIME_SYNC = 0x01` - Sync time to device
+- `CMD_SETTINGS_WRITE = 0x02` - Write device settings
+- `CMD_SETTINGS_READ = 0x12` - Read device settings
+- `RESP_DEVICE_PERMISSION = 0xF0` - Permission response
+- `RESP_STATUS = 0xD0` - Status response
+- `RESP_SETTINGS_FROM_DEVICE = 0xE2` - Settings read response
+- `RESP_SETTINGS_SYNC = 0xF2` - Settings write confirmation
+- `RESP_LIGHT_TIMER_END = 0xEB` - Light timer expired
+- `RESP_MOONLIGHT_TIMER_END = 0xEC` - Moonlight timer expired
+
+New methods in `beurer_daylight_lamps.py`:
+- `sync_time()` - Sync HA time to device
+- `query_settings()` - Query device settings
+- `set_feedback(enabled)` - Set feedback sound
+- `set_fade(enabled)` - Set fade transitions
+- `_handle_settings_notification(data)` - Process settings responses
+
+New state variables:
+- `_device_permission_granted` - Whether device granted control permission
+- `_feedback_enabled` - Feedback sound state
+- `_fade_enabled` - Fade transition state
+- `_display_setting`, `_date_format`, `_time_format` - Settings write-back values
+
+New entities:
+- Button: "Sync time" (`sync_time`)
+- Switch: "Feedback sound" (`feedback_sound`) - EntityCategory.CONFIG
+- Switch: "Fade" (`fade`) - EntityCategory.CONFIG
+
 ## [1.27.0] - 2026-02-19
 
 ### Fixed

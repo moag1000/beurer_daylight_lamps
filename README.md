@@ -54,6 +54,7 @@ I heavily used claude as I did in other projects but focused on keeping it tight
 | **Light** | Beurer Lamp | Main light entity with all controls |
 | **Button** | Identify | Blinks lamp 3x to find it |
 | **Button** | Reconnect | Forces BLE reconnection |
+| **Button** | Sync time | Syncs HA clock to device |
 | **Select** | Effect | Dropdown for light effects |
 | **Number** | White brightness | Slider 0-100% |
 | **Number** | Color brightness | Slider 0-100% |
@@ -65,6 +66,8 @@ I heavily used claude as I did in other projects but focused on keeping it tight
 | **Sensor** | Daily goal progress | Percentage of daily goal completed |
 | **Binary Sensor** | Connected | BLE connection status |
 | **Binary Sensor** | Bluetooth reachable | Device seen by any adapter |
+| **Switch** | Feedback sound | Enable/disable device beep on button press |
+| **Switch** | Fade | Enable/disable smooth brightness transitions |
 | **Binary Sensor** | Daily goal reached | True when daily exposure goal is met |
 
 #### Entity Notes

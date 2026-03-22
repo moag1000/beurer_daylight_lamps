@@ -16,7 +16,7 @@
             "message": "Failed to set timer on {name}. Timer only works in RGB/color mode."
         },
         "timer_invalid_range": {
-            "message": "Timer must be between 1 and 240 minutes, got {minutes}."
+            "message": "Timer must be between 1 and 120 minutes, got {minutes}."
         },
         "device_unavailable": {
             "message": "Device {name} is not available. It may be out of Bluetooth range or powered off."
@@ -148,6 +148,9 @@
             },
             "reconnect": {
                 "name": "Reconnect"
+            },
+            "sync_time": {
+                "name": "Sync time"
             }
         },
         "select": {
@@ -209,6 +212,12 @@
         "switch": {
             "adaptive_lighting": {
                 "name": "Adaptive Lighting"
+            },
+            "feedback_sound": {
+                "name": "Feedback sound"
+            },
+            "fade": {
+                "name": "Fade"
             }
         }
     },
@@ -294,9 +303,9 @@
                     "name": "Duration",
                     "description": "Duration of the sunset simulation in minutes (1-60)"
                 },
-                "profile": {
-                    "name": "Profile",
-                    "description": "Sunset profile: natural, gentle, or quick"
+                "end_brightness": {
+                    "name": "End Brightness",
+                    "description": "Final brightness percentage (0 = turn off completely)"
                 }
             }
         },
