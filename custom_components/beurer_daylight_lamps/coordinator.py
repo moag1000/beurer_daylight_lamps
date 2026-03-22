@@ -139,7 +139,7 @@ class BeurerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         Returns:
             Dictionary containing all device state data
         """
-        data = {
+        data: dict[str, Any] = {
             # Power state
             "is_on": self.instance.is_on,
             "available": self.instance.available,

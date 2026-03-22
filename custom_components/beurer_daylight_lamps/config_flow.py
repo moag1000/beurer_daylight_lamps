@@ -395,6 +395,8 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
 
         LOGGER.debug("Getting device %s via HA Bluetooth stack...", self._mac)
 
+        if self._mac is None:
+            return False
         ble_device = bluetooth.async_ble_device_from_address(
             self.hass, self._mac, connectable=True
         )
@@ -431,6 +433,8 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
 
     def _handle_connection_timeout(self) -> None:
         """Log a detailed error message when connection test times out."""
+        if self._mac is None:
+            return
         has_connectable = bluetooth.async_ble_device_from_address(
             self.hass, self._mac, connectable=True
         ) is not None
@@ -474,6 +478,8 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
             if not self._ensure_instance_from_bluetooth():
                 return False
 
+            if self._instance is None:
+                return False
             adapter_name = (
                 getattr(self._ble_device, "name", "unknown")
                 if self._ble_device else "unknown"

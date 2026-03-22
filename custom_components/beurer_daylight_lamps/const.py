@@ -29,12 +29,6 @@ CMD_TIMER_VALUE: Final = 0x33   # Set timer duration: 0x33 MODE MINUTES (slider)
 CMD_TIMER_CANCEL: Final = 0x36  # Cancel timer: 0x36 MODE
 CMD_TIMER_TOGGLE: Final = 0x38  # Toggle timer on/off: 0x38 MODE
 
-# Commands discovered from APK reverse engineering (Beurer LightUp 2.1)
-CMD_DEVICE_PERMISSION: Final = 0x00  # Query device control permission (response must be 2)
-CMD_TIME_SYNC: Final = 0x01      # Sync time to device: 0x01 SEC MIN HOUR WEEKDAY DAY MONTH YEAR
-CMD_SETTINGS_WRITE: Final = 0x02 # Write settings: 0x02 DISPLAY DATE_FMT TIME_FMT FEEDBACK FADE
-CMD_SETTINGS_READ: Final = 0x12  # Query settings from device
-
 # Response command bytes (data[7] in notification packets)
 # Used to identify response type before version-based routing
 RESP_DEVICE_PERMISSION: Final = 0xF0    # Device permission response (value must be 2)
