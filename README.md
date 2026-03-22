@@ -22,6 +22,7 @@ I heavily used claude as I did in other projects but focused on keeping it tight
 | TL70  | ⚠️ Untested | Should work |
 | TL80  | ⚠️ Untested | Should work |
 | TL90  | ⚠️ Untested | Should work |
+| WL90  | ⚠️ Untested | Wake-up Light with Radio, Speaker, Alarms |
 
 ## Features
 
@@ -69,6 +70,18 @@ I heavily used claude as I did in other projects but focused on keeping it tight
 | **Switch** | Feedback sound | Enable/disable device beep on button press |
 | **Switch** | Fade | Enable/disable smooth brightness transitions |
 | **Binary Sensor** | Daily goal reached | True when daily exposure goal is met |
+| **Button** | Sync time | Sync HA clock to device |
+| **Switch** | Feedback sound | Device button beep on/off |
+| **Switch** | Fade transitions | Smooth brightness transitions on/off |
+
+#### WL90-Only Entities
+
+| Entity Type | Name | Description |
+|-------------|------|-------------|
+| **Media Player** | FM Radio | Radio with on/off, volume, seek, presets |
+| **Media Player** | Bluetooth Speaker | BT speaker with on/off, volume |
+| **Number** | Radio volume | Radio volume slider 0-10 |
+| **Number** | Speaker volume | Speaker volume slider 0-10 |
 
 #### Entity Notes
 
@@ -158,6 +171,28 @@ Stop any running sunrise or sunset simulation.
 service: beurer_daylight_lamps.stop_simulation
 target:
   entity_id: light.beurer_tl100
+```
+
+#### `beurer_daylight_lamps.set_alarm` (WL90 only)
+
+Configure one of 3 alarm slots with sunrise simulation.
+
+```yaml
+service: beurer_daylight_lamps.set_alarm
+target:
+  entity_id: light.beurer_wl90
+data:
+  slot: 0                    # Alarm slot 0, 1, or 2
+  enabled: true
+  hour: 7
+  minute: 30
+  days: "Mon,Tue,Wed,Thu,Fri"
+  tone: 2                    # 0=Buzzer, 1=Radio, 2-11=Melody 1-10
+  volume: 5
+  snooze: 10                 # 1, 2, 5, 10, 20, or 30 minutes
+  sunrise_enabled: true
+  sunrise_time: 20           # Start 20 min before alarm
+  sunrise_brightness: 50
 ```
 
 ## Installation

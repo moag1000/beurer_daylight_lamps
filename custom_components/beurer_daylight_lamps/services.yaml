@@ -35,7 +35,7 @@ send_raw_command:
   fields:
     command:
       name: Command bytes
-      description: "Hex bytes to send (e.g., '33 01 1E' for timer). Known: 00=permission, 01=time_sync, 02=settings_write, 12=settings_read, 30=status, 31=brightness, 32=color, 33=timer_value, 34=effect, 35=off, 36=timer_cancel, 37=mode, 38=timer_toggle"
+      description: "Hex bytes to send (e.g., '33 01 1E' for 30min timer). Known: 30=status, 31=brightness, 32=color, 33=timer_value, 34=effect, 35=off, 36=timer_cancel, 37=mode, 38=timer_toggle. Unknown: 39, 3E, 3F"
       required: true
       example: "33 01 1E"
       selector:
@@ -134,3 +134,142 @@ stop_simulation:
     entity:
       integration: beurer_daylight_lamps
       domain: light
+
+set_alarm:
+  name: Set Alarm (WL90)
+  description: "Configure an alarm on a WL90 Wake-up Light. Supports sunrise simulation, weekday selection, tone, and snooze. Only works with WL90 devices."
+  target:
+    entity:
+      integration: beurer_daylight_lamps
+      domain: light
+  fields:
+    slot:
+      name: Alarm slot
+      description: "Alarm slot number (0, 1, or 2). The WL90 has 3 independent alarm slots."
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 2
+          step: 1
+          mode: box
+    enabled:
+      name: Enabled
+      description: "Enable or disable this alarm"
+      required: true
+      selector:
+        boolean:
+    hour:
+      name: Hour
+      description: "Alarm hour (24-hour format)"
+      default: 7
+      selector:
+        number:
+          min: 0
+          max: 23
+          step: 1
+          mode: box
+    minute:
+      name: Minute
+      description: "Alarm minute"
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 59
+          step: 1
+          mode: box
+    days:
+      name: Days
+      description: "Comma-separated day names (e.g., Mon,Tue,Wed,Thu,Fri)"
+      default: "Mon,Tue,Wed,Thu,Fri"
+      selector:
+        text:
+    tone:
+      name: Tone
+      description: "Alarm tone"
+      default: 0
+      selector:
+        select:
+          options:
+            - label: "Buzzer"
+              value: "0"
+            - label: "Radio (WL90 only)"
+              value: "1"
+            - label: "Melody 1"
+              value: "2"
+            - label: "Melody 2"
+              value: "3"
+            - label: "Melody 3"
+              value: "4"
+            - label: "Melody 4"
+              value: "5"
+            - label: "Melody 5"
+              value: "6"
+            - label: "Melody 6"
+              value: "7"
+            - label: "Melody 7"
+              value: "8"
+            - label: "Melody 8"
+              value: "9"
+            - label: "Melody 9"
+              value: "10"
+            - label: "Melody 10"
+              value: "11"
+    volume:
+      name: Volume
+      description: "Alarm volume"
+      default: 5
+      selector:
+        number:
+          min: 0
+          max: 10
+          step: 1
+          mode: slider
+    snooze:
+      name: Snooze
+      description: "Snooze duration in minutes"
+      default: 10
+      selector:
+        select:
+          options:
+            - label: "1 minute"
+              value: "1"
+            - label: "2 minutes"
+              value: "2"
+            - label: "5 minutes"
+              value: "5"
+            - label: "10 minutes"
+              value: "10"
+            - label: "20 minutes"
+              value: "20"
+            - label: "30 minutes"
+              value: "30"
+    sunrise_enabled:
+      name: Sunrise simulation
+      description: "Enable sunrise light simulation before alarm"
+      default: true
+      selector:
+        boolean:
+    sunrise_time:
+      name: Sunrise start
+      description: "Minutes before alarm to start sunrise simulation"
+      default: 20
+      selector:
+        number:
+          min: 2
+          max: 60
+          step: 1
+          unit_of_measurement: "min"
+          mode: slider
+    sunrise_brightness:
+      name: Sunrise brightness
+      description: "Maximum sunrise brightness"
+      default: 50
+      selector:
+        number:
+          min: 1
+          max: 100
+          step: 5
+          unit_of_measurement: "%"
+          mode: slider

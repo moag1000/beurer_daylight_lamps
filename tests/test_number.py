@@ -289,6 +289,7 @@ class TestAsyncSetupEntry:
         """Create a mock BeurerInstance."""
         instance = MagicMock()
         instance.mac = "AA:BB:CC:DD:EE:FF"
+        instance.is_wl90 = False  # TL model by default (no WL90 entities)
         return instance
 
     @pytest.fixture
@@ -303,6 +304,7 @@ class TestAsyncSetupEntry:
 
         mock_runtime_data = MagicMock()
         mock_runtime_data.coordinator = mock_coordinator
+        mock_runtime_data.instance = mock_coordinator.instance
 
         mock_entry = MagicMock()
         mock_entry.runtime_data = mock_runtime_data
@@ -316,7 +318,8 @@ class TestAsyncSetupEntry:
 
         await async_setup_entry(mock_hass, mock_entry, capture_entities)
 
-        # Should create 4 entities: white_brightness, color_brightness, timer, therapy_goal
+        # Should create 4 entities for TL models: white_brightness, color_brightness, timer, therapy_goal
+        # (WL90 models would add 2 more: radio_volume, music_volume)
         assert len(added_entities) == 4
 
         # Verify types

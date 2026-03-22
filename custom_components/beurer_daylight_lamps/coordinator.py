@@ -140,7 +140,7 @@ class BeurerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         Returns:
             Dictionary containing all device state data
         """
-        return {
+        data = {
             # Power state
             "is_on": self.instance.is_on,
             "available": self.instance.available,
@@ -172,10 +172,38 @@ class BeurerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "command_success_rate": self.instance.command_success_rate,
             "connection_uptime": self.instance.connection_uptime_seconds,
             "total_commands": self.instance.total_commands,
-            # Device settings
+            # Device settings (from APK reverse engineering)
             "feedback_enabled": self.instance.feedback_enabled,
             "fade_enabled": self.instance.fade_enabled,
+            # WL90-specific data
+            "is_wl90": self.instance.is_wl90,
         }
+
+        # Add WL90 data if applicable
+        if self.instance.wl90:
+            wl90 = self.instance.wl90
+            data.update({
+                "radio_on": wl90.radio.is_on,
+                "radio_frequency": wl90.radio.frequency_mhz,
+                "radio_volume": wl90.radio.volume,
+                "radio_channel": wl90.radio.channel,
+                "radio_sleep_timer": wl90.radio.sleep_timer_on,
+                "music_on": wl90.music.is_on,
+                "music_volume": wl90.music.volume,
+                "music_sleep_timer": wl90.music.sleep_timer_on,
+                "alarms": [
+                    {
+                        "slot": a.slot,
+                        "enabled": a.enabled,
+                        "hour": a.hour,
+                        "minute": a.minute,
+                        "days": a.days_list,
+                    }
+                    for a in wl90.alarms
+                ],
+            })
+
+        return data
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from device (periodic refresh).

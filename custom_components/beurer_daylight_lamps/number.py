@@ -23,6 +23,26 @@ from . import BeurerConfigEntry
 from .const import DOMAIN, LOGGER, VERSION, detect_model
 from .coordinator import BeurerDataUpdateCoordinator
 
+# WL90-specific number descriptions
+WL90_NUMBER_DESCRIPTIONS: tuple[NumberEntityDescription, ...] = (
+    NumberEntityDescription(
+        key="radio_volume",
+        translation_key="radio_volume",
+        icon="mdi:volume-medium",
+        native_min_value=0,
+        native_max_value=10,
+        native_step=1,
+    ),
+    NumberEntityDescription(
+        key="music_volume",
+        translation_key="music_volume",
+        icon="mdi:speaker",
+        native_min_value=0,
+        native_max_value=10,
+        native_step=1,
+    ),
+)
+
 NUMBER_DESCRIPTIONS: tuple[NumberEntityDescription, ...] = (
     NumberEntityDescription(
         key="white_brightness",
@@ -62,6 +82,13 @@ async def async_setup_entry(
     entities.append(BeurerTimerNumber(coordinator, name))
     # Add therapy daily goal entity
     entities.append(BeurerTherapyGoalNumber(coordinator, name))
+    # Add WL90-specific volume controls
+    instance = entry.runtime_data.instance
+    if instance.is_wl90:
+        entities.extend([
+            BeurerWL90Number(coordinator, name, desc)
+            for desc in WL90_NUMBER_DESCRIPTIONS
+        ])
     async_add_entities(entities)
 
 
@@ -277,3 +304,68 @@ class BeurerTherapyGoalNumber(CoordinatorEntity[BeurerDataUpdateCoordinator], Nu
         minutes = int(value)
         LOGGER.debug("Setting therapy goal to %d minutes", minutes)
         self._instance.set_therapy_daily_goal(minutes)
+
+
+class BeurerWL90Number(CoordinatorEntity[BeurerDataUpdateCoordinator], NumberEntity):
+    """Number entity for WL90-specific volume controls.
+
+    Only created for WL90 devices. Provides direct volume sliders
+    for FM Radio and Bluetooth Speaker.
+    """
+
+    _attr_has_entity_name = True
+    _attr_mode = NumberMode.SLIDER
+
+    def __init__(
+        self,
+        coordinator: BeurerDataUpdateCoordinator,
+        device_name: str,
+        description: NumberEntityDescription,
+    ) -> None:
+        """Initialize the WL90 number."""
+        super().__init__(coordinator)
+        self._instance = coordinator.instance
+        self._device_name = device_name
+        self.entity_description = description
+        self._attr_unique_id = f"{format_mac(self._instance.mac)}_{description.key}"
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the current value."""
+        wl90 = self._instance.wl90
+        if not wl90:
+            return None
+        if self.entity_description.key == "radio_volume":
+            return wl90.radio.volume
+        elif self.entity_description.key == "music_volume":
+            return wl90.music.volume
+        return None
+
+    @property
+    def available(self) -> bool:
+        """Return True if entity is available."""
+        return self._instance.available
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device info."""
+        mac = format_mac(self._instance.mac)
+        return DeviceInfo(
+            identifiers={(DOMAIN, mac)},
+            name=self._device_name,
+            manufacturer="Beurer",
+            model=detect_model(self._device_name),
+            sw_version=VERSION,
+            connections={(CONNECTION_BLUETOOTH, mac)},
+        )
+
+    async def async_set_native_value(self, value: float) -> None:
+        """Set the volume value."""
+        vol = int(value)
+        wl90 = self._instance.wl90
+        if not wl90:
+            return
+        if self.entity_description.key == "radio_volume":
+            await wl90.set_radio_volume(vol)
+        elif self.entity_description.key == "music_volume":
+            await wl90.set_music_volume(vol)

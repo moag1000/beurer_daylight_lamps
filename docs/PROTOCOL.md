@@ -99,25 +99,79 @@ feef0c11abbb0cd0020115007821ff00006c550d
                   └─────────────────── Version: 0x02 = RGB mode
 ```
 
-## Common Commands (from APK Reverse Engineering)
+## Complete Command Reference (from APK Reverse Engineering)
 
-All commands discovered from decompiling the Beurer LightUp APK v2.1.
+All 28 commands discovered from the Beurer LightUp APK v2.1 (decompiled with jadx).
+
+### Common Commands (All Models)
 
 | Cmd | Name | Payload | Description |
 |-----|------|---------|-------------|
-| 0x00 | Device Permission | `[]` | Request control permission (response must be 2) |
-| 0x01 | Time Sync | `[sec, min, hour, weekday, day, month, year-2000]` | Sync clock to device |
+| 0x00 | Permission | `[]` | Query device control permission (response must be 2) |
+| 0x01 | Time Sync | `[sec, min, hour, weekday, day, month, year-2000]` | Sync clock |
 | 0x02 | Settings Write | `[display, date_fmt, time_fmt, feedback, fade]` | Write device settings |
+| 0x03 | Alarm Sync | `[slot, enabled, min, hour, days, tone, vol, snooze_idx, sun_en, sun_time, sun_bright]` | Set/query alarm |
 | 0x12 | Settings Read | `[]` | Query device settings |
 | 0x30 | Status | `[mode]` | Request status (mode: 0x01=white, 0x02=rgb) |
 | 0x31 | Brightness | `[mode, percent]` | Set brightness 0-100% |
 | 0x32 | Color | `[r, g, b]` | Set RGB color 0-255 |
-| 0x33 | Timer Value | `[mode, minutes]` | Set timer duration (1-120 min) |
-| 0x34 | Effect | `[index]` | Set effect 0-10 |
+| 0x33 | Timer Value | `[mode, minutes]` | Set timer duration (1-120 min TL, 1-60 min WL90) |
+| 0x34 | Effect | `[index]` | Set effect/scene 0-10 |
 | 0x35 | Off | `[mode]` | Turn off |
 | 0x36 | Timer Cancel | `[mode]` | Cancel/disable timer |
-| 0x37 | Mode | `[mode]` | Switch white/rgb mode |
-| 0x38 | Timer Toggle | `[mode]` | Toggle timer on (at current/default duration) |
+| 0x37 | Mode | `[mode]` | Switch white/rgb mode (on) |
+| 0x38 | Timer Toggle | `[mode]` | Toggle timer on |
+
+### WL90-Only Commands (Radio)
+
+| Cmd | Name | Payload | Description |
+|-----|------|---------|-------------|
+| 0x04 | Radio Info | `[direction]` | Query radio with presets |
+| 0x07 | Radio Status | `[]` | Query radio state |
+| 0x08 | Radio Power | `[0/1]` | Radio on/off |
+| 0x09 | Radio Preset | `[channel]` | Select preset (1-10, 1-based!) |
+| 0x0A | Radio Tune | `[type, direction]` | type: 0=fine, 1=seek; dir: 0=down, 1=up |
+| 0x0B | Radio Volume | `[volume]` | Set volume 0-10 |
+| 0x0C | Radio Timer Toggle | `[0/1]` | Sleep timer on/off |
+| 0x0D | Radio Timer Value | `[minutes]` | Sleep timer minutes (1-60) |
+| 0x0E | Radio Save Freq | `[]` | Save current frequency to preset |
+
+### WL90-Only Commands (Music/BT Speaker)
+
+| Cmd | Name | Payload | Description |
+|-----|------|---------|-------------|
+| 0x0F | Music Query | `[]` | Check A2DP connection |
+| 0x10 | Music Toggle | `[]` | Open BT speaker mode |
+| 0x14 | Music Volume | `[volume]` | Set volume 0-10 |
+| 0x15 | Music Timer Toggle | `[0/1]` | Sleep timer on/off |
+| 0x16 | Music Timer Value | `[minutes]` | Sleep timer minutes (1-60) |
+| 0x17 | Music Info | `[]` | Query volume, timer state |
+| 0x24 | Music Close | `[]` | Close A2DP connection |
+
+### Response Command Bytes (data[7])
+
+| Resp | Name | Description |
+|------|------|-------------|
+| 0xD0 | Status | Normal status query response |
+| 0xF0 | Permission | Device permission (data[8] must be 2) |
+| 0xF1 | Time Ack | Time sync acknowledged |
+| 0xF2 | Settings Ack | Settings write confirmed |
+| 0xE2 | Settings Data | Settings read response |
+| 0xF3 | Alarm Data | Alarm slot data |
+| 0xF4 | Radio Info | Radio with 10 preset frequencies |
+| 0xF7 | Radio Status | Radio state (on, channel, freq, volume, timer) |
+| 0xF8 | Radio Power Ack | Radio on/off confirmed |
+| 0xF9 | Radio Preset Ack | Preset selection confirmed |
+| 0xFA | Radio Tune Ack | Tune/seek result with new frequency |
+| 0xFE | Radio Save Ack | Frequency save confirmed |
+| 0xFF | Music Status | A2DP status (includes BT address if connected) |
+| 0xE0 | Music Toggle Ack | BT speaker toggle result |
+| 0xE5 | Music Timer Ack | Music timer toggle result |
+| 0xE7 | Music Info | Volume, timer state, timer minutes |
+| 0xEB | Light Timer End | Light timer expired (1=off, 2=cancelled) |
+| 0xEC | Moonlight Timer End | Moonlight timer expired |
+| 0xED | Radio Timer End | Radio sleep timer expired (WL90 only) |
+| 0xEE | Music Timer End | Music sleep timer expired (WL90 only) |
 
 **Mode byte**: `0x01` = White mode, `0x02` = RGB mode
 
@@ -252,12 +306,114 @@ data:
   command: "36 01"  # White mode, use "36 02" for RGB mode
 ```
 
+## Timer State in Notifications (APK Discovery)
+
+Status response packets (both White and RGB) include timer state:
+
+| Offset | Field | Values |
+|--------|-------|--------|
+| data[11] | Timer enabled | 0x00 = off, 0x01 = active |
+| data[12] | Timer minutes | Duration in minutes (1-120), 120 = default when inactive |
+
+### Timer End Notifications (Unsolicited)
+
+When a timer expires, the device sends a short notification:
+
+| data[7] | Name | data[8] Values |
+|---------|------|---------------|
+| 0xEB | Light timer end | 1 = light turned off, 2 = timer cancelled |
+| 0xEC | Moonlight timer end | 1 = light turned off, 2 = timer cancelled |
+
+## Time Sync Command (0x01) — APK Discovery
+
+Sync the current time from host to device:
+
+```
+Payload: [0x01, SECOND, MINUTE, HOUR, WEEKDAY, DAY, MONTH, YEAR]
+```
+
+| Byte | Description | Range |
+|------|-------------|-------|
+| SECOND | Current second | 0-59 |
+| MINUTE | Current minute | 0-59 |
+| HOUR | Current hour (24h) | 0-23 |
+| WEEKDAY | Day of week | 1=Mon, 7=Sun |
+| DAY | Day of month | 1-31 |
+| MONTH | Month | 1-12 |
+| YEAR | Year offset | year - 2000 (e.g., 26 for 2026) |
+
+## Device Settings Commands (0x02, 0x12) — APK Discovery
+
+### Query Settings (0x12)
+
+```
+Payload: [0x12]
+Response: data[7]=0xE2, data[8..12] = settings
+```
+
+### Write Settings (0x02)
+
+```
+Payload: [0x02, DISPLAY, DATE_FORMAT, TIME_FORMAT, FEEDBACK, FADE]
+Response: data[7]=0xF2 (confirmation)
+```
+
+| Byte | Field | Values |
+|------|-------|--------|
+| DISPLAY | Display mode | Device-specific |
+| DATE_FORMAT | Date format | Device-specific |
+| TIME_FORMAT | Time format | 0 or 1 (12h/24h) |
+| FEEDBACK | Button beep | 0 = enabled, 1 = disabled (inverted!) |
+| FADE | Smooth transitions | 0 = enabled, 1 = disabled (inverted!) |
+
+**Note:** Feedback and Fade values are inverted in the protocol: 0 means ON, 1 means OFF.
+
+## Device Permission Check (0x00) — APK Discovery
+
+The first command after connecting. The device must respond with value `2` to allow control.
+
+```
+Send:     [0x00]
+Response: data[7]=0xF0, data[8]=2 (permission granted)
+```
+
+If the response is not `2`, the device may be locked by another connection.
+
+## Device Model Differences (from APK)
+
+| Feature | WL90 | TL100 |
+|---------|------|-------|
+| Light (white/RGB) | Yes | Yes |
+| Moonlight scenes | Yes (0-10) | Yes (0-10) |
+| Light timer max | 60 min | 120 min |
+| Alarm (3 slots) | Yes | Yes |
+| FM Radio | Yes | No |
+| BT Speaker (A2DP) | Yes | No |
+| Settings menu | Yes | No |
+| BLE name prefix | `WL_90` / `WL90` | `TL100` |
+
+### Alarm Tones (12 options, index 0-11)
+
+| Index | Name | Notes |
+|-------|------|-------|
+| 0 | Buzzer | Default beep |
+| 1 | Radio | Uses FM radio (WL90 only) |
+| 2-11 | Melody 1-10 | Pre-loaded melodies |
+
+### Radio Tune Types
+
+Command `0x0A` takes two parameters: `[TYPE] [DIRECTION]`
+- TYPE=0: Fine tune (step by step)
+- TYPE=1: Auto-seek (find next station)
+- DIRECTION=0: Down, DIRECTION=1: Up
+
 ## Unknown Commands (To Reverse Engineer)
 
 | Cmd | Suspected Feature |
 |-----|-------------------|
-| 0x39 | Unknown |
-| 0x3F | Unknown |
+| 0x39 | Unknown (not in APK) |
+| 0x3E | Unknown (not in APK, possibly TL100-specific firmware) |
+| 0x3F | Unknown (not in APK, possibly TL100-specific firmware) |
 
 ## Notification Responses
 

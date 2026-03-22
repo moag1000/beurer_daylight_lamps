@@ -170,6 +170,20 @@
             },
             "therapy_goal": {
                 "name": "Daily light goal"
+            },
+            "radio_volume": {
+                "name": "Radio volume"
+            },
+            "music_volume": {
+                "name": "Speaker volume"
+            }
+        },
+        "media_player": {
+            "fm_radio": {
+                "name": "FM Radio"
+            },
+            "bt_speaker": {
+                "name": "Bluetooth Speaker"
             }
         },
         "sensor": {
@@ -217,7 +231,7 @@
                 "name": "Feedback sound"
             },
             "fade": {
-                "name": "Fade"
+                "name": "Fade transitions"
             }
         }
     },
@@ -304,7 +318,7 @@
                     "description": "Duration of the sunset simulation in minutes (1-60)"
                 },
                 "end_brightness": {
-                    "name": "End Brightness",
+                    "name": "End brightness",
                     "description": "Final brightness percentage (0 = turn off completely)"
                 }
             }
@@ -316,6 +330,60 @@
                 "device_id": {
                     "name": "Device",
                     "description": "The Beurer lamp device to control"
+                }
+            }
+        },
+        "set_alarm": {
+            "name": "Set Alarm (WL90)",
+            "description": "Configure an alarm on a WL90 Wake-up Light. Supports sunrise simulation, weekday selection, tone, and snooze.",
+            "fields": {
+                "device_id": {
+                    "name": "Device",
+                    "description": "The WL90 device to configure"
+                },
+                "slot": {
+                    "name": "Alarm slot",
+                    "description": "Alarm slot number (0, 1, or 2)"
+                },
+                "enabled": {
+                    "name": "Enabled",
+                    "description": "Enable or disable this alarm"
+                },
+                "hour": {
+                    "name": "Hour",
+                    "description": "Alarm hour (0-23)"
+                },
+                "minute": {
+                    "name": "Minute",
+                    "description": "Alarm minute (0-59)"
+                },
+                "days": {
+                    "name": "Days",
+                    "description": "Comma-separated day names (Mon,Tue,Wed,Thu,Fri,Sat,Sun)"
+                },
+                "tone": {
+                    "name": "Tone",
+                    "description": "Alarm tone index (0-10)"
+                },
+                "volume": {
+                    "name": "Volume",
+                    "description": "Alarm volume (0-10)"
+                },
+                "snooze": {
+                    "name": "Snooze",
+                    "description": "Snooze duration in minutes (0-30)"
+                },
+                "sunrise_enabled": {
+                    "name": "Sunrise simulation",
+                    "description": "Enable sunrise light simulation before alarm"
+                },
+                "sunrise_time": {
+                    "name": "Sunrise start",
+                    "description": "Minutes before alarm to start sunrise (5-60)"
+                },
+                "sunrise_brightness": {
+                    "name": "Sunrise brightness",
+                    "description": "Maximum sunrise brightness percentage (0-100)"
                 }
             }
         }

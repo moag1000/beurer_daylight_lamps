@@ -28,7 +28,8 @@ SWITCH_DESCRIPTIONS = [
     ),
 ]
 
-DEVICE_SWITCH_DESCRIPTIONS: tuple[SwitchEntityDescription, ...] = (
+# Device hardware switches (discovered from APK reverse engineering)
+DEVICE_SWITCH_DESCRIPTIONS = [
     SwitchEntityDescription(
         key="feedback_sound",
         translation_key="feedback_sound",
@@ -41,7 +42,7 @@ DEVICE_SWITCH_DESCRIPTIONS: tuple[SwitchEntityDescription, ...] = (
         icon="mdi:transition-masked",
         entity_category=EntityCategory.CONFIG,
     ),
-)
+]
 
 
 async def async_setup_entry(
@@ -58,12 +59,11 @@ async def async_setup_entry(
         BeurerAdaptiveLightingSwitch(coordinator, name, entry.entry_id, desc)
         for desc in SWITCH_DESCRIPTIONS
     ]
-
-    # Add device setting switches (feedback sound, fade)
-    entities.extend(
+    # Add device hardware switches (feedback sound, fade)
+    entities.extend([
         BeurerDeviceSwitch(coordinator, name, desc)
         for desc in DEVICE_SWITCH_DESCRIPTIONS
-    )
+    ])
 
     async_add_entities(entities)
 
@@ -192,10 +192,13 @@ class BeurerAdaptiveLightingSwitch(
 class BeurerDeviceSwitch(
     CoordinatorEntity[BeurerDataUpdateCoordinator], SwitchEntity
 ):
-    """Switch for hardware device settings (feedback sound, fade).
+    """Switch for device hardware settings (feedback sound, fade).
 
-    These control actual device settings via BLE commands,
-    unlike the adaptive lighting switch which is software-only.
+    These control actual device firmware settings discovered from
+    APK reverse engineering of the Beurer LightUp app.
+
+    - Feedback Sound: Beep/sound when pressing physical buttons
+    - Fade: Smooth brightness transitions instead of instant changes
     """
 
     _attr_has_entity_name: bool = True
@@ -223,7 +226,7 @@ class BeurerDeviceSwitch(
         """Return True if the device setting is enabled."""
         if self.entity_description.key == "feedback_sound":
             return self._instance.feedback_enabled
-        if self.entity_description.key == "fade":
+        elif self.entity_description.key == "fade":
             return self._instance.fade_enabled
         return None
 

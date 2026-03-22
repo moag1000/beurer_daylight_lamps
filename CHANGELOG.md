@@ -5,64 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.29.0] - 2026-03-22
+## [1.30.0] - 2026-03-22
 
 ### Added
 
-- **Device Permission Check**: Connection sequence now sends `CMD 0x00` (device permission) before any other command, matching APK behavior. Logs a warning if another device holds the control lock.
+- **WL90 Wake-up Light support**: Full support for the Beurer WL90, including auto-discovery via BLE (`WL_90*`/`WL90*` name prefixes)
+- **FM Radio** (WL90): Media player entity with on/off, volume (0-10), preset selection (1-10), auto-seek/fine-tune, sleep timer
+- **Bluetooth Speaker** (WL90): Media player entity with on/off, volume control, sleep timer
+- **Alarm service** (WL90): `set_alarm` service to configure 3 alarm slots with time, weekday selection, 12 alarm tones (Buzzer, Radio, Melody 1-10), snooze (1/2/5/10/20/30 min), and sunrise simulation
+- **Radio/Speaker volume**: Dedicated number slider entities for WL90 radio and speaker volume
+- **Device Permission Check**: Sends CMD 0x00 after connect (like the official app) to detect if another device holds the control lock
+- **Time sync on connect**: Automatically syncs Home Assistant time to the device clock on every connection (prevents clock drift for alarms/timers)
+- **Device settings**: Feedback sound (beep) and Fade transitions as switch entities, read from device via CMD 0x12
+- **Sync Time button**: Manual time sync button entity (EntityCategory.CONFIG)
+- **Timer state from notifications**: BLE status notifications now parsed for timer active/minutes (data[11]/data[12])
+- **Timer end notifications**: Device-initiated timer expiry (0xEB/0xEC light, 0xED/0xEE radio/music) properly handled instead of being ignored as heartbeats
+- **Settings response routing**: Settings notifications (0xE2/0xF2) correctly caught before version-based routing to prevent state corruption
 
-- **Time Sync**: New "Sync time" button entity syncs Home Assistant's clock to the device on every connect (prevents clock drift). Can also be triggered manually.
+### Changed
 
-- **Device Settings**: New switch entities for hardware settings discovered from APK reverse engineering:
-  - **Feedback Sound** switch - Enable/disable device beep on button press
-  - **Fade** switch - Enable/disable smooth brightness transitions
-  - Settings are queried on first connect and persisted on the device
-
-- **Timer State Parsing**: Status notifications now parse timer state from bytes 11-12 (timer active flag and remaining minutes). Previously timer state was only tracked locally.
-
-- **Timer End Notifications**: The integration now handles `RESP 0xEB` (light timer end) and `RESP 0xEC` (moonlight timer end) notifications, properly updating state when timers expire.
-
-- **Settings Response Handling**: New `_handle_settings_notification()` method processes settings responses (`RESP 0xE2` for read, `RESP 0xF2` for write confirmation).
+- **Protocol documentation**: PROTOCOL.md expanded with all 28 A2D commands and 19 D2A response types discovered from APK reverse engineering
+- **Connect sequence**: Now mirrors the official Beurer LightUp app exactly: Permission → Time sync → Status → Settings → [WL90: Alarms → Radio → Music]
+- **Entity naming**: Remaining hardcoded `name=` fields converted to `translation_key=` for internationalization
+- **Timer range**: services.yaml corrected from 240 to 120 minutes (protocol limit)
+- **Version**: Bumped to 1.30.0
 
 ### Fixed
 
-- **Timer range**: Fixed timer_invalid_range error message from "240" to "120" minutes
-- **Timer service**: Fixed set_timer service description and max value from 240 to 120 minutes
-- **Sunset service strings**: Fixed sunset service field name from "profile" to "end_brightness" in strings.json to match services.yaml
-- **Entity names**: Switched white_brightness, color_brightness, and effect entity descriptions from `name` to `translation_key` for proper i18n support
-- **Raw command description**: Updated known commands list in send_raw_command service
-
-### Technical Details
-
-New constants in `const.py`:
-- `CMD_DEVICE_PERMISSION = 0x00` - Request device control permission
-- `CMD_TIME_SYNC = 0x01` - Sync time to device
-- `CMD_SETTINGS_WRITE = 0x02` - Write device settings
-- `CMD_SETTINGS_READ = 0x12` - Read device settings
-- `RESP_DEVICE_PERMISSION = 0xF0` - Permission response
-- `RESP_STATUS = 0xD0` - Status response
-- `RESP_SETTINGS_FROM_DEVICE = 0xE2` - Settings read response
-- `RESP_SETTINGS_SYNC = 0xF2` - Settings write confirmation
-- `RESP_LIGHT_TIMER_END = 0xEB` - Light timer expired
-- `RESP_MOONLIGHT_TIMER_END = 0xEC` - Moonlight timer expired
-
-New methods in `beurer_daylight_lamps.py`:
-- `sync_time()` - Sync HA time to device
-- `query_settings()` - Query device settings
-- `set_feedback(enabled)` - Set feedback sound
-- `set_fade(enabled)` - Set fade transitions
-- `_handle_settings_notification(data)` - Process settings responses
-
-New state variables:
-- `_device_permission_granted` - Whether device granted control permission
-- `_feedback_enabled` - Feedback sound state
-- `_fade_enabled` - Fade transition state
-- `_display_setting`, `_date_format`, `_time_format` - Settings write-back values
-
-New entities:
-- Button: "Sync time" (`sync_time`)
-- Switch: "Feedback sound" (`feedback_sound`) - EntityCategory.CONFIG
-- Switch: "Fade" (`fade`) - EntityCategory.CONFIG
+- **Coordinator data unreachable**: WL90 data block was after a `return` statement (never executed)
+- **WL90 notification state corruption**: Radio confirmation responses (0xF8/0xF9/0xFA/0xFE) fell through to version-based routing, causing spurious light state changes
+- **Snooze byte encoding**: Protocol uses index (0-5) not minutes; added mapping table (1/2/5/10/20/30 min)
+- **Radio preset indexing**: Changed from 0-based to 1-based (1-10) per APK protocol
+- **Alarm tone range**: Corrected from 0-10 to 0-11 (12 tones: Buzzer, Radio, Melody 1-10)
+- **Sunrise time minimum**: Corrected from 5 to 2 minutes per APK
+- **Sunrise brightness minimum**: Corrected from 0 to 1 per APK
+- **Timer exception message**: Corrected "1-240" to "1-120"
+- **Sunset service translation**: Fixed wrong field name (`profile` → `end_brightness`) in strings.json
 
 ## [1.27.0] - 2026-02-19
 
