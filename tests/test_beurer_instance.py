@@ -1864,3 +1864,169 @@ class TestColorModeModeSwitching:
 
         assert instance._color_on is True
         assert instance._light_on is False
+
+
+class TestModeSwitchGuard:
+    """Tests for the mode-switch notification guard.
+
+    The guard (_mode_switch_target) selectively filters contradicting
+    notifications during mode transitions. When set to ColorMode.WHITE,
+    RGB notifications are discarded (and vice versa).
+    """
+
+    @pytest.fixture
+    def mock_device(self):
+        """Create a mock BLE device."""
+        device = MagicMock()
+        device.address = "AA:BB:CC:DD:EE:FF"
+        device.name = "TL100"
+        return device
+
+    def _make_notification(self, version: int, payload_len: int = 0x08) -> bytearray:
+        """Build a minimal BLE notification packet.
+
+        Args:
+            version: Notification version byte (1=white, 2=RGB, 255=off, 0=shutdown)
+            payload_len: Payload length byte (0x08 for white/off, 0x0C for RGB)
+        """
+        size = max(17, 11) if version == 2 else 11
+        data = bytearray([0x00] * size)
+        data[6] = payload_len
+        data[8] = version
+        if version == 1:
+            data[9] = 1   # on
+            data[10] = 50  # brightness 50%
+        elif version == 2:
+            data[6] = 0x0C  # RGB needs larger payload
+            data[9] = 1     # on
+            data[10] = 100  # brightness 100%
+            data[13] = 255  # R
+            data[14] = 128  # G
+            data[15] = 64   # B
+            data[16] = 0    # effect = Off
+        return data
+
+    @pytest.mark.asyncio
+    async def test_rgb_notification_ignored_during_white_switch(self, mock_device):
+        """Test RGB notification is filtered when switching to white mode."""
+        from custom_components.beurer_daylight_lamps.beurer_daylight_lamps import (
+            BeurerInstance,
+        )
+        from homeassistant.components.light import ColorMode
+
+        instance = BeurerInstance(mock_device)
+        instance._available = True
+        instance._color_on = True  # Currently in RGB
+        instance._mode_switch_target = ColorMode.WHITE  # Switching TO white
+        char = MagicMock()
+
+        # Send RGB notification (version=2) — should be filtered
+        data = self._make_notification(version=2)
+        await instance._handle_notification(char, data)
+
+        # RGB state should NOT have been updated (notification was discarded)
+        assert instance._rgb_color == (255, 255, 255)  # default, not (255,128,64)
+
+    @pytest.mark.asyncio
+    async def test_white_notification_ignored_during_rgb_switch(self, mock_device):
+        """Test white notification is filtered when switching to RGB mode."""
+        from custom_components.beurer_daylight_lamps.beurer_daylight_lamps import (
+            BeurerInstance,
+        )
+        from homeassistant.components.light import ColorMode
+
+        instance = BeurerInstance(mock_device)
+        instance._light_on = True
+        instance._brightness = 200
+        instance._mode_switch_target = ColorMode.RGB  # Switching TO RGB
+        char = MagicMock()
+
+        # Send white notification (version=1) — should be filtered
+        data = self._make_notification(version=1)
+        await instance._handle_notification(char, data)
+
+        # White state should NOT have changed
+        assert instance._brightness == 200  # unchanged
+
+    @pytest.mark.asyncio
+    async def test_no_guard_passes_all_notifications(self, mock_device):
+        """Test all notifications pass when no guard is active."""
+        from custom_components.beurer_daylight_lamps.beurer_daylight_lamps import (
+            BeurerInstance,
+        )
+
+        instance = BeurerInstance(mock_device)
+        assert instance._mode_switch_target is None
+        char = MagicMock()
+
+        # White notification passes
+        data = self._make_notification(version=1)
+        await instance._handle_notification(char, data)
+        assert instance._light_on is True
+
+        # RGB notification passes
+        data = self._make_notification(version=2)
+        await instance._handle_notification(char, data)
+        assert instance._color_on is True
+
+    @pytest.mark.asyncio
+    async def test_white_notification_allowed_when_guard_off(self, mock_device):
+        """Test white notification passes through when guard is not active."""
+        from custom_components.beurer_daylight_lamps.beurer_daylight_lamps import (
+            BeurerInstance,
+        )
+
+        instance = BeurerInstance(mock_device)
+        instance._mode_switch_target = None
+        char = MagicMock()
+
+        # Send white notification (version=1) — should pass through
+        data = self._make_notification(version=1)
+        await instance._handle_notification(char, data)
+
+        assert instance._light_on is True
+        assert instance._brightness == 127  # 50% of 255
+
+    @pytest.mark.asyncio
+    async def test_rgb_notification_allowed_when_guard_off(self, mock_device):
+        """Test RGB notification passes through when guard is not active."""
+        from custom_components.beurer_daylight_lamps.beurer_daylight_lamps import (
+            BeurerInstance,
+        )
+
+        instance = BeurerInstance(mock_device)
+        instance._mode_switch_target = None
+        char = MagicMock()
+
+        # Send RGB notification (version=2) — should pass through
+        data = self._make_notification(version=2)
+        await instance._handle_notification(char, data)
+
+        assert instance._color_on is True
+        assert instance._rgb_color == (255, 128, 64)
+        assert instance._color_brightness == 255  # 100% of 255
+
+    @pytest.mark.asyncio
+    async def test_device_off_not_filtered(self, mock_device):
+        """Test device-off (version=255) is not filtered by guard.
+
+        Note: With _mode_switch_target=True, device off notifications
+        ARE filtered (all notifications blocked). This test verifies that
+        when guard is off, device off notifications pass through correctly.
+        """
+        from custom_components.beurer_daylight_lamps.beurer_daylight_lamps import (
+            BeurerInstance,
+        )
+
+        instance = BeurerInstance(mock_device)
+        instance._available = True
+        instance._light_on = True
+        instance._color_on = True
+        instance._mode_switch_target = None
+        char = MagicMock()
+
+        data = self._make_notification(version=255)
+        await instance._handle_notification(char, data)
+
+        assert instance._light_on is False
+        assert instance._color_on is False

@@ -34,6 +34,9 @@ class TestSwitchDescriptions:
 
     def test_number_of_descriptions(self) -> None:
         """Test correct number of switch descriptions."""
+        # SWITCH_DESCRIPTIONS only contains adaptive_lighting (1)
+        # DEVICE_SWITCH_DESCRIPTIONS contains feedback_sound and fade (2)
+        # Total entities created by async_setup_entry = 3
         assert len(SWITCH_DESCRIPTIONS) == 1
 
 

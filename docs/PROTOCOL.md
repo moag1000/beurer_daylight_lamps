@@ -175,6 +175,69 @@ All 28 commands discovered from the Beurer LightUp APK v2.1 (decompiled with jad
 
 **Mode byte**: `0x01` = White mode, `0x02` = RGB mode
 
+## Device Permission (CMD 0x00)
+
+The APK always sends `CMD 0x00` before any other command. The device responds with `RESP 0xF0`:
+
+| Response Value (data[8]) | Meaning |
+|--------------------------|---------|
+| 2 | Permission granted - full control |
+| Other | Permission denied - another device may be connected |
+
+## Time Sync (CMD 0x01)
+
+Syncs the current date/time to the device clock. The APK sends this on every connect.
+
+```
+Payload: [SEC, MIN, HOUR, WEEKDAY, DAY, MONTH, YEAR-2000]
+```
+
+- WEEKDAY: 1=Monday, 7=Sunday (ISO 8601)
+- YEAR: Offset from 2000 (e.g., 2026 = 26)
+
+## Device Settings (CMD 0x02 / CMD 0x12)
+
+### Read Settings (CMD 0x12)
+
+Send `[0x12]` to query settings. Response `RESP 0xE2`:
+
+| Byte | Field | Values |
+|------|-------|--------|
+| data[8] | Display setting | Device-specific |
+| data[9] | Date format | Device-specific |
+| data[10] | Time format | Device-specific |
+| data[11] | Feedback sound | 0=enabled, 1=disabled (inverted!) |
+| data[12] | Fade transitions | 0=enabled, 1=disabled (inverted!) |
+
+### Write Settings (CMD 0x02)
+
+```
+Payload: [display, date_fmt, time_fmt, feedback, fade]
+```
+
+- feedback/fade: 0=enabled, 1=disabled (inverted from boolean!)
+- Write confirmation response: `RESP 0xF2`
+
+## Timer State in Status Notifications
+
+Status notifications (version 1 and 2) contain timer state at bytes 11-12:
+
+| Byte | Field | Values |
+|------|-------|--------|
+| data[11] | Timer enabled | 0=inactive, 1=active |
+| data[12] | Timer minutes | Remaining minutes (only valid when enabled) |
+
+## Timer End Notifications
+
+When a timer expires, the device sends a special notification:
+
+| Response CMD | Type | Description |
+|--------------|------|-------------|
+| 0xEB | Light timer | Light mode timer expired |
+| 0xEC | Moonlight timer | Moonlight mode timer expired |
+
+- data[8]: Result code (1=timer expired and light off, 2=timer cancelled)
+
 ## Timer Commands (0x33, 0x36, 0x38)
 
 The timer functionality uses three commands:
@@ -354,11 +417,23 @@ Command `0x0A` takes two parameters: `[TYPE] [DIRECTION]`
 
 ## Notification Responses
 
-Byte 8 determines type:
-- `1` = White status (byte 9: on, byte 10: brightness)
-- `2` = RGB status (byte 9: on, byte 10: brightness, byte 13-15: RGB, byte 16: effect)
+### Status Notifications (by version byte, data[8])
+
+- `1` = White status (byte 9: on, byte 10: brightness, byte 11: timer_on, byte 12: timer_min)
+- `2` = RGB status (byte 9: on, byte 10: brightness, byte 13-15: RGB, byte 16: effect, byte 11: timer_on, byte 12: timer_min)
 - `255` = Off
 - `0` = Shutdown
+
+### Special Response Types (by command byte, data[7])
+
+| Response CMD | Name | Description |
+|--------------|------|-------------|
+| 0xD0 | Status | Normal status response |
+| 0xE2 | Settings Read | Device settings response |
+| 0xEB | Light Timer End | Light timer expired |
+| 0xEC | Moonlight Timer End | Moonlight timer expired |
+| 0xF0 | Device Permission | Permission grant/deny |
+| 0xF2 | Settings Write | Settings write confirmation |
 
 ## Reverse Engineering via Home Assistant UI
 

@@ -27,7 +27,7 @@ apply_preset:
 
 send_raw_command:
   name: Send raw command (Expert)
-  description: "Send a raw BLE command to the lamp. For reverse engineering and testing. Format: hex bytes separated by spaces (e.g., '3E 1E' for 30-min timer)"
+  description: "Send a raw BLE command to the lamp. For reverse engineering and testing. Format: hex bytes separated by spaces (e.g., '33 01 1E' for 30-min timer)"
   target:
     entity:
       integration: beurer_daylight_lamps
@@ -37,7 +37,7 @@ send_raw_command:
       name: Command bytes
       description: "Hex bytes to send (e.g., '33 01 1E' for 30min timer). Known: 30=status, 31=brightness, 32=color, 33=timer_value, 34=effect, 35=off, 36=timer_cancel, 37=mode, 38=timer_toggle. Unknown: 39, 3E, 3F"
       required: true
-      example: "3E 1E"
+      example: "33 01 1E"
       selector:
         text:
 

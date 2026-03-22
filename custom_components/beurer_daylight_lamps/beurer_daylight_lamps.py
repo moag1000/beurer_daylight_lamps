@@ -1111,6 +1111,100 @@ class BeurerInstance:
         finally:
             self._mode_switch_target = None
 
+    async def sync_time(self) -> bool:
+        """Sync current time from Home Assistant to the device.
+
+        Sends the current date/time so the device clock stays accurate.
+        Format: CMD_TIME_SYNC SEC MIN HOUR WEEKDAY DAY MONTH YEAR(offset from 2000)
+
+        Returns:
+            True if time sync command was sent successfully.
+        """
+        import datetime
+
+        now = datetime.datetime.now()
+        LOGGER.info("Syncing time to %s: %s", self._mac, now.strftime("%Y-%m-%d %H:%M:%S"))
+
+        result = await self._send_packet([
+            CMD_TIME_SYNC,
+            now.second,
+            now.minute,
+            now.hour,
+            now.isoweekday(),  # 1=Monday, 7=Sunday
+            now.day,
+            now.month,
+            now.year - 2000,
+        ])
+        if result:
+            await asyncio.sleep(COMMAND_DELAY)
+        return result
+
+    async def query_settings(self) -> bool:
+        """Query device settings (feedback, fade, display, date/time format).
+
+        Response will be handled by _handle_settings_notification.
+
+        Returns:
+            True if settings query was sent successfully.
+        """
+        LOGGER.debug("Querying settings from %s", self._mac)
+        result = await self._send_packet([CMD_SETTINGS_READ])
+        if result:
+            await asyncio.sleep(COMMAND_DELAY)
+        return result
+
+    async def set_feedback(self, enabled: bool) -> bool:
+        """Set device feedback sound (beep on button press).
+
+        Args:
+            enabled: True to enable feedback sound, False to disable.
+
+        Returns:
+            True if settings command was sent successfully.
+        """
+        LOGGER.info("Setting feedback sound to %s on %s", enabled, self._mac)
+        # APK inverts the value: 0 = enabled, 1 = disabled
+        feedback_value = 0 if enabled else 1
+        result = await self._send_packet([
+            CMD_SETTINGS_WRITE,
+            self._display_setting,
+            self._date_format,
+            self._time_format,
+            feedback_value,
+            0 if (self._fade_enabled or self._fade_enabled is None) else 1,
+        ])
+        if result:
+            self._feedback_enabled = enabled
+            await asyncio.sleep(COMMAND_DELAY)
+            await self._trigger_update()
+        return result
+
+    async def set_fade(self, enabled: bool) -> bool:
+        """Set smooth fade transitions.
+
+        Args:
+            enabled: True to enable fade transitions, False to disable.
+
+        Returns:
+            True if settings command was sent successfully.
+        """
+        LOGGER.info("Setting fade to %s on %s", enabled, self._mac)
+        # APK inverts the value: 0 = enabled, 1 = disabled
+        fade_value = 0 if enabled else 1
+        result = await self._send_packet([
+            CMD_SETTINGS_WRITE,
+            self._display_setting,
+            self._date_format,
+            self._time_format,
+            0 if (self._feedback_enabled or self._feedback_enabled is None) else 1,
+            fade_value,
+        ])
+        if result:
+            self._fade_enabled = enabled
+            await asyncio.sleep(COMMAND_DELAY)
+            await self._trigger_update()
+        return result
+
     async def set_white(
         self, intensity: int | float | None, _from_turn_on: bool = False
     ) -> None:

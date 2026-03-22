@@ -1,4 +1,4 @@
-"""Switch platform for Beurer Daylight Lamps - Adaptive Lighting Control."""
+"""Switch platform for Beurer Daylight Lamps - Adaptive Lighting & Device Settings."""
 from __future__ import annotations
 
 from typing import Any

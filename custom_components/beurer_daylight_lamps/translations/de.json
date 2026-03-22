@@ -16,7 +16,7 @@
             "message": "Timer konnte nicht auf {name} gesetzt werden. Timer funktioniert nur im RGB/Farbmodus."
         },
         "timer_invalid_range": {
-            "message": "Timer muss zwischen 1 und 240 Minuten sein, erhalten: {minutes}."
+            "message": "Timer muss zwischen 1 und 120 Minuten sein, erhalten: {minutes}."
         },
         "device_unavailable": {
             "message": "Gerät {name} ist nicht verfügbar. Es ist möglicherweise außer Bluetooth-Reichweite oder ausgeschaltet."
@@ -141,6 +141,9 @@
             },
             "reconnect": {
                 "name": "Neu verbinden"
+            },
+            "sync_time": {
+                "name": "Zeit synchronisieren"
             }
         },
         "select": {
@@ -193,6 +196,12 @@
         "switch": {
             "adaptive_lighting": {
                 "name": "Adaptive Beleuchtung"
+            },
+            "feedback_sound": {
+                "name": "Tastenton"
+            },
+            "fade": {
+                "name": "Sanfter Uebergang"
             }
         }
     },
@@ -258,9 +267,9 @@
                     "name": "Dauer",
                     "description": "Dauer der Sonnenuntergang-Simulation in Minuten (1-60)"
                 },
-                "profile": {
-                    "name": "Profil",
-                    "description": "Sonnenuntergang-Profil: natural, gentle oder quick"
+                "end_brightness": {
+                    "name": "End-Helligkeit",
+                    "description": "Finale Helligkeit in Prozent (0 = komplett ausschalten)"
                 }
             }
         },

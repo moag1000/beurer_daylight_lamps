@@ -120,6 +120,9 @@
             },
             "reconnect": {
                 "name": "Reconnect"
+            },
+            "sync_time": {
+                "name": "Sync time"
             }
         },
         "select": {
@@ -172,6 +175,12 @@
         "switch": {
             "adaptive_lighting": {
                 "name": "Adaptive Lighting"
+            },
+            "feedback_sound": {
+                "name": "Feedback sound"
+            },
+            "fade": {
+                "name": "Fade"
             }
         }
     },

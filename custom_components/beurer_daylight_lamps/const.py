@@ -12,8 +12,13 @@ LOGGER = logging.getLogger(__package__)
 WRITE_CHARACTERISTIC_UUID: Final = "8b00ace7-eb0b-49b0-bbe9-9aee0a26e1a3"
 READ_CHARACTERISTIC_UUID: Final = "0734594a-a8e7-4b1a-a6b1-cd5243059a57"
 
-# BLE Protocol Commands
+# BLE Protocol Commands (from APK reverse engineering)
 # These are the first byte of the command payload
+CMD_DEVICE_PERMISSION: Final = 0x00  # Request device control permission
+CMD_TIME_SYNC: Final = 0x01         # Sync time to device
+CMD_SETTINGS_WRITE: Final = 0x02    # Write device settings
+CMD_SETTINGS_READ: Final = 0x12     # Read device settings
+
 CMD_STATUS: Final = 0x30      # Request current status
 CMD_BRIGHTNESS: Final = 0x31  # Set brightness (0-100%)
 CMD_COLOR: Final = 0x32       # Set RGB color
@@ -84,7 +89,6 @@ ALARM_SLOT_MAP: Final[dict[int, int]] = {
     1: 0x87,  # Alarm 2 (index 7 | 0x80)
     2: 0x83,  # Alarm 3 (index 3 | 0x80)
 }
-
 
 # Mode identifiers (second byte after CMD_MODE, CMD_BRIGHTNESS, CMD_OFF, CMD_STATUS)
 MODE_WHITE: Final = 0x01
