@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-    from . import BeurerConfigEntry
+    from .data import BeurerConfigEntry
 
 SELECT_DESCRIPTIONS: tuple[SelectEntityDescription, ...] = (
     SelectEntityDescription(

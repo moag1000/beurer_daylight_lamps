@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-    from . import BeurerConfigEntry
+    from .data import BeurerConfigEntry
 
 # Limit parallel updates to 1 per device to prevent BLE command conflicts
 PARALLEL_UPDATES = 1

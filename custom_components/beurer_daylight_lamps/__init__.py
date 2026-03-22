@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
@@ -16,7 +15,6 @@ from homeassistant.components.bluetooth import (
     BluetoothScanningMode,
     BluetoothServiceInfoBleak,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_MAC, CONF_NAME, Platform
 from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.exceptions import ConfigEntryNotReady, ServiceValidationError
@@ -35,6 +33,7 @@ from homeassistant.util.color import color_temperature_to_rgb
 from .beurer_daylight_lamps import BeurerInstance
 from .const import DOMAIN, LOGGER
 from .coordinator import BeurerDataUpdateCoordinator
+from .data import BeurerConfigEntry, BeurerRuntimeData
 from .exceptions import BeurerInitializationError as BeurerInitializationError
 from .therapy import SunriseProfile
 from .wl90 import AlarmItem
@@ -192,24 +191,6 @@ SERVICE_ALARM_SCHEMA = vol.Schema(
 )
 
 
-@dataclass
-class BeurerRuntimeData:
-    """Runtime data for Beurer integration.
-
-    This dataclass holds all runtime data for a config entry,
-    following the recommended pattern for HA integrations.
-    """
-
-    instance: BeurerInstance
-    coordinator: BeurerDataUpdateCoordinator
-
-
-if TYPE_CHECKING:
-    # Type alias only evaluated during type checking
-    BeurerConfigEntry = ConfigEntry[BeurerRuntimeData]
-else:
-    BeurerConfigEntry = ConfigEntry
-
 PLATFORMS: list[Platform] = [
     Platform.LIGHT,
     Platform.SENSOR,
@@ -294,7 +275,7 @@ def _get_or_create_ble_device(
 
 def _create_instance(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: BeurerConfigEntry,
     ble_device: Any,
     rssi: int | None,
     device_initially_available: bool,
@@ -332,7 +313,7 @@ def _create_instance(
 
 def _register_bluetooth_callbacks(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: BeurerConfigEntry,
     instance: BeurerInstance,
     mac_address: str,
 ) -> None:

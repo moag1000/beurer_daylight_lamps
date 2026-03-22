@@ -17,7 +17,7 @@ from .const import VERSION
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
-    from . import BeurerConfigEntry
+    from .data import BeurerConfigEntry
 
 # Data to redact for privacy - MAC addresses are semi-sensitive
 TO_REDACT = {CONF_MAC}

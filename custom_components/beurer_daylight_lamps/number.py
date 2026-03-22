@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-    from . import BeurerConfigEntry
+    from .data import BeurerConfigEntry
 
 # WL90-specific number descriptions
 WL90_NUMBER_DESCRIPTIONS: tuple[NumberEntityDescription, ...] = (
