@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.30.4] - 2026-03-26
+
+### Fixed
+
+- **Slow HA startup when lamp unavailable**: The coordinator's first refresh no longer attempts a BLE connection, which could block Home Assistant startup for up to 150 seconds when the lamp is unreachable. The initial connection is now handled entirely by the non-blocking background task.
+
+### Changed
+
+- **Documentation updates**: Fixed outdated, duplicate, and missing information across all documentation files
+  - README: Removed duplicate entity entries, added missing entities (Adaptive Lighting, connection health sensors), corrected polling description
+  - CHANGELOG: Added missing entries for v1.30.1-1.30.3, corrected backoff constant values in v1.25.0
+  - SECURITY: Updated supported version from 1.4.x to 1.30.x
+  - CONTRIBUTING: Fixed duplicate command table entry for 0x3F
+
+## [1.30.3] - 2026-03-22
+
+### Changed
+
+- **Extract data.py**: Extracted type definitions into `data.py` module following the blueprint pattern for better code organization
+
+## [1.30.2] - 2026-03-22
+
+### Changed
+
+- **Code quality**: Applied ruff format to entire codebase, removed all disputable ruff ignores and fixed actual code issues
+- **Type checking**: Resolved all mypy and ruff errors across entire project
+
+## [1.30.1] - 2026-03-22
+
+### Changed
+
+- **Developer tooling**: Added ruff linting configuration and devcontainer support
+- **Code quality**: Fixed all lint issues identified by ruff
+
 ## [1.30.0] - 2026-03-22
 
 ### Added
@@ -212,9 +246,9 @@ New method in `beurer_daylight_lamps.py`:
 ### Technical Details
 
 New constants added to `const.py`:
-- `RECONNECT_INITIAL_BACKOFF = 1.0` - Initial reconnect delay (seconds)
+- `RECONNECT_INITIAL_BACKOFF = 5.0` - Initial reconnect delay (seconds)
 - `RECONNECT_MAX_BACKOFF = 60.0` - Maximum reconnect delay (seconds)
-- `RECONNECT_BACKOFF_MULTIPLIER = 2.0` - Backoff multiplier on each failure
+- `RECONNECT_BACKOFF_MULTIPLIER = 1.5` - Backoff multiplier on each failure
 - `RECONNECT_MIN_INTERVAL = 30.0` - Minimum time between reconnect attempts
 - `CONNECTION_WATCHDOG_INTERVAL = 60.0` - Watchdog check interval (seconds)
 - `CONNECTION_STALE_TIMEOUT = 300.0` - Time without data before connection is stale

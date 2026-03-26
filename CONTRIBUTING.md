@@ -210,8 +210,7 @@ complete reference. Only 3 commands remain unknown (not present in the APK):
 |-----|--------|-------|
 | `0x39` | Unknown | Not in APK, possibly TL100-specific firmware feature |
 | `0x3E` | Unknown | Not in APK, possibly TL100-specific firmware feature |
-| `0x3F` | Unknown | Not in APK, possibly TL100-specific firmware feature |
-| `0x3F` | Unknown | Possibly timer cancel |
+| `0x3F` | Unknown | Not in APK, possibly timer cancel or TL100-specific firmware feature |
 
 ### Example: Reverse Engineering the Timer
 

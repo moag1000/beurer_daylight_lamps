@@ -71,6 +71,11 @@ class BeurerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Track the current polling state for adaptive intervals
         self._last_poll_state: str = "unknown"
 
+        # Skip connection attempt during first refresh to avoid blocking
+        # HA startup for up to 150s when device is unreachable.
+        # The background task in __init__.py handles the initial connection.
+        self._first_refresh: bool = True
+
         # Register for push updates from BLE notifications
         self.instance.set_update_callback(self._handle_push_update)
 
@@ -224,6 +229,22 @@ class BeurerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         LOGGER.debug("Periodic refresh for %s", self.instance.mac)
 
         try:
+            # During first refresh (async_config_entry_first_refresh), skip
+            # BLE connection attempts. establish_connection(max_attempts=5)
+            # can block for up to 150s if the device is unreachable, which
+            # stalls the entire HA startup. The background task in
+            # __init__.py handles the initial connection instead.
+            if self._first_refresh:
+                self._first_refresh = False
+                if not self.instance.is_connected:
+                    LOGGER.debug(
+                        "First refresh for %s - skipping connection attempt "
+                        "(handled by background task)",
+                        self.instance.mac,
+                    )
+                    self._adjust_polling_interval()
+                    return self._get_current_data()
+
             # Only actively update if device is available
             if self.instance.ble_available:
                 await self.instance.update()

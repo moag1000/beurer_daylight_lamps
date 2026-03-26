@@ -67,12 +67,13 @@ I heavily used claude as I did in other projects but focused on keeping it tight
 | **Sensor** | Daily goal progress | Percentage of daily goal completed |
 | **Binary Sensor** | Connected | BLE connection status |
 | **Binary Sensor** | Bluetooth reachable | Device seen by any adapter |
+| **Binary Sensor** | Daily goal reached | True when daily exposure goal is met |
 | **Switch** | Feedback sound | Enable/disable device beep on button press |
 | **Switch** | Fade | Enable/disable smooth brightness transitions |
-| **Binary Sensor** | Daily goal reached | True when daily exposure goal is met |
-| **Button** | Sync time | Sync HA clock to device |
-| **Switch** | Feedback sound | Device button beep on/off |
-| **Switch** | Fade transitions | Smooth brightness transitions on/off |
+| **Switch** | Adaptive Lighting | Allow/block Adaptive Lighting (HACS) control |
+| **Sensor** | Reconnect count | Total BLE reconnections since startup (diagnostic, disabled) |
+| **Sensor** | Command success rate | Percentage of successful BLE commands (diagnostic, disabled) |
+| **Sensor** | Connection uptime | Seconds since current connection established (diagnostic, disabled) |
 
 #### WL90-Only Entities
 
@@ -529,7 +530,10 @@ This integration uses **Bluetooth Low Energy (BLE)** for communication:
 
 - **State Updates**: The lamp sends BLE notifications when its state changes. These are processed in real-time.
 - **RSSI Updates**: Signal strength is updated whenever the lamp sends a Bluetooth advertisement (typically every few seconds).
-- **Polling**: No polling is required - all updates are push-based via BLE notifications.
+- **Adaptive Polling**: Periodic refresh ensures state consistency with intervals that adapt to device state:
+  - 30 seconds when light is on (responsive updates)
+  - 5 minutes when light is off (save resources)
+  - 15 minutes when device unavailable (minimal polling)
 - **Command Timing**: Commands are rate-limited to 100ms minimum between sends to prevent overwhelming the device.
 - **Mode Changes**: Mode switches (white <-> RGB) include a 500ms delay to allow the hardware to stabilize.
 

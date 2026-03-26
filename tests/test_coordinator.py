@@ -319,11 +319,59 @@ class TestPeriodicUpdates:
         return hass
 
     @pytest.mark.asyncio
+    async def test_first_refresh_skips_connection_when_not_connected(
+        self, mock_hass: MagicMock, mock_instance: MagicMock
+    ) -> None:
+        """Test first refresh skips connection attempt to avoid blocking HA startup."""
+        mock_instance.is_connected = False
+        coordinator = BeurerDataUpdateCoordinator(mock_hass, mock_instance, "Test Lamp")
+
+        assert coordinator._first_refresh is True
+        data = await coordinator._async_update_data()
+
+        # Should NOT try to connect during first refresh
+        mock_instance.update.assert_not_called()
+        assert coordinator._first_refresh is False
+        # Still returns current data
+        assert data["is_on"] is False
+
+    @pytest.mark.asyncio
+    async def test_first_refresh_proceeds_when_already_connected(
+        self, mock_hass: MagicMock, mock_instance: MagicMock
+    ) -> None:
+        """Test first refresh proceeds normally if device is already connected."""
+        mock_instance.is_connected = True
+        coordinator = BeurerDataUpdateCoordinator(mock_hass, mock_instance, "Test Lamp")
+
+        data = await coordinator._async_update_data()
+
+        mock_instance.update.assert_called_once()
+        assert coordinator._first_refresh is False
+
+    @pytest.mark.asyncio
+    async def test_second_refresh_connects_normally(
+        self, mock_hass: MagicMock, mock_instance: MagicMock
+    ) -> None:
+        """Test that second refresh attempts connection normally."""
+        mock_instance.is_connected = False
+        coordinator = BeurerDataUpdateCoordinator(mock_hass, mock_instance, "Test Lamp")
+
+        # First refresh - skips connection
+        await coordinator._async_update_data()
+        mock_instance.update.assert_not_called()
+
+        # Second refresh - normal behavior, calls update
+        data = await coordinator._async_update_data()
+        mock_instance.update.assert_called_once()
+        assert data["is_on"] is False
+
+    @pytest.mark.asyncio
     async def test_async_update_data_when_available(
         self, mock_hass: MagicMock, mock_instance: MagicMock
     ) -> None:
         """Test periodic update calls instance.update when BLE available."""
         coordinator = BeurerDataUpdateCoordinator(mock_hass, mock_instance, "Test Lamp")
+        coordinator._first_refresh = False  # Simulate past first refresh
 
         data = await coordinator._async_update_data()
 
@@ -338,6 +386,7 @@ class TestPeriodicUpdates:
         """Test periodic update skips when BLE not available."""
         mock_instance.ble_available = False
         coordinator = BeurerDataUpdateCoordinator(mock_hass, mock_instance, "Test Lamp")
+        coordinator._first_refresh = False  # Simulate past first refresh
 
         data = await coordinator._async_update_data()
 
@@ -352,6 +401,7 @@ class TestPeriodicUpdates:
         """Test periodic update handles exceptions gracefully."""
         mock_instance.update = AsyncMock(side_effect=OSError("BLE error"))
         coordinator = BeurerDataUpdateCoordinator(mock_hass, mock_instance, "Test Lamp")
+        coordinator._first_refresh = False  # Simulate past first refresh
 
         # Should not raise, returns current data instead
         data = await coordinator._async_update_data()
