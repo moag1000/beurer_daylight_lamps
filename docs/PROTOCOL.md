@@ -2,6 +2,44 @@
 
 This document describes the Bluetooth Low Energy (BLE) protocol used by Beurer TL daylight therapy lamps.
 
+## Communication Architecture
+
+The Beurer LightUp APK v2.1 uses **Bluetooth Classic SPP** (RFCOMM UUID `00001101-0000-1000-8000-00805F9B34FB`) for data transfer. However, the device is **dual-mode** (Classic BT + BLE), and the packet format is identical regardless of transport. This integration uses **BLE GATT** for compatibility with Home Assistant's Bluetooth stack and ESPHome/Shelly Bluetooth Proxies.
+
+### APK Internal Architecture
+
+```
+SppManager (singleton)
+  ├── ConnectThread → SppService (Bluetooth Classic Socket)
+  ├── ReadThread → globalPool.publishBroadcast() → Intent system
+  ├── WriteThread → SppService.write()
+  └── TimeOutRequestProxy (6-second timeout per command)
+```
+
+Key classes in the APK:
+| Class | Purpose |
+|-------|---------|
+| `AppBytes.java` | Command builders (all `getBytes()` methods) |
+| `BlueOrder.java` | Command/response byte constants |
+| `globalPool.java` | Response parser (`publishBroadcast()`) |
+| `SppManager.java` | Connection management (singleton) |
+| `ConnectThread.java` | Bluetooth socket connection |
+| `ReadThread.java` | Response reading (2048 byte buffer, 100ms read interval) |
+| `WriteThread.java` | Command sending |
+| `TimeOutRequestProxy.java` | 6-second command timeout with retry dialog |
+| `LoopReceiver.java` | 60-second periodic polling (300ms initial delay) |
+| `MusicCmd.java` | A2DP/BT speaker command constants |
+
+### App Timing Constants
+
+| Constant | Value | Our Implementation |
+|----------|-------|--------------------|
+| Command timeout | 6 seconds | No explicit timeout (relies on BLE stack) |
+| Polling interval | 60 seconds | 30s (on) / 300s (off) / 900s (unavail.) adaptive |
+| Poll initial delay | 300ms | 2s (background task) |
+| Read buffer | 2048 bytes | BLE MTU-based |
+| Read interval | 100ms | BLE notification-based (push) |
+
 ## BLE Characteristics
 
 | UUID | Direction | Description |
@@ -147,6 +185,55 @@ All 28 commands discovered from the Beurer LightUp APK v2.1 (decompiled with jad
 | 0x16 | Music Timer Value | `[minutes]` | Sleep timer minutes (1-60) |
 | 0x17 | Music Info | `[]` | Query volume, timer state |
 | 0x24 | Music Close | `[]` | Close A2DP connection |
+
+### WL90 Polling Commands
+
+The APK uses periodic polling via `LoopReceiver` for real-time updates:
+
+| Cmd | Name | Payload | Interval | Description |
+|-----|------|---------|----------|-------------|
+| 0x20 | Loop Radio Info | `[]` | 60s | Periodic radio status poll |
+| 0x22 | Loop Light Info | `[]` | 60s | Periodic light status poll (response: 0xD0) |
+| 0x23 | Loop MoonLight Info | `[]` | 60s | Periodic moonlight status poll |
+
+### MusicCmd Constants (A2DP Control)
+
+The APK's `MusicCmd.java` defines these BT speaker control constants. These are **internal app states**, not BLE command bytes — the actual BLE commands use 0x10/0x14-0x17/0x24:
+
+| Constant | Value | Description |
+|----------|-------|-------------|
+| `PLAY_MUSIC` | 1 | Start playback |
+| `PAUSE_MUSIC` | 2 | Pause playback |
+| `STOP_MUSIC` | 3 | Stop playback |
+| `NEXT_MUSIC` | 4 | Next track |
+| `PREVIOUS_MUSIC` | 5 | Previous track |
+| `ADJUST_PROGRESS` | 6 | Seek/progress adjustment |
+| `ENABLE_TIMER` | 9 | Enable sleep timer |
+| `MUSIC_PAUSE` | 11 | Pause (alternate) |
+| `MUSIC_STOP` | 12 | Stop (alternate) |
+| `MUSIC_PLAY_DURATION` | 13 | Play duration report |
+| `RETURN_PLAYER_STATUS` | 16 | Player status response |
+| `PLAY_EXCEPTION` | 17 | Playback error |
+| `OPEN_A2DP_MODE` | 18 | Open A2DP mode |
+| `START_MUSIC_IN_EXIST` | 100 | Resume existing playback |
+| `MUSIC_PLAY_SWITCH` | 101 | Toggle play/pause |
+| `MUSIC_PAUSE_TOP` | 102 | Pause from system |
+
+### Radio Frequency Preset Encoding
+
+Radio info response (0xF4) contains 10 presets encoded as big-endian 16-bit integers:
+
+```
+data[10..29]:  10 frequencies × 2 bytes each (MSB first)
+data[30]:      volume (0-10)
+data[31]:      sleep timer state (0/1)
+data[32]:      sleep timer minutes
+```
+
+Frequency decoding:
+```python
+frequency = (data[offset] << 8) | data[offset + 1]  # Big-endian 16-bit
+```
 
 ### Response Command Bytes (data[7])
 
@@ -409,11 +496,16 @@ Command `0x0A` takes two parameters: `[TYPE] [DIRECTION]`
 
 ## Unknown Commands (To Reverse Engineer)
 
-| Cmd | Suspected Feature |
-|-----|-------------------|
-| 0x39 | Unknown (not in APK) |
-| 0x3E | Unknown (not in APK, possibly TL100-specific firmware) |
-| 0x3F | Unknown (not in APK, possibly TL100-specific firmware) |
+These commands were observed from the TL100 firmware but have **no corresponding code** in the Beurer LightUp APK v2.1. All Java source files (AppBytes.java, BlueOrder.java, globalPool.java) were exhaustively searched for bytes 0x39-0x3F (decimal 57-63) with no results. The entire range 0x39-0x3F is unimplemented in the APK.
+
+| Cmd | Status | Notes |
+|-----|--------|-------|
+| 0x39 | Not in APK | Confirmed absent — no method builds this command |
+| 0x3A-0x3D | Not in APK | Entire range unimplemented |
+| 0x3E | Not in APK | Possibly TL100-specific firmware feature |
+| 0x3F | Not in APK | Possibly timer cancel or TL100-specific firmware feature |
+
+**Methodology**: These were discovered by BLE traffic analysis between the TL100 and the app. Since they don't appear in the APK, they are likely firmware-initiated responses or TL100-specific extensions not yet exposed in the app UI.
 
 ## Notification Responses
 

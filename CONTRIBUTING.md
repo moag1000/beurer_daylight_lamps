@@ -106,11 +106,31 @@ There are three approaches to reverse engineering BLE commands:
 ### Method 0: APK Reverse Engineering (Most Complete)
 
 This is how all 28 commands and 19 response types were discovered. The Beurer LightUp APK v2.1
-was decompiled using [jadx](https://github.com/skylot/jadx). Key classes:
+was decompiled using [jadx](https://github.com/skylot/jadx).
+
+#### Key Classes (Protocol)
 - `AppBytes.java` — all command builders (`getBytes()`, `syncTime()`, `queryWL90Light()`, etc.)
 - `BlueOrder.java` — command/response byte constants
 - `globalPool.java` — response parser (`publishBroadcast()`)
-- `SppManager.java` / `ConnectThread.java` — connection handling
+
+#### Communication Layer
+- `SppManager.java` — connection management (singleton pattern)
+- `ConnectThread.java` — Bluetooth Classic socket connection
+- `ReadThread.java` — response reading (2048 byte buffer, 100ms interval)
+- `WriteThread.java` — command sending
+- `TimeOutRequestProxy.java` — 6-second command timeout with retry UI
+
+#### Polling & Media
+- `LoopReceiver.java` — 60-second periodic polling (BroadcastReceiver + Handler)
+- `MusicCmd.java` — A2DP/BT speaker command constants (18 internal states)
+- `MusicPlayService.java` — Android media session integration
+
+#### Data Models
+- `AlarmItem.java` — alarm slot data (incl. sunrise simulation params)
+- `LightInfo.java` — light state model
+- `MusicInfo.java` — music/speaker state model
+- `RadioItem.java` — radio preset model
+- `SettingItem.java` — device settings model
 
 The APK and decompiled sources are stored in `../beurer_capture/`:
 - `beurer LightUp_2.1_APKPure.apk` — original APK
@@ -119,6 +139,20 @@ The APK and decompiled sources are stored in `../beurer_capture/`:
 **Note:** The APK v2.1 uses Classic BT SPP for data transfer, but the device is dual-mode.
 Newer app versions switched to BLE GATT (confirmed by bugreport analysis). The packet format
 is identical regardless of transport.
+
+#### Systematic Analysis Checklist
+
+When analyzing an APK for protocol discovery, ensure **all** classes are reviewed, not just the obvious ones:
+
+1. **Command builders** — methods that construct byte arrays (e.g., `getBytes()`)
+2. **Response parsers** — switch/case on response bytes (e.g., `publishBroadcast()`)
+3. **Constants/enums** — all byte value definitions
+4. **Timeout/retry** — how the app handles failed commands
+5. **Polling/loop** — periodic data refresh mechanisms
+6. **Data models** — what fields the app tracks per device
+7. **Broadcast actions** — the full Intent action list reveals all expected events
+8. **Native libraries** — check for `.so` files (Beurer has none, but other APKs may)
+9. **Resources** — XML configs, assets, embedded data files
 
 ### Method 1: Android BLE Sniffing (Recommended for Discovery)
 
@@ -208,9 +242,10 @@ complete reference. Only 3 commands remain unknown (not present in the APK):
 
 | Cmd | Status | Notes |
 |-----|--------|-------|
-| `0x39` | Unknown | Not in APK, possibly TL100-specific firmware feature |
-| `0x3E` | Unknown | Not in APK, possibly TL100-specific firmware feature |
-| `0x3F` | Unknown | Not in APK, possibly timer cancel or TL100-specific firmware feature |
+| `0x39` | Not in APK | Confirmed absent after exhaustive search of all Java source |
+| `0x3A-0x3D` | Not in APK | Entire range unimplemented in APK |
+| `0x3E` | Not in APK | Possibly TL100-specific firmware feature |
+| `0x3F` | Not in APK | Possibly timer cancel or TL100-specific firmware feature |
 
 ### Example: Reverse Engineering the Timer
 
