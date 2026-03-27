@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.30.5] - 2026-03-27
+
+### Added
+
+- **BLE command timeout**: Added explicit 6-second timeout per BLE write command, matching the Beurer LightUp APK's `TimeOutRequestProxy`. Previously relied on bleak's default ~30s timeout, causing long hangs when a connected device stops responding. Failed commands now log a warning and trigger a clean disconnect.
+
+### Changed
+
+- **Protocol documentation**: Comprehensive update from systematic APK analysis
+  - Added communication architecture section (SPP vs BLE dual-mode)
+  - Documented all 14 APK classes (was 4)
+  - Added MusicCmd constants, LoopReceiver polling, radio preset encoding
+  - Confirmed 0x39-0x3F range absent from APK source
+  - Added systematic analysis checklist to CONTRIBUTING.md
+
 ## [1.30.4] - 2026-03-26
 
 ### Fixed

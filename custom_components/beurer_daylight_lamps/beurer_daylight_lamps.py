@@ -67,6 +67,7 @@ from .const import (
     CMD_TIMER_VALUE,
     # Timing constants
     COMMAND_DELAY,
+    COMMAND_TIMEOUT,
     CONNECTION_STALE_TIMEOUT,
     # Connection health constants
     CONNECTION_WATCHDOG_INTERVAL,
@@ -859,8 +860,22 @@ class BeurerInstance:
                 self._mac,
                 data.hex(),
             )
-            await self._client.write_gatt_char(self._write_uuid, data)
-        except (BleakError, TimeoutError, OSError) as err:
+            # Explicit 6s timeout matching Beurer LightUp APK's
+            # TimeOutRequestProxy (bleak default is ~30s)
+            await asyncio.wait_for(
+                self._client.write_gatt_char(self._write_uuid, data),
+                timeout=COMMAND_TIMEOUT,
+            )
+        except TimeoutError:
+            LOGGER.warning(
+                "Command timeout (%.0fs) writing to %s",
+                COMMAND_TIMEOUT,
+                self._mac,
+            )
+            self._command_failure_count += 1
+            await self.disconnect()
+            return False
+        except (BleakError, OSError) as err:
             LOGGER.debug("Error during write to %s: %s", self._mac, err)
             self._command_failure_count += 1
             await self.disconnect()

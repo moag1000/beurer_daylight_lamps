@@ -102,6 +102,10 @@ TURN_OFF_DELAY: Final = 0.15  # Short delay after turn off sequence
 # Rate limiting for commands to prevent overwhelming the device
 MIN_COMMAND_INTERVAL: Final = 0.1  # Minimum time between commands (100ms)
 
+# Command timeout - matches Beurer LightUp APK's TimeOutRequestProxy (6000ms)
+# Prevents hanging on unresponsive devices (bleak default is ~30s)
+COMMAND_TIMEOUT: Final = 6.0  # Maximum wait for a single BLE write (seconds)
+
 # Reconnection timing constants
 RECONNECT_INITIAL_BACKOFF: Final = 5.0  # Initial delay before reconnect (seconds)
 RECONNECT_MAX_BACKOFF: Final = (
