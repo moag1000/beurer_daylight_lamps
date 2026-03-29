@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.31.0] - 2026-03-29
+
+### Changed
+
+- **Modern config flow selectors**: Replaced bare `str`/`bool` and `vol.In()` with HA 2026 `TextSelector`, `NumberSelector`, `BooleanSelector` for better UI rendering
+- **Options flow modernized**: Removed deprecated `__init__(config_entry)` pattern, now uses `self.config_entry` property. Therapy goal and update interval use slider selectors.
+- **Config step data_description**: Added field-level help text to all config flow steps (user, manual, bluetooth_confirm, reconfigure) for better UX
+- **Unknown error handler**: Added generic `except Exception` fallback in `_test_connection()` with `unknown` error translation
+- **Hardcoded string removed**: "MAC manuell eingeben" replaced with English "Enter MAC manually" (translations handle localization)
+
 ## [1.30.5] - 2026-03-27
 
 ### Added

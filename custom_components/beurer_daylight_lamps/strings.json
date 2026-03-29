@@ -42,6 +42,10 @@
                 "data": {
                     "mac": "Device",
                     "name": "Name"
+                },
+                "data_description": {
+                    "mac": "Select a discovered Beurer lamp from the list.",
+                    "name": "A friendly name for the lamp in Home Assistant."
                 }
             },
             "bluetooth_confirm": {
@@ -49,6 +53,9 @@
                 "description": "Found Beurer lamp: **{name}**\n\nThe lamp will blink to confirm the connection.",
                 "data": {
                     "name": "Name (optional)"
+                },
+                "data_description": {
+                    "name": "Override the default device name if desired."
                 }
             },
             "validate": {
@@ -65,6 +72,10 @@
                 "data": {
                     "mac": "MAC address",
                     "name": "Name"
+                },
+                "data_description": {
+                    "mac": "Bluetooth MAC address in format AA:BB:CC:DD:EE:FF.",
+                    "name": "A friendly name for the lamp in Home Assistant."
                 }
             },
             "reauth_confirm": {
@@ -76,13 +87,17 @@
                 "description": "Change the settings for **{mac}**.",
                 "data": {
                     "name": "Name"
+                },
+                "data_description": {
+                    "name": "Update the friendly name for this lamp."
                 }
             }
         },
         "error": {
             "cannot_connect": "Failed to connect to lamp",
             "no_gatt_adapter": "No Bluetooth adapter with GATT support found. The lamp is visible but cannot be connected. Please add an ESPHome Bluetooth Proxy or use a local Bluetooth adapter.",
-            "invalid_mac": "Invalid MAC address format"
+            "invalid_mac": "Invalid MAC address format",
+            "unknown": "An unexpected error occurred. Check the Home Assistant logs for details."
         },
         "abort": {
             "already_configured": "Device is already configured",

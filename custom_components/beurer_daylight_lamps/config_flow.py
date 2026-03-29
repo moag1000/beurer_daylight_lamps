@@ -21,6 +21,15 @@ from homeassistant.config_entries import (
 from homeassistant.const import CONF_MAC, CONF_NAME
 from homeassistant.core import callback
 from homeassistant.helpers.device_registry import format_mac
+from homeassistant.helpers.selector import (
+    BooleanSelector,
+    NumberSelector,
+    NumberSelectorConfig,
+    NumberSelectorMode,
+    TextSelector,
+    TextSelectorConfig,
+    TextSelectorType,
+)
 
 from .beurer_daylight_lamps import BeurerInstance
 from .const import DEVICE_NAME_PREFIXES, DOMAIN, LOGGER
@@ -52,7 +61,7 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
         config_entry: ConfigEntry,
     ) -> OptionsFlow:
         """Create the options flow."""
-        return BeurerOptionsFlowHandler(config_entry)
+        return BeurerOptionsFlowHandler()
 
     def __init__(self) -> None:
         """Initialize the config flow."""
@@ -100,7 +109,13 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="bluetooth_confirm",
-            data_schema=vol.Schema({vol.Optional(CONF_NAME, default=self._name): str}),
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(CONF_NAME, default=self._name): TextSelector(
+                        TextSelectorConfig(type=TextSelectorType.TEXT)
+                    ),
+                }
+            ),
             description_placeholders={"name": self._name or "Unknown"},
         )
 
@@ -195,7 +210,7 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
                 device_options[addr] = f"{name}{rssi_str} (via Proxy)"
             else:
                 device_options[addr] = f"{name}{rssi_str}"
-        device_options[MANUAL_MAC] = "MAC manuell eingeben"
+        device_options[MANUAL_MAC] = "Enter MAC manually"
 
         # Get first device name as default
         first_device = next(iter(self._discovered_devices.values()), None)
@@ -206,7 +221,9 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
             data_schema=vol.Schema(
                 {
                     vol.Required(CONF_MAC): vol.In(device_options),
-                    vol.Required(CONF_NAME, default=default_name): str,
+                    vol.Required(CONF_NAME, default=default_name): TextSelector(
+                        TextSelectorConfig(type=TextSelectorType.TEXT)
+                    ),
                 }
             ),
             errors=errors,
@@ -233,8 +250,12 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="manual",
             data_schema=vol.Schema(
                 {
-                    vol.Required(CONF_MAC): str,
-                    vol.Required(CONF_NAME): str,
+                    vol.Required(CONF_MAC): TextSelector(
+                        TextSelectorConfig(type=TextSelectorType.TEXT)
+                    ),
+                    vol.Required(CONF_NAME): TextSelector(
+                        TextSelectorConfig(type=TextSelectorType.TEXT)
+                    ),
                 }
             ),
             errors=errors,
@@ -368,7 +389,9 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="reconfigure",
             data_schema=vol.Schema(
                 {
-                    vol.Required(CONF_NAME, default=self._name): str,
+                    vol.Required(CONF_NAME, default=self._name): TextSelector(
+                        TextSelectorConfig(type=TextSelectorType.TEXT)
+                    ),
                 }
             ),
             errors=errors,
@@ -528,6 +551,9 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
         except (BleakError, TimeoutError, OSError, ValueError) as err:
             LOGGER.error("Error during connection test for %s: %s", self._mac, err)
             return False
+        except Exception:
+            LOGGER.exception("Unexpected error during connection test for %s", self._mac)
+            return False
         else:
             return True
         finally:
@@ -555,20 +581,15 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
 class BeurerOptionsFlowHandler(OptionsFlow):
     """Handle options flow for Beurer Daylight Lamps."""
 
-    def __init__(self, config_entry: ConfigEntry) -> None:
-        """Initialize options flow."""
-        self._config_entry = config_entry
-
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Manage the options."""
         if user_input is not None:
-            # Update options
             return self.async_create_entry(title="", data=user_input)
 
         # Get current options with defaults
-        current_options = self._config_entry.options
+        current_options = self.config_entry.options
         therapy_goal = current_options.get(CONF_THERAPY_GOAL, DEFAULT_THERAPY_GOAL)
         update_interval = current_options.get(
             CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL
@@ -584,15 +605,23 @@ class BeurerOptionsFlowHandler(OptionsFlow):
                     vol.Optional(
                         CONF_THERAPY_GOAL,
                         default=therapy_goal,
-                    ): vol.All(vol.Coerce(int), vol.Range(min=5, max=120)),
+                    ): NumberSelector(
+                        NumberSelectorConfig(
+                            min=5, max=120, step=5, mode=NumberSelectorMode.SLIDER
+                        )
+                    ),
                     vol.Optional(
                         CONF_UPDATE_INTERVAL,
                         default=update_interval,
-                    ): vol.All(vol.Coerce(int), vol.Range(min=10, max=300)),
+                    ): NumberSelector(
+                        NumberSelectorConfig(
+                            min=10, max=300, step=10, mode=NumberSelectorMode.SLIDER
+                        )
+                    ),
                     vol.Optional(
                         CONF_ADAPTIVE_LIGHTING_DEFAULT,
                         default=adaptive_lighting,
-                    ): bool,
+                    ): BooleanSelector(),
                 }
             ),
         )
