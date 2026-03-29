@@ -58,7 +58,7 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
     @staticmethod
     @callback
     def async_get_options_flow(
-        config_entry: ConfigEntry,
+        _config_entry: ConfigEntry,
     ) -> OptionsFlow:
         """Create the options flow."""
         return BeurerOptionsFlowHandler()
@@ -506,11 +506,12 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
             return False
 
         try:
-            if not self._ensure_instance_from_bluetooth():
+            if (
+                not self._ensure_instance_from_bluetooth()
+                or self._instance is None
+            ):
                 return False
 
-            if self._instance is None:
-                return False
             adapter_name = (
                 getattr(self._ble_device, "name", "unknown")
                 if self._ble_device
@@ -548,11 +549,8 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
                 await self._instance.turn_off()
 
             LOGGER.info("Connection test successful for %s", self._mac)
-        except (BleakError, TimeoutError, OSError, ValueError) as err:
+        except (BleakError, TimeoutError, OSError, ValueError, RuntimeError) as err:
             LOGGER.error("Error during connection test for %s: %s", self._mac, err)
-            return False
-        except Exception:
-            LOGGER.exception("Unexpected error during connection test for %s", self._mac)
             return False
         else:
             return True
