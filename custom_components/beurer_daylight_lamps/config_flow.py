@@ -506,10 +506,7 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
             return False
 
         try:
-            if (
-                not self._ensure_instance_from_bluetooth()
-                or self._instance is None
-            ):
+            if not self._ensure_instance_from_bluetooth() or self._instance is None:
                 return False
 
             adapter_name = (
