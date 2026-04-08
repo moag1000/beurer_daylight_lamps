@@ -22,6 +22,7 @@ I heavily used claude as I did in other projects but focused on keeping it tight
 | TL70  | ⚠️ Untested | Should work |
 | TL80  | ⚠️ Untested | Should work |
 | TL90  | ⚠️ Untested | Should work |
+| WL75  | ⚠️ Untested | Wake-up Light (same protocol family as WL90) |
 | WL90  | ⚠️ Untested | Wake-up Light with Radio, Speaker, Alarms |
 
 ## Features
@@ -564,6 +565,8 @@ This integration uses **Bluetooth Low Energy (BLE)** for communication:
 6. **Simulation requires connection**: Sunrise/sunset simulations require an active BLE connection. If the connection drops, the simulation will pause and resume when reconnected.
 
 7. **Color temperature approximation**: Color temperatures are approximated using RGB values since the lamp doesn't have a native CT mode. Results may vary slightly from true Kelvin values.
+
+8. **White brightness capped at 99%**: Some device firmware versions switch to red/RGB mode when white brightness is set to exactly 100%. The integration caps white brightness at 99% to work around this firmware bug. The visual difference is imperceptible.
 
 ## Diagnostics
 

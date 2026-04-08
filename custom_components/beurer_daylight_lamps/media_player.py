@@ -46,7 +46,7 @@ async def async_setup_entry(
     name = entry.data.get("name", "Beurer Lamp")
 
     # Only add media player entities for WL90 devices
-    if not instance.is_wl90:
+    if not instance.is_wl:
         return
 
     entities: list[MediaPlayerEntity] = [

@@ -89,7 +89,7 @@ async def async_setup_entry(
     entities.append(BeurerTherapyGoalNumber(coordinator, name))
     # Add WL90-specific volume controls
     instance = entry.runtime_data.instance
-    if instance.is_wl90:
+    if instance.is_wl:
         entities.extend(
             [
                 BeurerWL90Number(coordinator, name, desc)

@@ -22,6 +22,12 @@
         },
         {
             "local_name": "WL90*"
+        },
+        {
+            "local_name": "WL_75*"
+        },
+        {
+            "local_name": "WL75*"
         }
     ],
     "codeowners": ["@moag1000"],
@@ -32,5 +38,5 @@
     "iot_class": "local_push",
     "issue_tracker": "https://github.com/moag1000/beurer_daylight_lamps/issues",
     "requirements": ["bleak-retry-connector>=3.0.0"],
-    "version": "1.31.0"
+    "version": "1.32.0"
 }

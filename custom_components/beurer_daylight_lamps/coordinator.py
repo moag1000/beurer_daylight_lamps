@@ -182,7 +182,7 @@ class BeurerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "feedback_enabled": self.instance.feedback_enabled,
             "fade_enabled": self.instance.fade_enabled,
             # WL90-specific data
-            "is_wl90": self.instance.is_wl90,
+            "is_wl": self.instance.is_wl,
         }
 
         # Add WL90 data if applicable

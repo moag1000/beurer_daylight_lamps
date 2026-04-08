@@ -6,7 +6,7 @@ import logging
 from typing import Final
 
 DOMAIN: Final = "beurer_daylight_lamps"
-VERSION: Final = "1.30.3"
+VERSION: Final = "1.32.0"
 LOGGER = logging.getLogger(__package__)
 
 # BLE Characteristic UUIDs
@@ -157,6 +157,8 @@ DEVICE_NAME_PREFIXES: Final[tuple[str, ...]] = (
     "tl90",
     "wl_90",  # WL90 Wake-up Light (uses underscore in BLE name)
     "wl90",  # WL90 alternate naming
+    "wl_75",  # WL75 Wake-up Light (underscore variant)
+    "wl75",  # WL75 alternate naming
 )
 
 # Model detection map based on device name prefixes
@@ -168,10 +170,12 @@ MODEL_MAP: Final[dict[str, str]] = {
     "TL90": "TL90 Daylight Therapy Lamp",
     "WL_90": "WL90 Wake-up Light",
     "WL90": "WL90 Wake-up Light",
+    "WL_75": "WL75 Wake-up Light",
+    "WL75": "WL75 Wake-up Light",
 }
 
-# Models that support radio/music (WL90 family)
-WL90_MODELS: Final[frozenset[str]] = frozenset({"WL_90", "WL90"})
+# Models that support radio/music (WL family: WL90, WL75)
+WL_MODELS: Final[frozenset[str]] = frozenset({"WL_90", "WL90", "WL_75", "WL75"})
 
 # Timer max values differ per device model (from APK)
 TIMER_MAX_WL90: Final = 60  # WL90: max 60 minutes light timer
@@ -212,16 +216,16 @@ def detect_model(name: str | None) -> str:
     return "Daylight Therapy Lamp"
 
 
-def is_wl90_model(name: str | None) -> bool:
-    """Check if device is a WL90 (supports radio, alarms, music).
+def is_wl_model(name: str | None) -> bool:
+    """Check if device is a WL model (supports radio, alarms, music).
 
     Args:
         name: Device name to check
 
     Returns:
-        True if the device is a WL90 model.
+        True if the device is a WL90 or WL75 model.
     """
     if not name:
         return False
     name_upper = name.upper()
-    return any(name_upper.startswith(prefix) for prefix in WL90_MODELS)
+    return any(name_upper.startswith(prefix) for prefix in WL_MODELS)

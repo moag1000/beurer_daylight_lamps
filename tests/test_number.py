@@ -317,7 +317,7 @@ class TestAsyncSetupEntry:
         """Create a mock BeurerInstance."""
         instance = MagicMock()
         instance.mac = "AA:BB:CC:DD:EE:FF"
-        instance.is_wl90 = False  # TL model by default (no WL90 entities)
+        instance.is_wl = False  # TL model by default (no WL entities)
         return instance
 
     @pytest.fixture

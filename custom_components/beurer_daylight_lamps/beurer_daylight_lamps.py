@@ -93,7 +93,7 @@ from .const import (
     SUPPORTED_EFFECTS,
     TURN_OFF_DELAY,
     WRITE_CHARACTERISTIC_UUID,
-    is_wl90_model,
+    is_wl_model,
 )
 
 
@@ -167,9 +167,9 @@ class BeurerInstance:
         self._sunrise_simulation: SunriseSimulation | None = None
         self._therapy_tracker: TherapyTracker = TherapyTracker()
         self.adaptive_lighting_switch: Any = None
-        self._is_wl90: bool = is_wl90_model(getattr(device, "name", None))
+        self._is_wl: bool = is_wl_model(getattr(device, "name", None))
         self._wl90: WL90Controller | None = (
-            WL90Controller(self) if self._is_wl90 else None
+            WL90Controller(self) if self._is_wl else None
         )
 
     def _init_connection_state(self) -> None:
@@ -440,9 +440,9 @@ class BeurerInstance:
         return self._timer_minutes if self._timer_active else None
 
     @property
-    def is_wl90(self) -> bool:
-        """Return True if this device is a WL90 (supports radio/alarm/music)."""
-        return self._is_wl90
+    def is_wl(self) -> bool:
+        """Return True if this device is a WL model (supports radio/alarm/music)."""
+        return self._is_wl
 
     @property
     def wl90(self) -> WL90Controller | None:
@@ -1267,6 +1267,10 @@ class BeurerInstance:
                 self._available = True
 
             intensity_percent = max(0, min(100, int(intensity / 255 * 100)))
+            # Cap at 99% to work around firmware bug where 100% in white mode
+            # causes some devices to switch to red/RGB mode (see Deadolus#11)
+            if intensity_percent == 100:
+                intensity_percent = 99
             await self._send_packet([CMD_BRIGHTNESS, MODE_WHITE, intensity_percent])
             await asyncio.sleep(COMMAND_DELAY)
             await self._request_status()

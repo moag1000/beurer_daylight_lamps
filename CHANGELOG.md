@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.32.0] - 2026-04-07
+
+### Added
+
+- **WL75 Wake-up Light support**: Added BLE discovery, model detection, and full feature support for the Beurer WL75 (same protocol family as WL90, with radio, speaker, and alarm features)
+
+### Fixed
+
+- **White brightness 100% firmware bug**: Capped white mode brightness at 99% to work around a device firmware bug where setting brightness to exactly 100% causes some lamps to incorrectly switch to red/RGB mode (reported in upstream Deadolus#11)
+
+### Changed
+
+- **Renamed `is_wl90` to `is_wl`**: Internal API now uses generic WL model detection to accommodate the WL75 alongside the WL90
+
 ## [1.31.0] - 2026-03-29
 
 ### Changed
