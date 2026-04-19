@@ -151,10 +151,15 @@ class BeurerLight(
     def available(self) -> bool:
         """Return True if entity is available.
 
-        Availability is based on whether we have received status from the device,
-        not whether the light is on or off.
+        Stays available after first successful connection so commands
+        can trigger reconnection transparently via _send_packet.
         """
         return self._instance.available
+
+    @property
+    def assumed_state(self) -> bool:
+        """Return True when not connected (state may be stale)."""
+        return not self._instance.is_connected
 
     @property
     def should_poll(self) -> bool:

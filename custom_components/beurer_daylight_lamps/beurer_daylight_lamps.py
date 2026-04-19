@@ -143,6 +143,7 @@ class BeurerInstance:
         self._last_command_time: float = 0.0
         self._last_seen: float = time.time()
         self._ble_available: bool = True
+        self._ever_connected: bool = False
 
         # Diagnostic state
         self._last_raw_notification: str | None = None
@@ -782,17 +783,20 @@ class BeurerInstance:
 
     @property
     def available(self) -> bool:
-        """Return True if device is available.
+        """Return True if device is available for commands.
 
         Device is available if:
         - Connected via GATT (active connection), OR
-        - Reachable via BLE AND we've received status
+        - Reachable via BLE AND we've received status, OR
+        - Was previously connected (commands will trigger reconnect)
         """
-        # If actively connected, device is definitely available
         if self.is_connected:
             return True
-        # Otherwise, need both BLE reachability and status received
-        return self.ble_available and self._available
+        if self.ble_available and self._available:
+            return True
+        # Keep available after disconnect so HA allows commands through.
+        # _send_packet handles reconnection transparently before sending.
+        return self._ever_connected
 
     @property
     def is_connected(self) -> bool:
@@ -2155,6 +2159,7 @@ class BeurerInstance:
                     self._clear_adapter_failure(service_info.source)
 
             self._reconnect_backoff = RECONNECT_INITIAL_BACKOFF
+            self._ever_connected = True
             if self._connection_start_time is not None:
                 self._reconnect_count += 1
             self._connection_start_time = time.time()
