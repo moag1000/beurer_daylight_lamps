@@ -28,6 +28,7 @@ from .const import (
 
 if TYPE_CHECKING:
     from .beurer_daylight_lamps import BeurerInstance
+    from .data import BeurerConfigEntry
 
 
 # Default update interval (used initially before state is known)
@@ -50,6 +51,7 @@ class BeurerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         hass: HomeAssistant,
         instance: BeurerInstance,
         name: str,
+        config_entry: BeurerConfigEntry | None = None,
     ) -> None:
         """Initialize the coordinator.
 
@@ -57,10 +59,12 @@ class BeurerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             hass: Home Assistant instance
             instance: BeurerInstance for BLE communication
             name: Device name for logging
+            config_entry: Owning config entry (HA 2025.5+ best practice)
         """
         super().__init__(
             hass,
             LOGGER,
+            config_entry=config_entry,
             name=f"Beurer {name}",
             update_interval=DEFAULT_UPDATE_INTERVAL,
             always_update=False,  # Only update when data changes

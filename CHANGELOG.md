@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.34.0] - 2026-05-03
+
+### Changed
+
+- **Modernization release**: Toolchain, dependencies and CI pipelines aligned with current Home Assistant requirements.
+
+### Breaking
+
+- **Minimum Home Assistant version raised to `2025.12.0`** (was `2024.1.0`). Aligns with the December 2025 HA release that ships modern Bluetooth stack improvements, the stable `config_entry` coordinator API, and Python 3.13.2 baseline. Users on older HA can remain on v1.33.0.
+- **Minimum Python version raised to `3.13`** (was `3.12`). HA Core 2025.2+ already requires 3.13; HA master (2026.5+) requires 3.14.
+
+### Added
+
+- **Python 3.14 test matrix**: CI now runs tests on both Python 3.13 and 3.14 to anticipate the upcoming HA Core requirement.
+- **Coordinator `config_entry` parameter**: `BeurerDataUpdateCoordinator` now accepts and forwards `config_entry` to `DataUpdateCoordinator` as recommended by HA 2025.5+ (avoids the `ContextVar` lookup deprecated in HA 2026.8 for core integrations).
+
+### Updated
+
+- **Manifest requirement**: `bleak-retry-connector>=4.0.0` (was `>=3.0.0`) — matches the version shipped by HA 2026.x.
+- **Test dependencies** (`requirements_test.txt`):
+  - `pytest>=9.0.0` (was `>=7.0.0`)
+  - `pytest-asyncio>=1.3.0` (was `>=0.21.0`)
+  - `pytest-cov>=7.1.0` (was `>=4.0.0`)
+  - `pytest-homeassistant-custom-component>=0.13.316` (was `>=0.13.0`)
+  - `bleak>=2.0.0` (was `>=0.20.0`) — matches HA 2026.x pin
+- **GitHub Actions**:
+  - `actions/checkout@v4` → `@v6`
+  - `actions/setup-python@v5` → `@v6`
+  - `codecov/codecov-action@v4` → `@v6` (uses `files:` instead of legacy `file:`)
+  - `softprops/action-gh-release@v1` → `@v3`
+
+### Notes
+
+- All 487 existing tests continue to pass on the new dependency baseline.
+- mypy strict mode passes with no issues across all 20 source files.
+- `bleak-retry-connector` 4.x and `bleak` 2.x are API-compatible with the imports used by this integration (`BleakClient`, `BleakError`, `BLEDevice`, `BleakClientWithServiceCache`, `establish_connection`).
+
 ## [1.33.0] - 2026-04-19
 
 ### Added

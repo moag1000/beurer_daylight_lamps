@@ -197,6 +197,16 @@ data:
   sunrise_brightness: 50
 ```
 
+## Requirements
+
+| Component | Minimum version | Notes |
+|---|---|---|
+| Home Assistant Core | **2025.12.0** | Required for modern Bluetooth + coordinator APIs and Python 3.13.2. Users on older HA should stay on v1.33.0. |
+| Python | **3.13** | HA Core 2025.2+ requires Python 3.13. |
+| Bluetooth | HA Bluetooth integration | Built-in BLE adapter, ESPHome BT proxy, or Shelly BT proxy. |
+
+> **Upgrading from < 1.34.0?** Make sure your Home Assistant Core is on **2025.12.0 or newer** before installing this version. HACS will hide the update on older HA installs. Users still on HA ≤ 2025.11 can continue to use v1.33.0.
+
 ## Installation
 
 > **Note:** Restart Home Assistant after installation.

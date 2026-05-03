@@ -394,7 +394,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> bo
         device_initially_available,
     )
 
-    coordinator = BeurerDataUpdateCoordinator(hass, instance, device_name)
+    coordinator = BeurerDataUpdateCoordinator(
+        hass, instance, device_name, config_entry=entry
+    )
     entry.runtime_data = BeurerRuntimeData(instance=instance, coordinator=coordinator)
     await coordinator.async_config_entry_first_refresh()
 
