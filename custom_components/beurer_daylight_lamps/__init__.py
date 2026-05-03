@@ -452,7 +452,7 @@ async def _async_get_instances_from_target(
     instances: list[BeurerInstance] = []
 
     # Extract entity IDs from target (handles entity_id, device_id, area_id)
-    entity_ids = await async_extract_entity_ids(hass, call)
+    entity_ids = await async_extract_entity_ids(call)
 
     if not entity_ids:
         LOGGER.warning("%sNo target entities specified", log_prefix)

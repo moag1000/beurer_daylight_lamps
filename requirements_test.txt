@@ -4,3 +4,4 @@ pytest-homeassistant-custom-component>=0.13.316
 pytest-cov>=7.0.0
 bleak>=2.0.0
 pyserial>=3.5
+aiousbwatcher>=1.1.1
