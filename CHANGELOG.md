@@ -27,7 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Test dependencies** (`requirements_test.txt`):
   - `pytest>=9.0.0` (was `>=7.0.0`)
   - `pytest-asyncio>=1.3.0` (was `>=0.21.0`)
-  - `pytest-cov>=7.1.0` (was `>=4.0.0`)
+  - `pytest-cov>=7.0.0` (was `>=4.0.0`) — matches the exact pin in `pytest-homeassistant-custom-component`
   - `pytest-homeassistant-custom-component>=0.13.316` (was `>=0.13.0`)
   - `bleak>=2.0.0` (was `>=0.20.0`) — matches HA 2026.x pin
 - **GitHub Actions**:
