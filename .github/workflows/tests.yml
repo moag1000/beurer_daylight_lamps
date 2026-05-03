@@ -32,7 +32,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.13", "3.14"]
+        # HA stable (2025.12-2026.4) requires Python 3.13.
+        # 3.14 will be re-added once HA stable bumps to 3.14.
+        python-version: ["3.13"]
 
     steps:
       - uses: actions/checkout@v6

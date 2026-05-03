@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Python 3.14 test matrix**: CI now runs tests on both Python 3.13 and 3.14 to anticipate the upcoming HA Core requirement.
+- **Python 3.14 forward-compat**: integration code is verified against Python 3.14 locally; CI matrix will add 3.14 once HA stable requires it (master only as of 2026-05).
 - **Coordinator `config_entry` parameter**: `BeurerDataUpdateCoordinator` now accepts and forwards `config_entry` to `DataUpdateCoordinator` as recommended by HA 2025.5+ (avoids the `ContextVar` lookup deprecated in HA 2026.8 for core integrations).
 
 ### Updated
