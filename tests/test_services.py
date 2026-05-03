@@ -347,6 +347,7 @@ class TestGetInstancesFromTarget:
 
         with patch(
             "custom_components.beurer_daylight_lamps.async_extract_entity_ids",
+            new_callable=AsyncMock,
             return_value=set(),
         ):
             result = await _async_get_instances_from_target(hass, mock_call, "TEST")
@@ -359,6 +360,7 @@ class TestGetInstancesFromTarget:
 
         with patch(
             "custom_components.beurer_daylight_lamps.async_extract_entity_ids",
+            new_callable=AsyncMock,
             return_value={"sensor.beurer_brightness", "binary_sensor.beurer_connected"},
         ):
             result = await _async_get_instances_from_target(hass, mock_call, "TEST")
@@ -374,6 +376,7 @@ class TestGetInstancesFromTarget:
         with (
             patch(
                 "custom_components.beurer_daylight_lamps.async_extract_entity_ids",
+                new_callable=AsyncMock,
                 return_value={"light.living_room"},
             ),
             patch("custom_components.beurer_daylight_lamps.er.async_get") as mock_er,
@@ -402,6 +405,7 @@ class TestGetInstancesFromTarget:
         with (
             patch(
                 "custom_components.beurer_daylight_lamps.async_extract_entity_ids",
+                new_callable=AsyncMock,
                 return_value={"light.beurer_lamp"},
             ),
             patch("custom_components.beurer_daylight_lamps.er.async_get") as mock_er,
@@ -436,6 +440,7 @@ class TestGetInstancesFromTarget:
         with (
             patch(
                 "custom_components.beurer_daylight_lamps.async_extract_entity_ids",
+                new_callable=AsyncMock,
                 return_value={"light.beurer_lamp_1", "light.beurer_lamp_2"},
             ),
             patch("custom_components.beurer_daylight_lamps.er.async_get") as mock_er,
