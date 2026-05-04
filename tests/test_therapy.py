@@ -629,52 +629,68 @@ class TestTherapyTrackerCurrentSession:
         assert tracker.today_minutes == 0
 
     def test_week_minutes_includes_current_session(self) -> None:
-        """Test week_minutes includes active current session."""
+        """Test week_minutes includes active current session.
+
+        Pin "now" to a midweek Wednesday so the historical session 1 day
+        ago is guaranteed to fall in the same ISO week (otherwise on
+        Mondays the historical session lands in the previous week and
+        is correctly excluded).
+        """
+        fixed_now = datetime(2026, 5, 6, 12, 0, 0, tzinfo=UTC)  # Wednesday
         tracker = TherapyTracker()
 
-        # Add historical session
         tracker.sessions.append(
             TherapySession(
-                start_time=datetime.now(tz=UTC) - timedelta(days=1, minutes=30),
-                end_time=datetime.now(tz=UTC) - timedelta(days=1, minutes=20),
+                start_time=fixed_now - timedelta(days=1, minutes=30),
+                end_time=fixed_now - timedelta(days=1, minutes=20),
                 color_temp_kelvin=5300,
                 brightness_pct=100,
             )
         )
 
-        # Start a current session
         tracker._current_session = TherapySession(
-            start_time=datetime.now(tz=UTC) - timedelta(minutes=15),
+            start_time=fixed_now - timedelta(minutes=15),
             color_temp_kelvin=5300,
             brightness_pct=100,
         )
 
-        # Should be about 25 minutes (10 historical + 15 current)
-        assert 24 < tracker.week_minutes < 26
+        with patch(
+            "custom_components.beurer_daylight_lamps.therapy.datetime"
+        ) as mock_dt:
+            mock_dt.now.return_value = fixed_now
+            mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)  # noqa: DTZ001
+            assert 24 < tracker.week_minutes < 26
 
     def test_week_minutes_excludes_non_therapy_current_session(self) -> None:
-        """Test week_minutes excludes non-therapy current session."""
+        """Test week_minutes excludes non-therapy current session.
+
+        See note in ``test_week_minutes_includes_current_session`` about
+        the fixed Wednesday timestamp.
+        """
+        fixed_now = datetime(2026, 5, 6, 12, 0, 0, tzinfo=UTC)  # Wednesday
         tracker = TherapyTracker()
 
-        # Add historical session
         tracker.sessions.append(
             TherapySession(
-                start_time=datetime.now(tz=UTC) - timedelta(days=1, minutes=30),
-                end_time=datetime.now(tz=UTC) - timedelta(days=1, minutes=20),
+                start_time=fixed_now - timedelta(days=1, minutes=30),
+                end_time=fixed_now - timedelta(days=1, minutes=20),
                 color_temp_kelvin=5300,
                 brightness_pct=100,
             )
         )
 
-        # Start a non-therapy current session
         tracker._current_session = TherapySession(
-            start_time=datetime.now(tz=UTC) - timedelta(minutes=15),
+            start_time=fixed_now - timedelta(minutes=15),
             color_temp_kelvin=3000,
             brightness_pct=50,
         )
 
-        # Should only be 10 minutes (historical only)
-        assert 9 < tracker.week_minutes < 11
+        with patch(
+            "custom_components.beurer_daylight_lamps.therapy.datetime"
+        ) as mock_dt:
+            mock_dt.now.return_value = fixed_now
+            mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)  # noqa: DTZ001
+            assert 9 < tracker.week_minutes < 11
 
     def test_end_session_returns_none_when_no_session(self) -> None:
         """Test end_session returns None when no active session."""
