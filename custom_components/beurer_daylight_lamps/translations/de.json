@@ -132,6 +132,17 @@
                     "entry_not_found": "Konfigurationseintrag nicht gefunden."
                 }
             }
+        },
+        "adapter_full": {
+            "title": "Bluetooth-Adapter ausgelastet",
+            "fix_flow": {
+                "step": {
+                    "confirm": {
+                        "title": "BLE-Adapter hat keine freien Verbindungsslots",
+                        "description": "Home Assistant konnte die Beurer Lampe an **{mac}** nicht verbinden, weil der aktive Bluetooth-Adapter sein Limit gleichzeitiger Verbindungen erreicht hat.\n\nTypische Ursachen:\n- Viele BLE-Geräte sind bereits am selben Adapter verbunden (BlueZ-Standard ca. 7).\n- Eine alte Verbindung wurde nicht freigegeben.\n\nLösungsmöglichkeiten:\n- Anzahl gleichzeitig verbundener BLE-Geräte reduzieren, oder\n- ESPHome- / Shelly-Bluetooth-Proxy hinzufügen, damit die Lampe einen anderen Adapter nutzt, oder\n- Bluetooth-Stack neu starten.\n\nGemeldeter Fehler: `{error}`\n\nKlicken Sie auf Absenden, sobald das Problem behoben ist, um diese Meldung zu schließen."
+                    }
+                }
+            }
         }
     },
     "entity": {

@@ -151,6 +151,42 @@ class InitializationFailedRepairFlow(RepairsFlow):
         )
 
 
+class AdapterFullRepairFlow(RepairsFlow):
+    """Handler for adapter-out-of-connection-slots repair flow.
+
+    Triggered when bleak-retry-connector raises ``BleakOutOfConnectionSlotsError``
+    (typically Linux BlueZ with too many concurrent BLE peripherals). The fix
+    is on the user's side — free up an adapter slot or add an ESPHome BT proxy.
+    Submitting the form just acknowledges the issue and clears it.
+    """
+
+    def __init__(self, issue_id: str, data: dict[str, Any]) -> None:
+        """Initialize the repair flow."""
+        super().__init__()
+        self._issue_id = issue_id
+        self._data = data
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> data_entry_flow.FlowResult:
+        """Handle the first step of the repair flow."""
+        return await self.async_step_confirm()
+
+    async def async_step_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> data_entry_flow.FlowResult:
+        """Handle the confirm step."""
+        if user_input is not None:
+            ir.async_delete_issue(self.hass, DOMAIN, self._issue_id)
+            return self.async_create_entry(data={})
+
+        return self.async_show_form(
+            step_id="confirm",
+            data_schema=vol.Schema({}),
+            description_placeholders=self._data,
+        )
+
+
 async def async_create_fix_flow(
     hass: HomeAssistant,
     issue_id: str,
@@ -166,6 +202,8 @@ async def async_create_fix_flow(
         return DeviceNotFoundRepairFlow(issue_id, data or {})
     if issue_id.startswith("initialization_failed_"):
         return InitializationFailedRepairFlow(issue_id, data or {})
+    if issue_id.startswith("adapter_full_"):
+        return AdapterFullRepairFlow(issue_id, data or {})
 
     # Fallback - shouldn't happen
     raise ValueError(f"Unknown issue type: {issue_id}")

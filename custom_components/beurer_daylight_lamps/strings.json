@@ -154,6 +154,17 @@
                     "entry_not_found": "Configuration entry not found."
                 }
             }
+        },
+        "adapter_full": {
+            "title": "Bluetooth adapter at capacity",
+            "fix_flow": {
+                "step": {
+                    "confirm": {
+                        "title": "BLE adapter out of connection slots",
+                        "description": "Home Assistant could not connect to the Beurer lamp at **{mac}** because the active Bluetooth adapter has reached its concurrent-connection limit.\n\nTypical causes:\n- Many BLE devices already connected to the same adapter (BlueZ default cap is around 7).\n- A stale connection that was not released.\n\nWhat to do:\n- Reduce the number of simultaneously connected BLE devices, or\n- Add an ESPHome / Shelly Bluetooth proxy so the lamp can use a different adapter, or\n- Restart the Bluetooth host.\n\nError reported: `{error}`\n\nClick submit once the situation is resolved to dismiss this issue."
+                    }
+                }
+            }
         }
     },
     "entity": {

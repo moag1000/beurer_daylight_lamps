@@ -30,9 +30,17 @@ from typing import TYPE_CHECKING, Any
 
 from bleak import BleakClient  # noqa: TC002 - needed at runtime for test mocking
 from bleak.exc import BleakError
-from bleak_retry_connector import BleakClientWithServiceCache, establish_connection
+from bleak_retry_connector import (
+    BleakAbortedError,
+    BleakClientWithServiceCache,
+    BleakConnectionError,
+    BleakNotFoundError,
+    BleakOutOfConnectionSlotsError,
+    establish_connection,
+)
 from homeassistant.components import bluetooth
 from homeassistant.components.light import ColorMode  # type: ignore[attr-defined]
+from homeassistant.helpers import issue_registry as ir
 
 from .therapy import SunriseSimulation, TherapyTracker
 from .wl90 import WL90Controller
@@ -71,6 +79,7 @@ from .const import (
     CONNECTION_STALE_TIMEOUT,
     # Connection health constants
     CONNECTION_WATCHDOG_INTERVAL,
+    DOMAIN,
     EFFECT_DELAY,
     LOGGER,
     MIN_COMMAND_INTERVAL,
@@ -2094,7 +2103,7 @@ class BeurerInstance:
         await asyncio.sleep(STATUS_DELAY)
         await self._send_packet([CMD_MUSIC_QUERY])
 
-    async def connect(self) -> bool:
+    async def connect(self) -> bool:  # noqa: PLR0912, PLR0915
         """Connect to the device using Home Assistant's Bluetooth stack.
 
         Preferentially selects GATT-capable adapters (ESPHome Proxies,
@@ -2164,6 +2173,26 @@ class BeurerInstance:
                 self._reconnect_count += 1
             self._connection_start_time = time.time()
             self._start_watchdog()
+        except BleakNotFoundError as err:
+            LOGGER.warning(
+                "Beurer %s not in range or not advertising: %s", self._mac, err
+            )
+            self._clear_adapter_full_issue()
+        except BleakOutOfConnectionSlotsError as err:
+            LOGGER.error(
+                "BLE adapter at connection-slot capacity for %s: %s",
+                self._mac,
+                err,
+            )
+            self._raise_adapter_full_issue(err)
+        except BleakAbortedError as err:
+            LOGGER.warning(
+                "Connection to %s aborted by device or adapter: %s", self._mac, err
+            )
+            self._clear_adapter_full_issue()
+        except BleakConnectionError as err:
+            LOGGER.error("Connection to %s failed: %s", self._mac, err)
+            self._clear_adapter_full_issue()
         except (
             BleakError,
             TimeoutError,
@@ -2179,6 +2208,7 @@ class BeurerInstance:
                 type(err).__name__,
             )
         else:
+            self._clear_adapter_full_issue()
             return True
 
         # Mark the adapter that failed so we try a different one next time
@@ -2191,6 +2221,31 @@ class BeurerInstance:
 
         await self.disconnect()
         return False
+
+    def _adapter_full_issue_id(self) -> str:
+        """Return repair issue id for adapter-full state for this device."""
+        return f"adapter_full_{self._mac.replace(':', '').lower()}"
+
+    def _raise_adapter_full_issue(self, err: BleakOutOfConnectionSlotsError) -> None:
+        """Create a repair issue when the BLE adapter is out of slots."""
+        if not self._hass:
+            return
+        ir.async_create_issue(
+            self._hass,
+            DOMAIN,
+            self._adapter_full_issue_id(),
+            is_fixable=True,
+            is_persistent=False,
+            severity=ir.IssueSeverity.ERROR,
+            translation_key="adapter_full",
+            translation_placeholders={"mac": self._mac, "error": str(err)},
+        )
+
+    def _clear_adapter_full_issue(self) -> None:
+        """Delete the adapter-full repair issue if present."""
+        if not self._hass:
+            return
+        ir.async_delete_issue(self._hass, DOMAIN, self._adapter_full_issue_id())
 
     async def update(self) -> None:
         """Update device state by requesting current status."""

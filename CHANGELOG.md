@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.35.0] - 2026-05-04
+
+### Added
+
+- **Differentiated Bluetooth error handling**: `BeurerInstance.connect()` now distinguishes the four `bleak-retry-connector` 4.x exception subtypes (`BleakNotFoundError`, `BleakOutOfConnectionSlotsError`, `BleakAbortedError`, `BleakConnectionError`) and logs each with a context-specific message.
+- **New repair issue `adapter_full`**: When the BLE adapter reports it is out of connection slots (typical Linux/BlueZ situation when too many BLE peripherals are bound to one adapter), Home Assistant now surfaces an actionable repair card explaining the cause and suggesting a fix (reduce concurrent BLE devices, add a Bluetooth proxy, or restart the BT host). Translations available in English and German.
+
+### Why
+
+Both improvements use the same `bleak-retry-connector >= 4.0` baseline that v1.34 already requires, so there is no further dependency change. They turn previously opaque "BleakError: …" log lines into specific, user-actionable signals — particularly valuable for users running on Linux where the BlueZ slot cap silently breaks reconnects.
+
+### Notes
+
+- No breaking changes. Existing repair flows (`device_not_found`, `initialization_failed`) are unchanged.
+- The Home Assistant analytics distribution as of 2026-05-04 shows ~81% of installations on HA 2025.12 or newer (our minimum) and ~77% on HA 2026.x, so the modern bleak-retry-connector exceptions are universally available across the supported user base.
+
 ## [1.34.0] - 2026-05-03
 
 ### Changed
