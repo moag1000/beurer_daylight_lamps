@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.35.1] - 2026-05-06
+
+### Fixed
+
+- **Watchdog false-positive after reconnect**: `BeurerInstance` did not reset `_last_seen` when a new BLE connection was established, so the very first watchdog tick after a reconnect compared against a timestamp that could be hours old. The connection was then disconnected immediately and reconnected in a loop, producing repeated `Connection to … appears stale (26813s without data), forcing reconnect` warnings.
+- **Watchdog runs only when light is on**: a powered-off lamp legitimately stops sending notifications and (on TL100) may stop advertising, so the 5-minute silence threshold treated normal off-states as a fault. The stale check is now skipped when `is_on` is not `True`. The reconnect path remains active when the light is on and silent, which is when an actual stuck connection matters.
+
 ## [1.35.0] - 2026-05-04
 
 ### Added

@@ -647,10 +647,20 @@ class BeurerInstance:
                             )
                             break
 
+                        # Only treat silence as "stale" when the lamp is on:
+                        # an off lamp legitimately sends no notifications,
+                        # and TL100 stops advertising in some power states,
+                        # so a long silent stretch is normal and must not
+                        # trigger a reconnect.
                         time_since_data = time.time() - self._last_seen
-                        if time_since_data > CONNECTION_STALE_TIMEOUT:
+                        if (
+                            self.is_on is True
+                            and time_since_data > CONNECTION_STALE_TIMEOUT
+                        ):
                             LOGGER.warning(
-                                "Watchdog: Connection to %s appears stale (%.0fs without data), forcing reconnect",
+                                "Watchdog: Connection to %s appears stale "
+                                "(%.0fs without data while light on), "
+                                "forcing reconnect",
                                 self._mac,
                                 time_since_data,
                             )
@@ -2172,6 +2182,9 @@ class BeurerInstance:
             if self._connection_start_time is not None:
                 self._reconnect_count += 1
             self._connection_start_time = time.time()
+            # Reset stale-data timer: a fresh connection means the previous
+            # _last_seen (possibly hours old) must not trigger the watchdog.
+            self._last_seen = time.time()
             self._start_watchdog()
         except BleakNotFoundError as err:
             LOGGER.warning(
