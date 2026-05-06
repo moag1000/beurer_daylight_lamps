@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.35.2] - 2026-05-06
+
+### Fixed
+
+- **Noisy log alerts for transient ESPHome proxy hiccups**: connection attempts that failed with the well-known ESPHome / aioesphomeapi messages "Peripheral changed connection status while waiting for BluetoothGATTNotifyResponse" / "BluetoothGATTErrorResponse: Unknown error (0)" are now logged at WARNING instead of ERROR. The auto-reconnect path already recovers from these — keeping them at ERROR triggered an HA UI alert popup for an event that resolves itself within a second.
+- **Removed duplicate "Could not connect to … for update" warning**: `BeurerInstance.update()` no longer emits its own warning when `connect()` already failed. The original failure is logged once with the correct level inside `connect()`; the second warning only doubled the alert noise.
+
 ## [1.35.1] - 2026-05-06
 
 ### Fixed

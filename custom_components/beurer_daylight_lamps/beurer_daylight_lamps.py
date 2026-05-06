@@ -2214,8 +2214,21 @@ class BeurerInstance:
             RuntimeError,
             AttributeError,
         ) as err:
-            LOGGER.error(
-                "Error connecting to %s: %s (type: %s)",
+            # ESPHome / aioesphomeapi surfaces a few known-transient
+            # situations as raw BleakError (peripheral disconnects mid-
+            # handshake, GATT subscribe races). Log those at WARNING so
+            # they do not raise a UI alert; the auto-reconnect path picks
+            # the connection up on the next attempt.
+            err_str = str(err)
+            transient = (
+                "changed connection status while waiting" in err_str
+                or "BluetoothGATTNotifyResponse" in err_str
+                or "BluetoothGATTErrorResponse" in err_str
+            )
+            level_log = LOGGER.warning if transient else LOGGER.error
+            level_log(
+                "%s connecting to %s: %s (type: %s)",
+                "Transient error" if transient else "Error",
                 self._mac,
                 err,
                 type(err).__name__,
@@ -2267,7 +2280,10 @@ class BeurerInstance:
             if (
                 not self._client or not self._client.is_connected
             ) and not await self.connect():
-                LOGGER.warning("Could not connect to %s for update", self._mac)
+                # connect() already logs the specific reason at the right
+                # level; emitting another warning here just duplicates the
+                # alert in the HA UI for transient connection misses.
+                LOGGER.debug("Could not connect to %s for update", self._mac)
                 return
 
             await self._request_status()
