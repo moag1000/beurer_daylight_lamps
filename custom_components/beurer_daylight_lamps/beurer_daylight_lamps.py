@@ -2082,17 +2082,22 @@ class BeurerInstance:
         # settle delay, plus a single retry against the same transient.
         await asyncio.sleep(POST_CONNECT_SETTLE)
 
+        # Local non-Optional bindings so mypy stays narrowed inside the
+        # closure (the wider checks above already guarantee both values).
+        client = self._client
+        assert client is not None  # noqa: S101 - already guarded above
+        assert self._read_uuid is not None  # noqa: S101 - already guarded above
+        read_uuid = self._read_uuid
+
         async def _do_start_notify() -> None:
             try:
-                await self._client.start_notify(  # type: ignore[union-attr]
-                    self._read_uuid,
+                await client.start_notify(
+                    read_uuid,
                     self._handle_notification,
                     bluez={"use_start_notify": True},
                 )
             except TypeError:
-                await self._client.start_notify(  # type: ignore[union-attr]
-                    self._read_uuid, self._handle_notification
-                )
+                await client.start_notify(read_uuid, self._handle_notification)
 
         try:
             await _do_start_notify()
