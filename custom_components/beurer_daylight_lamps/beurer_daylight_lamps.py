@@ -86,6 +86,7 @@ from .const import (
     MODE_CHANGE_DELAY,
     MODE_RGB,
     MODE_WHITE,
+    POST_CONNECT_SETTLE,
     READ_CHARACTERISTIC_UUID,
     RECONNECT_BACKOFF_MULTIPLIER,
     # Reconnection constants
@@ -2073,15 +2074,42 @@ class BeurerInstance:
             await self.disconnect()
             return False
 
-        # Start notifications (with bleak 2.0.0 workaround)
+        # TL100 firmware is not immediately GATT-ready after the BLE link
+        # comes up. Subscribing too early triggers a peripheral-initiated
+        # disconnect ("changed connection status while waiting for
+        # BluetoothGATTNotifyResponse"). The official LightUp app waits
+        # before issuing the first GATT op; mirror that with a short
+        # settle delay, plus a single retry against the same transient.
+        await asyncio.sleep(POST_CONNECT_SETTLE)
+
+        async def _do_start_notify() -> None:
+            try:
+                await self._client.start_notify(  # type: ignore[union-attr]
+                    self._read_uuid,
+                    self._handle_notification,
+                    bluez={"use_start_notify": True},
+                )
+            except TypeError:
+                await self._client.start_notify(  # type: ignore[union-attr]
+                    self._read_uuid, self._handle_notification
+                )
+
         try:
-            await self._client.start_notify(
-                self._read_uuid,
-                self._handle_notification,
-                bluez={"use_start_notify": True},
-            )
-        except TypeError:
-            await self._client.start_notify(self._read_uuid, self._handle_notification)
+            await _do_start_notify()
+        except BleakError as err:
+            err_str = str(err)
+            if (
+                "changed connection status while waiting" in err_str
+                or "BluetoothGATTNotifyResponse" in err_str
+            ):
+                LOGGER.info(
+                    "Beurer %s aborted GATT subscribe; retrying after settle",
+                    self._mac,
+                )
+                await asyncio.sleep(POST_CONNECT_SETTLE)
+                await _do_start_notify()
+            else:
+                raise
 
         # Initial device setup sequence
         await self._send_packet([CMD_DEVICE_PERMISSION])

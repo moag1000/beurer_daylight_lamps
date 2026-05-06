@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.35.3] - 2026-05-06
+
+### Fixed
+
+- **Root cause for transient ESPHome GATT-subscribe failures**: when Home Assistant connected to a Beurer lamp and the integration immediately called `start_notify`, the lamp firmware sometimes aborted the BLE link mid-handshake (`Peripheral … changed connection status while waiting for BluetoothGATTNotifyResponse`). The Beurer firmware needs a short stabilization window after the BLE link comes up before it can handle GATT operations - the official LightUp app pauses ~300-500 ms in the same place.
+- Wait `POST_CONNECT_SETTLE` (0.4 s) between the GATT connect and the first `start_notify`.
+- Retry `start_notify` once after another `POST_CONNECT_SETTLE` if the lamp still aborts the subscribe with the known transient error pattern. Other `BleakError`s from `start_notify` continue to bubble up unchanged.
+
 ## [1.35.2] - 2026-05-06
 
 ### Fixed

@@ -98,6 +98,11 @@ MODE_CHANGE_DELAY: Final = 0.5  # Longer delay after mode changes
 EFFECT_DELAY: Final = 0.5  # Delay after effect changes
 STATUS_DELAY: Final = 0.2  # Delay after status request
 TURN_OFF_DELAY: Final = 0.15  # Short delay after turn off sequence
+# Wait after BLE connect before the first GATT op. Beurer firmware aborts
+# the GATT subscribe ("changed connection status while waiting for
+# BluetoothGATTNotifyResponse") if issued immediately after the link is
+# up. The official LightUp APK pauses ~300-500ms; mirror that here.
+POST_CONNECT_SETTLE: Final = 0.4
 
 # Rate limiting for commands to prevent overwhelming the device
 MIN_COMMAND_INTERVAL: Final = 0.1  # Minimum time between commands (100ms)
