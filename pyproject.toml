@@ -1,6 +1,6 @@
 [project]
 name = "beurer-daylight-lamps"
-version = "1.35.3"
+version = "1.35.4"
 description = "Home Assistant integration for Beurer Daylight Therapy Lamps"
 requires-python = ">=3.13"
 

@@ -906,6 +906,13 @@ class BeurerInstance:
             return False
         else:
             self._command_success_count += 1
+            # A successful GATT write proves the BLE link is alive even
+            # if the lamp does not push notifications back (some firmware
+            # / proxy combinations suppress notify deliveries). Treat the
+            # write itself as fresh activity so the watchdog does not
+            # tear down a healthy connection just because notifications
+            # are silent.
+            self._last_seen = time.time()
             return True
 
     async def _send_packet(self, message: list[int]) -> bool:

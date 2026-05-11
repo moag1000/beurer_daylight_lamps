@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.35.4] - 2026-05-11
+
+### Fixed
+
+- **Watchdog tore down healthy connections after a quiet stretch**: with a Beurer lamp connected through certain ESPHome Bluetooth proxy / firmware combinations, GATT notifications can stay silent even though commands are being delivered correctly. The watchdog only updated `_last_seen` from notifications, so a long off-period followed by the user turning the lamp on triggered `Watchdog: Connection … appears stale (300s without data while light on), forcing reconnect` within milliseconds of the on-transition — disconnecting the freshly-working link.
+- A successful GATT write now also bumps `_last_seen`. The link is provably alive whenever a `write_gatt_char` returns without error, so a healthy reconnect cycle is no longer triggered just because the peripheral does not push notifications.
+
 ## [1.35.3] - 2026-05-06
 
 ### Fixed
