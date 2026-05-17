@@ -134,6 +134,8 @@ class BeurerInstance:
         self._mac: str = device.address
         self._ble_device: BLEDevice = device
         self._hass: HomeAssistant | None = hass
+        self._entry: Any = None  # Set after creation by async_setup_entry
+        self._device_name: str = getattr(device, "name", None) or "Beurer Lamp"
         self._client: BleakClient | None = None
         self._update_callbacks: list[Callable[[], None]] = []
         self._rssi: int | None = rssi
@@ -1611,6 +1613,27 @@ class BeurerInstance:
             return None
         return state.state
 
+    def _end_therapy_and_emit(self) -> None:
+        """End the active session and fire EVENT_THERAPY_SESSION if a session was ended."""
+        from .const import EVENT_THERAPY_SESSION
+
+        session = self._therapy_tracker.end_session()
+        if session is None or session.end_time is None or self._hass is None:
+            return
+        self._hass.bus.async_fire(
+            EVENT_THERAPY_SESSION,
+            {
+                "entry_id": self._entry.entry_id if self._entry else None,
+                "lamp_name": self._device_name,
+                "person_id": session.person_id,
+                "start_time": session.start_time.isoformat(),
+                "end_time": session.end_time.isoformat(),
+                "duration_minutes": round(session.duration_minutes, 1),
+                "color_temp_kelvin": session.color_temp_kelvin,
+                "brightness_pct": session.brightness_pct,
+            },
+        )
+
     def _track_therapy_from_rgb(self) -> None:
         """Track therapy exposure based on current RGB state."""
         # Therapy-relevant light: cool white (high blue component) at high brightness
@@ -1636,7 +1659,7 @@ class BeurerInstance:
                 )
         elif not self._color_on:
             # End session when color mode turns off
-            self._therapy_tracker.end_session()
+            self._end_therapy_and_emit()
 
     def _handle_device_off(self) -> bool:
         """Handle device-off notification (version 255).
@@ -1648,7 +1671,7 @@ class BeurerInstance:
         if self._light_on or self._color_on:
             changed = True
             # End therapy session when light turns off
-            self._therapy_tracker.end_session()
+            self._end_therapy_and_emit()
         self._light_on = False
         self._color_on = False
         LOGGER.debug("Device off notification")

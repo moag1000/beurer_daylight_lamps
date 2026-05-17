@@ -294,6 +294,8 @@ def _create_instance(
 
     try:
         instance = BeurerInstance(ble_device, rssi, hass)
+        instance._entry = entry
+        instance._device_name = device_name
         if not device_initially_available:
             instance._ble_available = False
             LOGGER.info("Device %s marked as initially unavailable", mac_address)
