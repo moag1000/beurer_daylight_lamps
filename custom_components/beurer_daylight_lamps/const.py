@@ -234,3 +234,11 @@ def is_wl_model(name: str | None) -> bool:
         return False
     name_upper = name.upper()
     return any(name_upper.startswith(prefix) for prefix in WL_MODELS)
+
+
+# Per-person therapy attribution
+CONF_DEFAULT_THERAPY_USER = "default_therapy_user"
+DEFAULT_THERAPY_USER: str | None = None
+THERAPY_USER_UNKNOWN = "unknown"
+EVENT_THERAPY_SESSION = "beurer_daylight_lamps_therapy_session"
+THERAPY_HUB_IDENTIFIER = "therapy_hub"
