@@ -86,6 +86,7 @@ class TherapySession:
     end_time: datetime | None = None
     color_temp_kelvin: int = 5300
     brightness_pct: int = 100
+    person_id: str | None = None
 
     @property
     def duration_minutes(self) -> float:

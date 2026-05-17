@@ -758,3 +758,16 @@ class TestTherapyEdgeCases:
         assert SunriseProfile.NATURAL.value == "natural"
         assert SunriseProfile.ENERGIZE.value == "energize"
         assert SunriseProfile.THERAPY.value == "therapy"
+
+
+def test_session_stores_person_id() -> None:
+    session = TherapySession(
+        start_time=datetime.now(tz=UTC),
+        person_id="person.michael",
+    )
+    assert session.person_id == "person.michael"
+
+
+def test_session_person_id_defaults_none() -> None:
+    session = TherapySession(start_time=datetime.now(tz=UTC))
+    assert session.person_id is None
