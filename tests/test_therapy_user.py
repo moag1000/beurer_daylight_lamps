@@ -5,7 +5,9 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.device_registry import format_mac
+from homeassistant.helpers.update_coordinator import BaseCoordinatorEntity
 
 from custom_components.beurer_daylight_lamps.const import (
     DOMAIN,
@@ -242,7 +244,7 @@ class TestBeurerTherapyUserSelectOption:
         mock_hass_no_persons: MagicMock,
         mock_entry: MagicMock,
     ) -> None:
-        """Selecting an invalid option raises ValueError."""
+        """Selecting an invalid option raises HomeAssistantError."""
         from custom_components.beurer_daylight_lamps.select import BeurerTherapyUserSelect
 
         entity = BeurerTherapyUserSelect(
@@ -250,7 +252,7 @@ class TestBeurerTherapyUserSelectOption:
         )
         entity.hass = mock_hass_no_persons
 
-        with pytest.raises(ValueError, match="Invalid therapy user"):
+        with pytest.raises(HomeAssistantError, match="Invalid therapy user"):
             await entity.async_select_option("person.does_not_exist")
 
 
@@ -277,14 +279,11 @@ class TestBeurerTherapyUserSelectRestoreState:
 
         # Patch async_get_last_state to return a saved state
         entity.async_get_last_state = AsyncMock(return_value=last_state)
-        # Patch super().async_added_to_hass to be a no-op
-        entity.__class__.__mro__  # ensure MRO exists
 
-        # Call the method under test while bypassing CoordinatorEntity wiring
         from unittest.mock import patch as _patch
 
         with _patch.object(
-            type(entity).__mro__[2],  # CoordinatorEntity
+            BaseCoordinatorEntity,
             "async_added_to_hass",
             new=AsyncMock(),
         ):
@@ -314,7 +313,7 @@ class TestBeurerTherapyUserSelectRestoreState:
         from unittest.mock import patch as _patch
 
         with _patch.object(
-            type(entity).__mro__[2],
+            BaseCoordinatorEntity,
             "async_added_to_hass",
             new=AsyncMock(),
         ):
@@ -344,7 +343,7 @@ class TestBeurerTherapyUserSelectRestoreState:
         from unittest.mock import patch as _patch
 
         with _patch.object(
-            type(entity).__mro__[2],
+            BaseCoordinatorEntity,
             "async_added_to_hass",
             new=AsyncMock(),
         ):
@@ -386,3 +385,23 @@ class TestBeurerTherapyUserSelectDeviceInfo:
         info = entity.device_info
         identifier_domains = {i[0] for i in info["identifiers"]}
         assert DOMAIN in identifier_domains
+
+
+class TestBeurerTherapyUserSelectAvailability:
+    """Test that BeurerTherapyUserSelect is always available."""
+
+    def test_available_is_true_even_when_lamp_offline(
+        self,
+        mock_coordinator: MagicMock,
+        mock_hass_no_persons: MagicMock,
+        mock_entry: MagicMock,
+    ) -> None:
+        """Entity must remain available when the lamp is unreachable (HA-side state)."""
+        from custom_components.beurer_daylight_lamps.select import BeurerTherapyUserSelect
+
+        mock_coordinator.instance.available = False
+
+        entity = BeurerTherapyUserSelect(
+            mock_hass_no_persons, mock_coordinator, "Test Lamp", mock_entry
+        )
+        assert entity.available is True

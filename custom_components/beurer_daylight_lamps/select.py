@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from homeassistant.components.select import SelectEntity, SelectEntityDescription
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.device_registry import (
     CONNECTION_BLUETOOTH,
     DeviceInfo,
@@ -167,9 +168,14 @@ class BeurerTherapyUserSelect(
             if default and default in self.options:
                 self._current = default
 
+    @property
+    def available(self) -> bool:
+        """Always available — attribution is HA-side state, not lamp state."""
+        return True
+
     async def async_select_option(self, option: str) -> None:
         """Change the active therapy user."""
         if option not in self.options:
-            raise ValueError(f"Invalid therapy user: {option}")
+            raise HomeAssistantError(f"Invalid therapy user: {option}")
         self._current = option
         self.async_write_ha_state()
