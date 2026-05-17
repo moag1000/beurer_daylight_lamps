@@ -118,10 +118,15 @@ class TherapyTracker:
         color_temp_kelvin: int = 5300,
         brightness_pct: int = 100,
         person_id: str | None = None,
-    ) -> None:
-        """Start tracking a new therapy session."""
+    ) -> "TherapySession | None":
+        """Start tracking a new therapy session.
+
+        Returns the previously active session if one was implicitly ended, so
+        the caller can fire the session-end event for it.
+        """
+        ended_session = None
         if self._current_session is not None:
-            self.end_session()
+            ended_session = self.end_session()
 
         self._current_session = TherapySession(
             start_time=datetime.now(tz=UTC),
@@ -135,6 +140,7 @@ class TherapyTracker:
             brightness_pct,
             person_id,
         )
+        return ended_session
 
     def update_session(
         self,

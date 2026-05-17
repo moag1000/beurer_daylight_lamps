@@ -690,3 +690,153 @@ class TestDynamicPersonListener:
         handler(fake_event)  # fire again — should be a no-op
 
         assert async_add_entities.call_count == 1
+
+
+# ---------------------------------------------------------------------------
+# C1: Implicit session-end fires event
+# ---------------------------------------------------------------------------
+
+
+class TestImplicitSessionEnd:
+    """Verify that start_session returns the displaced session and callers fire the event."""
+
+    def test_start_session_returns_ended_session(self) -> None:
+        """TherapyTracker.start_session returns the previously active session when one is displaced."""
+        from custom_components.beurer_daylight_lamps.therapy import TherapyTracker
+
+        tracker = TherapyTracker()
+        # Start session for person A
+        tracker.start_session(5300, 100, person_id="person.alice")
+        # Backdate to ensure session qualifies (>= 1 min, therapy light)
+        from datetime import UTC, timedelta, datetime
+        tracker._current_session.start_time = datetime.now(UTC) - timedelta(minutes=5)
+
+        # Starting session for person B should return A's ended session
+        returned = tracker.start_session(5300, 100, person_id="person.bob")
+
+        assert returned is not None
+        assert returned.person_id == "person.alice"
+        assert returned.end_time is not None  # was ended
+        assert tracker._current_session.person_id == "person.bob"
+
+    def test_start_session_returns_none_when_no_prior_session(self) -> None:
+        """TherapyTracker.start_session returns None when no prior session was active."""
+        from custom_components.beurer_daylight_lamps.therapy import TherapyTracker
+
+        tracker = TherapyTracker()
+        returned = tracker.start_session(5300, 100, person_id="person.alice")
+
+        assert returned is None
+
+    def test_implicit_end_fires_event_at_instance_level(self) -> None:
+        """When start_session displaces an old session, an event is fired for the old session."""
+        mock_hass = _make_mock_hass()
+        instance = _make_beurer_instance(hass=mock_hass)
+        mock_entry = MagicMock()
+        mock_entry.entry_id = "entry_implicit"
+        instance._entry = mock_entry
+        instance._device_name = "Implicit Lamp"
+
+        from custom_components.beurer_daylight_lamps.therapy import TherapyTracker
+        from datetime import UTC, timedelta, datetime
+
+        instance._therapy_tracker = TherapyTracker()
+
+        # Directly start session for person A (bypassing _track_therapy_from_rgb)
+        instance._therapy_tracker.start_session(5300, 100, person_id="person.alice")
+        instance._therapy_tracker._current_session.start_time = (
+            datetime.now(UTC) - timedelta(minutes=5)
+        )
+
+        # Now simulate a second start_session (person B) via _emit_session_end path
+        ended = instance._therapy_tracker.start_session(5300, 100, person_id="person.bob")
+        instance._emit_session_end(ended)
+
+        # Event for person A should have fired once
+        mock_hass.bus.async_fire.assert_called_once()
+        event_name, payload = mock_hass.bus.async_fire.call_args[0]
+        assert event_name == EVENT_THERAPY_SESSION
+        assert payload["person_id"] == "person.alice"
+
+    def test_implicit_end_no_event_when_no_prior_session(self) -> None:
+        """_emit_session_end(None) does not fire any event."""
+        mock_hass = _make_mock_hass()
+        instance = _make_beurer_instance(hass=mock_hass)
+        instance._entry = MagicMock()
+        instance._device_name = "Empty"
+
+        instance._emit_session_end(None)
+
+        mock_hass.bus.async_fire.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# I4: light_entity_id present in event payload
+# ---------------------------------------------------------------------------
+
+
+class TestLightEntityIdInPayload:
+    """Verify that EVENT_THERAPY_SESSION payload includes light_entity_id."""
+
+    def test_event_payload_includes_light_entity_id(self) -> None:
+        """light_entity_id from the entity registry is included in the event payload."""
+        mock_hass = _make_mock_hass()
+        instance = _make_beurer_instance(hass=mock_hass)
+        mock_entry = MagicMock()
+        mock_entry.entry_id = "entry_light"
+        instance._entry = mock_entry
+        instance._device_name = "Light Lamp"
+
+        from custom_components.beurer_daylight_lamps.therapy import TherapyTracker
+        from datetime import UTC, timedelta, datetime
+
+        instance._therapy_tracker = TherapyTracker()
+        instance._therapy_tracker.start_session(5300, 100, person_id="person.alice")
+        instance._therapy_tracker._current_session.start_time = (
+            datetime.now(UTC) - timedelta(minutes=5)
+        )
+
+        # Mock the entity registry to return a known entity_id
+        mock_registry = MagicMock()
+        mock_registry.async_get_entity_id.return_value = "light.beurer_tl100"
+
+        with patch(
+            "custom_components.beurer_daylight_lamps.beurer_daylight_lamps.er.async_get",
+            return_value=mock_registry,
+        ):
+            instance._end_therapy_and_emit()
+
+        mock_hass.bus.async_fire.assert_called_once()
+        _, payload = mock_hass.bus.async_fire.call_args[0]
+        assert "light_entity_id" in payload
+        assert payload["light_entity_id"] == "light.beurer_tl100"
+
+    def test_event_payload_light_entity_id_none_when_not_found(self) -> None:
+        """light_entity_id is None when the entity registry lookup returns nothing."""
+        mock_hass = _make_mock_hass()
+        instance = _make_beurer_instance(hass=mock_hass)
+        mock_entry = MagicMock()
+        mock_entry.entry_id = "entry_no_light"
+        instance._entry = mock_entry
+        instance._device_name = "No Light"
+
+        from custom_components.beurer_daylight_lamps.therapy import TherapyTracker
+        from datetime import UTC, timedelta, datetime
+
+        instance._therapy_tracker = TherapyTracker()
+        instance._therapy_tracker.start_session(5300, 100, person_id=None)
+        instance._therapy_tracker._current_session.start_time = (
+            datetime.now(UTC) - timedelta(minutes=5)
+        )
+
+        mock_registry = MagicMock()
+        mock_registry.async_get_entity_id.return_value = None
+
+        with patch(
+            "custom_components.beurer_daylight_lamps.beurer_daylight_lamps.er.async_get",
+            return_value=mock_registry,
+        ):
+            instance._end_therapy_and_emit()
+
+        _, payload = mock_hass.bus.async_fire.call_args[0]
+        assert payload["light_entity_id"] is None

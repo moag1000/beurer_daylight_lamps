@@ -1613,18 +1613,23 @@ class BeurerInstance:
             return None
         return state.state
 
-    def _end_therapy_and_emit(self) -> None:
-        """End the active session and fire EVENT_THERAPY_SESSION if a session was ended."""
+    def _emit_session_end(self, session: "TherapySession | None") -> None:
+        """Fire EVENT_THERAPY_SESSION for an already-ended session."""
         from .const import EVENT_THERAPY_SESSION
+        from .therapy import TherapySession  # noqa: F401 (type reference)
 
-        session = self._therapy_tracker.end_session()
         if session is None or session.end_time is None or self._hass is None:
             return
+        registry = er.async_get(self._hass)
+        light_entity_id = registry.async_get_entity_id(
+            "light", DOMAIN, format_mac(self.mac)
+        )
         self._hass.bus.async_fire(
             EVENT_THERAPY_SESSION,
             {
                 "entry_id": self._entry.entry_id if self._entry else None,
                 "lamp_name": self._device_name,
+                "light_entity_id": light_entity_id,
                 "person_id": session.person_id,
                 "start_time": session.start_time.isoformat(),
                 "end_time": session.end_time.isoformat(),
@@ -1633,6 +1638,11 @@ class BeurerInstance:
                 "brightness_pct": session.brightness_pct,
             },
         )
+
+    def _end_therapy_and_emit(self) -> None:
+        """End the active session and fire EVENT_THERAPY_SESSION if a session was ended."""
+        session = self._therapy_tracker.end_session()
+        self._emit_session_end(session)
 
     def _track_therapy_from_rgb(self) -> None:
         """Track therapy exposure based on current RGB state."""
@@ -1652,11 +1662,13 @@ class BeurerInstance:
                 and brightness_pct >= 80
                 and not self._therapy_tracker.has_active_session
             ):
-                self._therapy_tracker.start_session(
+                ended = self._therapy_tracker.start_session(
                     estimated_kelvin,
                     brightness_pct,
                     person_id=self._resolve_therapy_person(),
                 )
+                # Fire event for any session that was implicitly ended by start_session
+                self._emit_session_end(ended)
         elif not self._color_on:
             # End session when color mode turns off
             self._end_therapy_and_emit()
