@@ -38,9 +38,11 @@ from .therapy_hub import (
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from typing import Any
 
     from homeassistant.core import Event, HomeAssistant
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
+    from homeassistant.helpers.event import EventStateChangedData
 
     from .data import BeurerConfigEntry
 
@@ -123,7 +125,7 @@ def _make_person_listener(
     hass: HomeAssistant,
     async_add_entities: AddEntitiesCallback,
     known_persons: set[str],
-) -> Callable[[Event], None]:
+) -> Callable[[Event[EventStateChangedData]], Any]:
     """Return a callback that adds per-person sensors for any newly created person entity.
 
     The *known_persons* set is mutated in-place to prevent duplicate entity creation
@@ -131,7 +133,7 @@ def _make_person_listener(
     """
 
     @callback
-    def _handle_new_person(event: Event) -> None:
+    def _handle_new_person(event: Event[EventStateChangedData]) -> None:
         new_id: str = event.data["entity_id"]
         if new_id in known_persons:
             return
