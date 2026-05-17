@@ -15,12 +15,14 @@ from homeassistant.const import (
     SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
     UnitOfTime,
 )
+from homeassistant.core import callback
 from homeassistant.helpers.device_registry import (
     CONNECTION_BLUETOOTH,
     DeviceInfo,
     format_mac,
 )
 from homeassistant.helpers.entity import EntityCategory  # type: ignore[attr-defined]
+from homeassistant.helpers.event import async_track_state_added_domain
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN, VERSION, THERAPY_HUB_IDENTIFIER, detect_model
@@ -34,7 +36,7 @@ from .therapy_hub import (
 )
 
 if TYPE_CHECKING:
-    from homeassistant.core import HomeAssistant
+    from homeassistant.core import Event, HomeAssistant
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
     from .data import BeurerConfigEntry
@@ -114,6 +116,33 @@ CONNECTION_HEALTH_SENSOR_DESCRIPTIONS: tuple[SensorEntityDescription, ...] = (
 )
 
 
+def _make_person_listener(
+    hass: "HomeAssistant",
+    async_add_entities: "AddEntitiesCallback",
+    known_persons: set[str],
+) -> "callback":
+    """Return a callback that adds per-person sensors for any newly created person entity.
+
+    The *known_persons* set is mutated in-place to prevent duplicate entity creation
+    when the same state_added event fires more than once for the same entity_id.
+    """
+
+    @callback
+    def _handle_new_person(event: "Event") -> None:
+        new_id: str = event.data["entity_id"]
+        if new_id in known_persons:
+            return
+        known_persons.add(new_id)
+        slug = new_id.split(".", 1)[1]
+        async_add_entities([
+            BeurerPersonTherapySensor(hass, new_id, slug, "today"),
+            BeurerPersonTherapySensor(hass, new_id, slug, "week"),
+            BeurerPersonTherapySensor(hass, new_id, slug, "progress"),
+        ])
+
+    return _handle_new_person
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: BeurerConfigEntry,
@@ -156,6 +185,11 @@ async def async_setup_entry(
     def _person_slug(entity_id: str) -> str:
         return entity_id.split(".", 1)[1]
 
+    # Snapshot existing persons so the listener can skip them
+    known_persons: set[str] = {
+        s.entity_id for s in hass.states.async_all("person")
+    }
+
     def _build_person_sensors() -> list[SensorEntity]:
         person_entities: list[SensorEntity] = []
         for ps in hass.states.async_all("person"):
@@ -168,6 +202,12 @@ async def async_setup_entry(
         return person_entities
 
     async_add_entities(_build_person_sensors())
+
+    # Register a listener so sensors are created for persons added after setup
+    unsub = async_track_state_added_domain(
+        hass, "person", _make_person_listener(hass, async_add_entities, known_persons)
+    )
+    entry.async_on_unload(unsub)
 
 
 class BeurerSensor(CoordinatorEntity[BeurerDataUpdateCoordinator], SensorEntity):

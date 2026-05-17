@@ -598,3 +598,95 @@ class TestBeurerPersonTherapySensor:
         assert s_today.native_unit_of_measurement == "min"
         assert s_week.native_unit_of_measurement == "min"
         assert s_prog.native_unit_of_measurement == "%"
+
+
+# ---------------------------------------------------------------------------
+# Dynamic person listener tests
+# ---------------------------------------------------------------------------
+
+
+class TestDynamicPersonListener:
+    """Unit tests for _handle_new_person: dynamically adds sensors at runtime."""
+
+    def test_handle_new_person_adds_three_sensors(self) -> None:
+        """_handle_new_person adds today/week/progress sensors for a newly seen person."""
+        from unittest.mock import MagicMock, call
+
+        from custom_components.beurer_daylight_lamps.sensor import _make_person_listener
+
+        hass = _make_hass_with_entries([])
+        hass.states = MagicMock()
+        hass.states.async_all.return_value = []  # No persons at setup time
+
+        async_add_entities = MagicMock()
+        known_persons: set[str] = set()
+
+        handler = _make_person_listener(hass, async_add_entities, known_persons)
+
+        # Fire a fake state_added event for person.anna
+        fake_event = MagicMock()
+        fake_event.data = {"entity_id": "person.anna"}
+        handler(fake_event)
+
+        async_add_entities.assert_called_once()
+        added = async_add_entities.call_args[0][0]
+        assert len(added) == 3
+        kinds = {e._kind for e in added}
+        assert kinds == {"today", "week", "progress"}
+        for entity in added:
+            assert entity._person == "person.anna"
+
+    def test_handle_new_person_deduplicates_same_person(self) -> None:
+        """_handle_new_person does NOT add sensors again if person already known."""
+        from unittest.mock import MagicMock
+
+        from custom_components.beurer_daylight_lamps.sensor import _make_person_listener
+
+        hass = _make_hass_with_entries([])
+        async_add_entities = MagicMock()
+        known_persons: set[str] = {"person.anna"}  # pre-populated
+
+        handler = _make_person_listener(hass, async_add_entities, known_persons)
+
+        fake_event = MagicMock()
+        fake_event.data = {"entity_id": "person.anna"}
+        handler(fake_event)
+
+        async_add_entities.assert_not_called()
+
+    def test_handle_new_person_updates_known_set(self) -> None:
+        """After _handle_new_person fires, the person is added to known_persons."""
+        from unittest.mock import MagicMock
+
+        from custom_components.beurer_daylight_lamps.sensor import _make_person_listener
+
+        hass = _make_hass_with_entries([])
+        async_add_entities = MagicMock()
+        known_persons: set[str] = set()
+
+        handler = _make_person_listener(hass, async_add_entities, known_persons)
+
+        fake_event = MagicMock()
+        fake_event.data = {"entity_id": "person.bob"}
+        handler(fake_event)
+
+        assert "person.bob" in known_persons
+
+    def test_handle_new_person_called_twice_adds_once(self) -> None:
+        """Firing state_added twice for same person only creates sensors once."""
+        from unittest.mock import MagicMock
+
+        from custom_components.beurer_daylight_lamps.sensor import _make_person_listener
+
+        hass = _make_hass_with_entries([])
+        async_add_entities = MagicMock()
+        known_persons: set[str] = set()
+
+        handler = _make_person_listener(hass, async_add_entities, known_persons)
+
+        fake_event = MagicMock()
+        fake_event.data = {"entity_id": "person.carol"}
+        handler(fake_event)
+        handler(fake_event)  # fire again — should be a no-op
+
+        assert async_add_entities.call_count == 1
