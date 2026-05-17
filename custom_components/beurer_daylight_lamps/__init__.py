@@ -416,7 +416,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> bo
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     await _async_setup_services(hass)
 
-    # Ensure the virtual Therapy Hub device exists (singleton per hass instance)
+    # Ensure the virtual Therapy Hub device exists (singleton per hass instance).
+    # ensure_device returns None when the entry is not yet registered (e.g. in
+    # tests using bare MagicMock entries) — that is benign and we log nothing.
     hub = get_or_create_hub(hass)
     hub.ensure_device(entry)
 

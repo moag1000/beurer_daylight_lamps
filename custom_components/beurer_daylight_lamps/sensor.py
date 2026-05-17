@@ -37,6 +37,8 @@ from .therapy_hub import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from homeassistant.core import Event, HomeAssistant
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -121,7 +123,7 @@ def _make_person_listener(
     hass: HomeAssistant,
     async_add_entities: AddEntitiesCallback,
     known_persons: set[str],
-) -> callback:
+) -> Callable[[Event], None]:
     """Return a callback that adds per-person sensors for any newly created person entity.
 
     The *known_persons* set is mutated in-place to prevent duplicate entity creation

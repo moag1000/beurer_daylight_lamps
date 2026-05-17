@@ -338,6 +338,34 @@ class TestTherapyHubDevice:
         # async_get_or_create is idempotent by HA contract; called twice here
         assert mock_dev_reg.async_get_or_create.call_count == 2
 
+    def test_ensure_device_returns_none_for_unknown_entry(self) -> None:
+        """ensure_device returns None (and does not raise) when the config entry is
+        not registered with HA — as happens with bare MagicMock entries in tests."""
+        from homeassistant.exceptions import HomeAssistantError
+
+        from custom_components.beurer_daylight_lamps.therapy_hub import TherapyHub
+
+        hass = _make_mock_hass_for_hub()
+        mock_dev_reg = _make_mock_dev_reg()
+        # Simulate HA refusing to link an unregistered config entry
+        mock_dev_reg.async_get_or_create.side_effect = HomeAssistantError(
+            "Can't link device to unknown config entry fake_id"
+        )
+
+        owning_entry = MagicMock()
+        owning_entry.entry_id = "fake_id"
+
+        with patch(
+            "custom_components.beurer_daylight_lamps.therapy_hub.dr.async_get",
+            return_value=mock_dev_reg,
+        ):
+            hub = TherapyHub(hass)
+            result = hub.ensure_device(owning_entry)
+
+        assert result is None
+        # owning_entry_id should NOT be updated when the call failed
+        assert hub.owning_entry_id is None
+
 
 # ---------------------------------------------------------------------------
 # Aggregation helper tests

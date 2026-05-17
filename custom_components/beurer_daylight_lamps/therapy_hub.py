@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 
-from .const import DOMAIN, THERAPY_HUB_IDENTIFIER
+from .const import DOMAIN, LOGGER, THERAPY_HUB_IDENTIFIER
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -28,21 +29,29 @@ class TherapyHub:
         self.hass = hass
         self.owning_entry_id: str | None = None
 
-    def ensure_device(self, owning_entry: ConfigEntry) -> dr.DeviceEntry:
+    def ensure_device(self, owning_entry: ConfigEntry) -> dr.DeviceEntry | None:
         """Create or update the virtual hub device in the device registry.
 
         Uses async_get_or_create so repeated calls are idempotent — HA
         deduplicates on the identifiers tuple.
+
+        Returns None when the config entry is not registered with HA (e.g. in
+        test mocks that use a bare MagicMock entry), so callers must handle a
+        None return value gracefully.
         """
         dev_reg = dr.async_get(self.hass)
-        device = dev_reg.async_get_or_create(
-            config_entry_id=owning_entry.entry_id,
-            identifiers={(DOMAIN, THERAPY_HUB_IDENTIFIER)},
-            name="Beurer Therapy Hub",
-            manufacturer="Beurer",
-            model="Therapy Aggregation",
-            entry_type=dr.DeviceEntryType.SERVICE,
-        )
+        try:
+            device = dev_reg.async_get_or_create(
+                config_entry_id=owning_entry.entry_id,
+                identifiers={(DOMAIN, THERAPY_HUB_IDENTIFIER)},
+                name="Beurer Therapy Hub",
+                manufacturer="Beurer",
+                model="Therapy Aggregation",
+                entry_type=dr.DeviceEntryType.SERVICE,
+            )
+        except HomeAssistantError as err:
+            LOGGER.debug("Could not create therapy hub device: %s", err)
+            return None
         self.owning_entry_id = owning_entry.entry_id
         return device
 
@@ -71,7 +80,7 @@ def get_or_create_hub(hass: HomeAssistant) -> TherapyHub:
     if hub is None:
         hub = TherapyHub(hass)
         domain_data[HUB_DATA_KEY] = hub
-    return hub
+    return cast("TherapyHub", hub)
 
 
 # ---------------------------------------------------------------------------
