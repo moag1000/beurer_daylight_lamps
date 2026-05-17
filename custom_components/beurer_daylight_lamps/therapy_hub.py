@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from homeassistant.helpers import device_registry as dr
@@ -66,3 +67,71 @@ def get_or_create_hub(hass: HomeAssistant) -> TherapyHub:
         hub = TherapyHub(hass)
         domain_data[HUB_DATA_KEY] = hub
     return hub
+
+
+# ---------------------------------------------------------------------------
+# Per-person aggregation helpers
+# ---------------------------------------------------------------------------
+
+
+def _iter_trackers(hass: HomeAssistant):
+    """Yield each lamp's TherapyTracker from runtime_data."""
+    for entry in hass.config_entries.async_entries(DOMAIN):
+        runtime = getattr(entry, "runtime_data", None)
+        if runtime is None:
+            continue
+        instance = getattr(runtime, "instance", None)
+        if instance is None:
+            continue
+        tracker = getattr(instance, "therapy_tracker", None)
+        if tracker is not None:
+            yield tracker
+
+
+def _sum_minutes_for(
+    hass: HomeAssistant, person_id: str, since: datetime
+) -> float:
+    total = 0.0
+    for tracker in _iter_trackers(hass):
+        for session in tracker.sessions:
+            if (
+                session.person_id == person_id
+                and session.is_therapy_light
+                and session.start_time >= since
+            ):
+                total += session.duration_minutes
+        cur = tracker._current_session
+        if (
+            cur is not None
+            and cur.person_id == person_id
+            and cur.is_therapy_light
+            and cur.start_time >= since
+        ):
+            total += cur.duration_minutes
+    return total
+
+
+def today_minutes_for(hass: HomeAssistant, person_id: str) -> float:
+    """Return total therapy minutes for person_id today (UTC midnight cutoff)."""
+    midnight = datetime.now(tz=UTC).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    return _sum_minutes_for(hass, person_id, midnight)
+
+
+def week_minutes_for(hass: HomeAssistant, person_id: str) -> float:
+    """Return total therapy minutes for person_id this week (Mon 00:00 UTC cutoff)."""
+    now = datetime.now(tz=UTC)
+    week_start = (now - timedelta(days=now.weekday())).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    return _sum_minutes_for(hass, person_id, week_start)
+
+
+def goal_progress_for(
+    hass: HomeAssistant, person_id: str, goal_minutes: int
+) -> int:
+    """Return today's goal completion for person_id as an integer percentage (0-100)."""
+    if goal_minutes <= 0:
+        return 0
+    return min(100, int(today_minutes_for(hass, person_id) / goal_minutes * 100))

@@ -23,8 +23,15 @@ from homeassistant.helpers.device_registry import (
 from homeassistant.helpers.entity import EntityCategory  # type: ignore[attr-defined]
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, VERSION, detect_model
+from .const import DOMAIN, VERSION, THERAPY_HUB_IDENTIFIER, detect_model
 from .coordinator import BeurerDataUpdateCoordinator
+from .therapy_hub import (
+    HUB_DATA_KEY,
+    get_or_create_hub,
+    goal_progress_for,
+    today_minutes_for,
+    week_minutes_for,
+)
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -135,6 +142,32 @@ async def async_setup_entry(
         ]
     )
     async_add_entities(entities)
+
+    # --- Per-person aggregation sensors on Therapy Hub (once per HA instance) ---
+    domain_data = hass.data.setdefault(DOMAIN, {})
+    sensors_added_key = f"{HUB_DATA_KEY}_sensors_added"
+    if domain_data.get(sensors_added_key):
+        return
+    domain_data[sensors_added_key] = True
+
+    hub = get_or_create_hub(hass)
+    hub.ensure_device(entry)
+
+    def _person_slug(entity_id: str) -> str:
+        return entity_id.split(".", 1)[1]
+
+    def _build_person_sensors() -> list[SensorEntity]:
+        person_entities: list[SensorEntity] = []
+        for ps in hass.states.async_all("person"):
+            slug = _person_slug(ps.entity_id)
+            person_entities.extend([
+                BeurerPersonTherapySensor(hass, ps.entity_id, slug, "today"),
+                BeurerPersonTherapySensor(hass, ps.entity_id, slug, "week"),
+                BeurerPersonTherapySensor(hass, ps.entity_id, slug, "progress"),
+            ])
+        return person_entities
+
+    async_add_entities(_build_person_sensors())
 
 
 class BeurerSensor(CoordinatorEntity[BeurerDataUpdateCoordinator], SensorEntity):
@@ -309,3 +342,65 @@ class BeurerConnectionHealthSensor(
             sw_version=VERSION,
             connections={(CONNECTION_BLUETOOTH, mac)},
         )
+
+
+class BeurerPersonTherapySensor(SensorEntity):
+    """Aggregated therapy sensor for one HA person across all lamps.
+
+    Lives on the virtual Therapy Hub device and aggregates sessions from
+    every configured Beurer lamp for the given person entity.
+    """
+
+    _attr_has_entity_name = True
+    _attr_should_poll = True
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        person_entity_id: str,
+        slug: str,
+        kind: str,
+    ) -> None:
+        """Initialize the per-person aggregation sensor."""
+        self._hass = hass
+        self._person = person_entity_id
+        self._kind = kind
+        self._attr_unique_id = f"therapy_{kind}_{slug}"
+        self._attr_translation_key = f"therapy_{kind}_person"
+        if kind == "progress":
+            self._attr_native_unit_of_measurement = "%"
+        else:
+            self._attr_native_unit_of_measurement = "min"
+        self._attr_name = {
+            "today": f"Therapy today {slug}",
+            "week": f"Therapy week {slug}",
+            "progress": f"Therapy progress {slug}",
+        }[kind]
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device info pointing to the virtual Therapy Hub."""
+        return DeviceInfo(
+            identifiers={(DOMAIN, THERAPY_HUB_IDENTIFIER)},
+            name="Beurer Therapy Hub",
+            manufacturer="Beurer",
+            model="Therapy Aggregation",
+        )
+
+    @property
+    def native_value(self) -> float | int:
+        """Return the aggregated therapy value for this person."""
+        if self._kind == "today":
+            return round(today_minutes_for(self._hass, self._person), 1)
+        if self._kind == "week":
+            return round(week_minutes_for(self._hass, self._person), 1)
+        goal = self._first_goal()
+        return goal_progress_for(self._hass, self._person, goal)
+
+    def _first_goal(self) -> int:
+        """Return the therapy goal from the first configured entry."""
+        from .config_flow import CONF_THERAPY_GOAL, DEFAULT_THERAPY_GOAL
+
+        for entry in self._hass.config_entries.async_entries(DOMAIN):
+            return int(entry.options.get(CONF_THERAPY_GOAL, DEFAULT_THERAPY_GOAL))
+        return DEFAULT_THERAPY_GOAL
