@@ -115,12 +115,14 @@
                 "data": {
                     "therapy_goal": "Daily light therapy goal (minutes)",
                     "update_interval": "Update interval (seconds)",
-                    "adaptive_lighting_default": "Enable Adaptive Lighting by default"
+                    "adaptive_lighting_default": "Enable Adaptive Lighting by default",
+                    "default_therapy_user": "Default therapy user"
                 },
                 "data_description": {
                     "therapy_goal": "The daily therapy goal in minutes (5-120). Used for tracking progress.",
                     "update_interval": "How often to poll the device for updates (10-300 seconds).",
-                    "adaptive_lighting_default": "If enabled, Adaptive Lighting can control this lamp's color temperature."
+                    "adaptive_lighting_default": "If enabled, Adaptive Lighting can control this lamp's color temperature.",
+                    "default_therapy_user": "The HA person entity to attribute therapy sessions to by default when no person is selected on the lamp."
                 }
             }
         }
@@ -239,6 +241,15 @@
             },
             "connection_uptime": {
                 "name": "Connection uptime"
+            },
+            "therapy_today_person": {
+                "name": "Therapy today {person}"
+            },
+            "therapy_week_person": {
+                "name": "Therapy week {person}"
+            },
+            "therapy_progress_person": {
+                "name": "Therapy progress {person}"
             }
         },
         "binary_sensor": {

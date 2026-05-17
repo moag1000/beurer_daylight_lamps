@@ -93,12 +93,14 @@
                 "data": {
                     "therapy_goal": "Tägliches Lichttherapie-Ziel (Minuten)",
                     "update_interval": "Aktualisierungsintervall (Sekunden)",
-                    "adaptive_lighting_default": "Adaptive Beleuchtung standardmäßig aktivieren"
+                    "adaptive_lighting_default": "Adaptive Beleuchtung standardmäßig aktivieren",
+                    "default_therapy_user": "Standard-Therapie-Person"
                 },
                 "data_description": {
                     "therapy_goal": "Das tägliche Therapieziel in Minuten (5-120). Wird für die Fortschrittsverfolgung verwendet.",
                     "update_interval": "Wie oft das Gerät nach Updates abgefragt wird (10-300 Sekunden).",
-                    "adaptive_lighting_default": "Wenn aktiviert, kann Adaptive Beleuchtung die Farbtemperatur dieser Lampe steuern."
+                    "adaptive_lighting_default": "Wenn aktiviert, kann Adaptive Beleuchtung die Farbtemperatur dieser Lampe steuern.",
+                    "default_therapy_user": "Die HA-Personen-Entität, der Therapiesitzungen standardmäßig zugeordnet werden, wenn keine Person an der Lampe ausgewählt ist."
                 }
             }
         }
@@ -160,6 +162,9 @@
         "select": {
             "effect": {
                 "name": "Effekt"
+            },
+            "therapy_user": {
+                "name": "Therapie-Person"
             }
         },
         "number": {
@@ -191,6 +196,15 @@
             },
             "therapy_progress": {
                 "name": "Tagesfortschritt"
+            },
+            "therapy_today_person": {
+                "name": "Therapie heute {person}"
+            },
+            "therapy_week_person": {
+                "name": "Therapie diese Woche {person}"
+            },
+            "therapy_progress_person": {
+                "name": "Therapiefortschritt {person}"
             }
         },
         "binary_sensor": {
@@ -287,6 +301,20 @@
         "stop_simulation": {
             "name": "Simulation stoppen",
             "description": "Stoppt jede laufende Sonnenaufgang- oder Sonnenuntergang-Simulation auf der Lampe."
+        },
+        "set_therapy_user": {
+            "name": "Therapie-Person setzen",
+            "description": "Legt die aktive Therapie-Person für eine Beurer Lampe fest.",
+            "fields": {
+                "entity_id": {
+                    "name": "Lampe",
+                    "description": "Beurer Licht-Entität."
+                },
+                "person": {
+                    "name": "Person",
+                    "description": "HA-Person, der Sitzungen zugeordnet werden."
+                }
+            }
         }
     }
 }

@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.36.0] - 2026-05-17
+
+### Added
+
+- **Per-person therapy attribution**: a select entity per lamp lets the active person be chosen from configured HA person entities.
+- **Beurer Therapy Hub virtual device**: aggregated per-person sensors (therapy today, therapy week, therapy progress) grouped under a shared virtual device.
+- **Service `beurer_daylight_lamps.set_therapy_user`**: set the active person from automations or scripts without opening the UI.
+- **Event `beurer_daylight_lamps_therapy_session`**: fired on every session end with full payload (`entry_id`, `person_id`, `duration_s`, `started_at`, `ended_at`).
+- **Options-flow field `default_therapy_user`**: per-entry default attribution used when no person is selected on the lamp select entity.
+
+### Notes
+
+- All existing per-lamp therapy sensors (`therapy_today`, `therapy_week`, `therapy_progress`) continue to work unchanged.
+- Sessions started before this version stay unattributed (`person_id=None`).
+
 ## [1.35.4] - 2026-05-11
 
 ### Fixed
