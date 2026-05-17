@@ -1010,7 +1010,11 @@ class TestSetTherapyUserService:
         def fake_async_get_entity_id(
             domain: str, platform: str, unique_id: str
         ) -> str | None:
-            if domain == "select" and platform == DOMAIN and unique_id == select_unique_id:
+            if (
+                domain == "select"
+                and platform == DOMAIN
+                and unique_id == select_unique_id
+            ):
                 return select_entity_id
             return None
 

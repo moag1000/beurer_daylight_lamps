@@ -441,6 +441,7 @@ class TestBeurerTherapyUserSelectAvailability:
 # Tests for BeurerInstance._resolve_therapy_person and auto-session wiring
 # ---------------------------------------------------------------------------
 
+
 def _make_beurer_instance(mac: str = "AA:BB:CC:DD:EE:FF") -> BeurerInstance:  # noqa: F821
     """Construct a BeurerInstance with BleakClient mocked out."""
     from custom_components.beurer_daylight_lamps.beurer_daylight_lamps import (

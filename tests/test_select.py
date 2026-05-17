@@ -148,8 +148,12 @@ class TestAsyncSetupEntry:
 
         # Should create 2 entities: effect select + therapy_user select
         assert len(added_entities) == 2
-        effect_selects = [e for e in added_entities if isinstance(e, BeurerEffectSelect)]
-        therapy_selects = [e for e in added_entities if isinstance(e, BeurerTherapyUserSelect)]
+        effect_selects = [
+            e for e in added_entities if isinstance(e, BeurerEffectSelect)
+        ]
+        therapy_selects = [
+            e for e in added_entities if isinstance(e, BeurerTherapyUserSelect)
+        ]
         assert len(effect_selects) == 1
         assert len(therapy_selects) == 1
 

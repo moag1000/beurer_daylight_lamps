@@ -135,11 +135,13 @@ def _make_person_listener(
             return
         known_persons.add(new_id)
         slug = new_id.split(".", 1)[1]
-        async_add_entities([
-            BeurerPersonTherapySensor(hass, new_id, slug, "today"),
-            BeurerPersonTherapySensor(hass, new_id, slug, "week"),
-            BeurerPersonTherapySensor(hass, new_id, slug, "progress"),
-        ])
+        async_add_entities(
+            [
+                BeurerPersonTherapySensor(hass, new_id, slug, "today"),
+                BeurerPersonTherapySensor(hass, new_id, slug, "week"),
+                BeurerPersonTherapySensor(hass, new_id, slug, "progress"),
+            ]
+        )
 
     return _handle_new_person
 
@@ -187,19 +189,19 @@ async def async_setup_entry(
         return entity_id.split(".", 1)[1]
 
     # Snapshot existing persons so the listener can skip them
-    known_persons: set[str] = {
-        s.entity_id for s in hass.states.async_all("person")
-    }
+    known_persons: set[str] = {s.entity_id for s in hass.states.async_all("person")}
 
     def _build_person_sensors() -> list[SensorEntity]:
         person_entities: list[SensorEntity] = []
         for ps in hass.states.async_all("person"):
             slug = _person_slug(ps.entity_id)
-            person_entities.extend([
-                BeurerPersonTherapySensor(hass, ps.entity_id, slug, "today"),
-                BeurerPersonTherapySensor(hass, ps.entity_id, slug, "week"),
-                BeurerPersonTherapySensor(hass, ps.entity_id, slug, "progress"),
-            ])
+            person_entities.extend(
+                [
+                    BeurerPersonTherapySensor(hass, ps.entity_id, slug, "today"),
+                    BeurerPersonTherapySensor(hass, ps.entity_id, slug, "week"),
+                    BeurerPersonTherapySensor(hass, ps.entity_id, slug, "progress"),
+                ]
+            )
         return person_entities
 
     async_add_entities(_build_person_sensors())

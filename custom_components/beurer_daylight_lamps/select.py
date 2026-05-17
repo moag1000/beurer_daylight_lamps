@@ -126,17 +126,13 @@ class BeurerTherapyUserSelect(
         self._instance = coordinator.instance
         self._device_name = device_name
         self._entry = entry
-        self._attr_unique_id = (
-            f"{format_mac(self._instance.mac)}_therapy_user"
-        )
+        self._attr_unique_id = f"{format_mac(self._instance.mac)}_therapy_user"
         self._current: str = THERAPY_USER_UNKNOWN
 
     @property
     def options(self) -> list[str]:
         """Return list of options: unknown sentinel + all HA person entity_ids."""
-        persons = sorted(
-            s.entity_id for s in self._hass.states.async_all("person")
-        )
+        persons = sorted(s.entity_id for s in self._hass.states.async_all("person"))
         return [THERAPY_USER_UNKNOWN, *persons]
 
     @property

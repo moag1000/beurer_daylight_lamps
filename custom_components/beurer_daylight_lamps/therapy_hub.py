@@ -93,9 +93,7 @@ def _iter_trackers(hass: HomeAssistant) -> Iterator[TherapyTracker]:
             yield tracker
 
 
-def _sum_minutes_for(
-    hass: HomeAssistant, person_id: str, since: datetime
-) -> float:
+def _sum_minutes_for(hass: HomeAssistant, person_id: str, since: datetime) -> float:
     total = 0.0
     for tracker in _iter_trackers(hass):
         for session in tracker.sessions:
@@ -118,9 +116,7 @@ def _sum_minutes_for(
 
 def today_minutes_for(hass: HomeAssistant, person_id: str) -> float:
     """Return total therapy minutes for person_id today (UTC midnight cutoff)."""
-    midnight = datetime.now(tz=UTC).replace(
-        hour=0, minute=0, second=0, microsecond=0
-    )
+    midnight = datetime.now(tz=UTC).replace(hour=0, minute=0, second=0, microsecond=0)
     return _sum_minutes_for(hass, person_id, midnight)
 
 
@@ -133,9 +129,7 @@ def week_minutes_for(hass: HomeAssistant, person_id: str) -> float:
     return _sum_minutes_for(hass, person_id, week_start)
 
 
-def goal_progress_for(
-    hass: HomeAssistant, person_id: str, goal_minutes: int
-) -> int:
+def goal_progress_for(hass: HomeAssistant, person_id: str, goal_minutes: int) -> int:
     """Return today's goal completion for person_id as an integer percentage (0-100)."""
     if goal_minutes <= 0:
         return 0
