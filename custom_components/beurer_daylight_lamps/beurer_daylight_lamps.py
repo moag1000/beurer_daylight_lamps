@@ -40,7 +40,9 @@ from bleak_retry_connector import (
 )
 from homeassistant.components import bluetooth
 from homeassistant.components.light import ColorMode  # type: ignore[attr-defined]
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers.device_registry import format_mac
 
 from .therapy import SunriseSimulation, TherapyTracker
 from .wl90 import WL90Controller
@@ -101,6 +103,7 @@ from .const import (
     RESP_SETTINGS_SYNC,
     STATUS_DELAY,
     SUPPORTED_EFFECTS,
+    THERAPY_USER_UNKNOWN,
     TURN_OFF_DELAY,
     WRITE_CHARACTERISTIC_UUID,
     is_wl_model,
@@ -1587,6 +1590,27 @@ class BeurerInstance:
 
         return changed
 
+    def _resolve_therapy_person(self) -> str | None:
+        """Resolve the active therapy person from this lamp's therapy_user select entity."""
+        from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
+
+        if self._hass is None:
+            return None
+        registry = er.async_get(self._hass)
+        mac = format_mac(self.mac)
+        unique = f"{mac}_therapy_user"
+        entity_id = registry.async_get_entity_id("select", DOMAIN, unique)
+        if entity_id is None:
+            return None
+        state = self._hass.states.get(entity_id)
+        if state is None or state.state in (
+            THERAPY_USER_UNKNOWN,
+            STATE_UNAVAILABLE,
+            STATE_UNKNOWN,
+        ):
+            return None
+        return state.state
+
     def _track_therapy_from_rgb(self) -> None:
         """Track therapy exposure based on current RGB state."""
         # Therapy-relevant light: cool white (high blue component) at high brightness
@@ -1605,7 +1629,11 @@ class BeurerInstance:
                 and brightness_pct >= 80
                 and not self._therapy_tracker.has_active_session
             ):
-                self._therapy_tracker.start_session(estimated_kelvin, brightness_pct)
+                self._therapy_tracker.start_session(
+                    estimated_kelvin,
+                    brightness_pct,
+                    person_id=self._resolve_therapy_person(),
+                )
         elif not self._color_on:
             # End session when color mode turns off
             self._therapy_tracker.end_session()

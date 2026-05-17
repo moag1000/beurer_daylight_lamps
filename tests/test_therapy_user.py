@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from homeassistant.exceptions import HomeAssistantError
@@ -405,3 +405,205 @@ class TestBeurerTherapyUserSelectAvailability:
             mock_hass_no_persons, mock_coordinator, "Test Lamp", mock_entry
         )
         assert entity.available is True
+
+
+# ---------------------------------------------------------------------------
+# Tests for BeurerInstance._resolve_therapy_person and auto-session wiring
+# ---------------------------------------------------------------------------
+
+def _make_beurer_instance(mac: str = "AA:BB:CC:DD:EE:FF") -> "BeurerInstance":  # noqa: F821
+    """Construct a BeurerInstance with BleakClient mocked out."""
+    from custom_components.beurer_daylight_lamps.beurer_daylight_lamps import (
+        BeurerInstance,
+    )
+
+    device = MagicMock()
+    device.address = mac
+    device.name = "TL100"
+    device.rssi = -60
+    return BeurerInstance(device, rssi=-60)
+
+
+class TestResolveTherapyPerson:
+    """Unit tests for BeurerInstance._resolve_therapy_person."""
+
+    @pytest.fixture(autouse=True)
+    def mock_bleak(self):
+        """Suppress BleakClient for all tests in this class."""
+        with patch(
+            "custom_components.beurer_daylight_lamps.beurer_daylight_lamps.BleakClient"
+        ):
+            yield
+
+    def _make_instance_with_hass(
+        self,
+        entity_id: str | None,
+        state_value: str | None,
+    ) -> "BeurerInstance":  # noqa: F821
+        """Helper: build instance with a mock hass wired to the given entity/state."""
+        instance = _make_beurer_instance()
+
+        mock_registry = MagicMock()
+        mock_registry.async_get_entity_id.return_value = entity_id
+
+        mock_hass = MagicMock()
+        if entity_id is not None and state_value is not None:
+            mock_state = MagicMock()
+            mock_state.state = state_value
+            mock_hass.states.get.return_value = mock_state
+        else:
+            mock_hass.states.get.return_value = None
+
+        instance._hass = mock_hass
+
+        with patch(
+            "custom_components.beurer_daylight_lamps.beurer_daylight_lamps.er.async_get",
+            return_value=mock_registry,
+        ):
+            result = instance._resolve_therapy_person()
+
+        return result
+
+    def test_returns_person_id_when_select_has_valid_state(self) -> None:
+        """Returns the state string when the select entity has a valid person entity_id."""
+        result = self._make_instance_with_hass(
+            entity_id="select.test_lamp_therapy_user",
+            state_value="person.michael",
+        )
+        assert result == "person.michael"
+
+    def test_returns_none_when_entity_not_registered(self) -> None:
+        """Returns None when the therapy_user entity is not in the entity registry."""
+        result = self._make_instance_with_hass(
+            entity_id=None,
+            state_value=None,
+        )
+        assert result is None
+
+    def test_returns_none_when_state_is_none(self) -> None:
+        """Returns None when hass.states.get returns None (entity not loaded)."""
+        instance = _make_beurer_instance()
+        mock_registry = MagicMock()
+        mock_registry.async_get_entity_id.return_value = "select.test_lamp_therapy_user"
+        mock_hass = MagicMock()
+        mock_hass.states.get.return_value = None
+        instance._hass = mock_hass
+
+        with patch(
+            "custom_components.beurer_daylight_lamps.beurer_daylight_lamps.er.async_get",
+            return_value=mock_registry,
+        ):
+            result = instance._resolve_therapy_person()
+
+        assert result is None
+
+    def test_returns_none_when_state_is_therapy_user_unknown(self) -> None:
+        """Returns None when the select entity state is the THERAPY_USER_UNKNOWN sentinel."""
+        result = self._make_instance_with_hass(
+            entity_id="select.test_lamp_therapy_user",
+            state_value=THERAPY_USER_UNKNOWN,
+        )
+        assert result is None
+
+    def test_returns_none_when_state_is_unavailable(self) -> None:
+        """Returns None when the select entity state is 'unavailable'."""
+        result = self._make_instance_with_hass(
+            entity_id="select.test_lamp_therapy_user",
+            state_value="unavailable",
+        )
+        assert result is None
+
+    def test_returns_none_when_state_is_unknown(self) -> None:
+        """Returns None when the select entity state is 'unknown'."""
+        result = self._make_instance_with_hass(
+            entity_id="select.test_lamp_therapy_user",
+            state_value="unknown",
+        )
+        assert result is None
+
+    def test_unique_id_uses_formatted_mac(self) -> None:
+        """The registry lookup uses format_mac(mac) + '_therapy_user' as unique_id."""
+        instance = _make_beurer_instance(mac="AA:BB:CC:DD:EE:FF")
+        mock_registry = MagicMock()
+        mock_registry.async_get_entity_id.return_value = None
+        mock_hass = MagicMock()
+        mock_hass.states.get.return_value = None
+        instance._hass = mock_hass
+
+        with patch(
+            "custom_components.beurer_daylight_lamps.beurer_daylight_lamps.er.async_get",
+            return_value=mock_registry,
+        ):
+            instance._resolve_therapy_person()
+
+        expected_unique_id = f"{format_mac('AA:BB:CC:DD:EE:FF')}_therapy_user"
+        mock_registry.async_get_entity_id.assert_called_once_with(
+            "select", DOMAIN, expected_unique_id
+        )
+
+
+class TestAutoSessionUsesSelectPerson:
+    """Test that auto-started sessions receive the person_id from the select entity."""
+
+    @pytest.fixture(autouse=True)
+    def mock_bleak(self):
+        """Suppress BleakClient for all tests in this class."""
+        with patch(
+            "custom_components.beurer_daylight_lamps.beurer_daylight_lamps.BleakClient"
+        ):
+            yield
+
+    def _drive_track_therapy(
+        self,
+        person_id: str | None,
+        brightness: int = 230,  # ~90% -> >= 80%
+        rgb: tuple[int, int, int] = (200, 200, 200),  # white-ish
+    ):
+        """Drive _track_therapy_from_rgb on a fresh instance with mocked dependencies."""
+        instance = _make_beurer_instance()
+
+        # Set up lamp state: color mode ON, bright white-ish
+        instance._color_on = True
+        instance._color_brightness = brightness
+        instance._rgb_color = rgb
+
+        # Mock therapy tracker: no active session so start_session will be triggered
+        mock_tracker = MagicMock()
+        mock_tracker.has_active_session = False
+        instance._therapy_tracker = mock_tracker
+
+        # Mock _resolve_therapy_person to return the desired person_id
+        with patch.object(instance, "_resolve_therapy_person", return_value=person_id):
+            instance._track_therapy_from_rgb()
+
+        return mock_tracker
+
+    def test_auto_session_uses_select_person(self) -> None:
+        """start_session is called with person_id from the therapy_user select."""
+        tracker = self._drive_track_therapy(person_id="person.michael")
+        tracker.start_session.assert_called_once()
+        _args, kwargs = tracker.start_session.call_args
+        assert kwargs.get("person_id") == "person.michael"
+
+    def test_auto_session_uses_none_when_select_is_unknown(self) -> None:
+        """start_session is called with person_id=None when select returns None."""
+        tracker = self._drive_track_therapy(person_id=None)
+        tracker.start_session.assert_called_once()
+        _args, kwargs = tracker.start_session.call_args
+        assert kwargs.get("person_id") is None
+
+    def test_no_auto_session_when_not_white_ish(self) -> None:
+        """start_session is NOT called when RGB is not white-ish (e.g. saturated red)."""
+        tracker = self._drive_track_therapy(
+            person_id="person.michael",
+            rgb=(255, 0, 0),  # saturated red — not white-ish
+        )
+        tracker.start_session.assert_not_called()
+
+    def test_no_auto_session_when_brightness_too_low(self) -> None:
+        """start_session is NOT called when brightness < 80%."""
+        tracker = self._drive_track_therapy(
+            person_id="person.michael",
+            brightness=150,  # ~59% — below threshold
+        )
+        tracker.start_session.assert_not_called()
