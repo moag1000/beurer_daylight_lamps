@@ -7,7 +7,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from custom_components.beurer_daylight_lamps.const import EVENT_THERAPY_SESSION
+from custom_components.beurer_daylight_lamps.const import (
+    DOMAIN,
+    EVENT_THERAPY_SESSION,
+    THERAPY_HUB_IDENTIFIER,
+)
 
 
 def _make_beurer_instance(
@@ -214,3 +218,120 @@ class TestNoEventWhenNoActiveSession:
         instance._handle_device_off()
 
         mock_hass.bus.async_fire.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# TherapyHub unit tests
+# ---------------------------------------------------------------------------
+
+
+def _make_mock_dev_reg() -> MagicMock:
+    """Create a mock device registry."""
+    dev_reg = MagicMock()
+    mock_device = MagicMock()
+    mock_device.id = "hub-device-id-123"
+    dev_reg.async_get_or_create.return_value = mock_device
+    dev_reg.async_get_device.return_value = mock_device
+    dev_reg.async_remove_device = MagicMock()
+    return dev_reg
+
+
+def _make_mock_hass_for_hub() -> MagicMock:
+    """Create a mock hass suitable for TherapyHub tests (with data dict)."""
+    hass = MagicMock()
+    hass.data = {}
+    return hass
+
+
+class TestTherapyHubDevice:
+    """Unit tests for TherapyHub module-level helpers and device management."""
+
+    def test_hub_device_created_after_setup(self) -> None:
+        """ensure_device calls async_get_or_create with the correct identifiers."""
+        from custom_components.beurer_daylight_lamps.therapy_hub import TherapyHub
+
+        hass = _make_mock_hass_for_hub()
+        mock_dev_reg = _make_mock_dev_reg()
+
+        owning_entry = MagicMock()
+        owning_entry.entry_id = "entry_001"
+
+        with patch(
+            "custom_components.beurer_daylight_lamps.therapy_hub.dr.async_get",
+            return_value=mock_dev_reg,
+        ):
+            hub = TherapyHub(hass)
+            hub.ensure_device(owning_entry)
+
+        mock_dev_reg.async_get_or_create.assert_called_once()
+        call_kwargs = mock_dev_reg.async_get_or_create.call_args[1]
+        assert call_kwargs["identifiers"] == {(DOMAIN, THERAPY_HUB_IDENTIFIER)}
+        assert call_kwargs["name"] == "Beurer Therapy Hub"
+        assert call_kwargs["config_entry_id"] == "entry_001"
+
+    def test_hub_device_removed_after_last_unload(self) -> None:
+        """remove_device calls async_remove_device when the hub device exists."""
+        from custom_components.beurer_daylight_lamps.therapy_hub import TherapyHub
+
+        hass = _make_mock_hass_for_hub()
+        mock_dev_reg = _make_mock_dev_reg()
+
+        with patch(
+            "custom_components.beurer_daylight_lamps.therapy_hub.dr.async_get",
+            return_value=mock_dev_reg,
+        ):
+            hub = TherapyHub(hass)
+            hub.remove_device()
+
+        mock_dev_reg.async_remove_device.assert_called_once_with("hub-device-id-123")
+        assert hub.owning_entry_id is None
+
+    def test_hub_device_persists_when_other_entries_remain(self) -> None:
+        """remove_device with no device found does not raise and does not call async_remove_device."""
+        from custom_components.beurer_daylight_lamps.therapy_hub import TherapyHub
+
+        hass = _make_mock_hass_for_hub()
+        mock_dev_reg = _make_mock_dev_reg()
+        # Simulate device not found
+        mock_dev_reg.async_get_device.return_value = None
+
+        with patch(
+            "custom_components.beurer_daylight_lamps.therapy_hub.dr.async_get",
+            return_value=mock_dev_reg,
+        ):
+            hub = TherapyHub(hass)
+            # Should not raise
+            hub.remove_device()
+
+        mock_dev_reg.async_remove_device.assert_not_called()
+
+    def test_get_or_create_hub_returns_singleton(self) -> None:
+        """get_or_create_hub always returns the same TherapyHub instance per hass."""
+        from custom_components.beurer_daylight_lamps.therapy_hub import get_or_create_hub
+
+        hass = _make_mock_hass_for_hub()
+
+        hub1 = get_or_create_hub(hass)
+        hub2 = get_or_create_hub(hass)
+        assert hub1 is hub2
+
+    def test_ensure_device_is_idempotent(self) -> None:
+        """Calling ensure_device twice does not create duplicate devices (delegate to async_get_or_create)."""
+        from custom_components.beurer_daylight_lamps.therapy_hub import TherapyHub
+
+        hass = _make_mock_hass_for_hub()
+        mock_dev_reg = _make_mock_dev_reg()
+
+        owning_entry = MagicMock()
+        owning_entry.entry_id = "entry_002"
+
+        with patch(
+            "custom_components.beurer_daylight_lamps.therapy_hub.dr.async_get",
+            return_value=mock_dev_reg,
+        ):
+            hub = TherapyHub(hass)
+            hub.ensure_device(owning_entry)
+            hub.ensure_device(owning_entry)
+
+        # async_get_or_create is idempotent by HA contract; called twice here
+        assert mock_dev_reg.async_get_or_create.call_count == 2

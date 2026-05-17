@@ -415,6 +415,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> bo
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     await _async_setup_services(hass)
 
+    # Ensure the virtual Therapy Hub device exists (singleton per hass instance)
+    from .therapy_hub import get_or_create_hub
+
+    hub = get_or_create_hub(hass)
+    hub.ensure_device(entry)
+
     # Auto-connect after setup to get initial state (runs in background)
     async def _async_initial_connect() -> None:
         """Try to connect and get initial state."""
@@ -852,6 +858,22 @@ async def async_unload_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> b
         await entry.runtime_data.coordinator.async_shutdown()
         # Then disconnect the BLE instance
         await entry.runtime_data.instance.disconnect()
+
+        # Remove the virtual Therapy Hub device only when the last entry is gone
+        from .therapy_hub import HUB_DATA_KEY
+
+        remaining = [
+            e
+            for e in hass.config_entries.async_entries(DOMAIN)
+            if e.entry_id != entry.entry_id
+        ]
+        if not remaining:
+            domain_data = hass.data.get(DOMAIN, {})
+            hub = domain_data.get(HUB_DATA_KEY)
+            if hub is not None:
+                hub.remove_device()
+                domain_data.pop(HUB_DATA_KEY, None)
+
     return unload_ok
 
 
