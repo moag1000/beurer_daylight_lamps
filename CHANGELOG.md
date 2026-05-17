@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Per-person therapy attribution**: a select entity per lamp lets the active person be chosen from configured HA person entities.
 - **Beurer Therapy Hub virtual device**: aggregated per-person sensors (therapy today, therapy week, therapy progress) grouped under a shared virtual device.
 - **Service `beurer_daylight_lamps.set_therapy_user`**: set the active person from automations or scripts without opening the UI.
-- **Event `beurer_daylight_lamps_therapy_session`**: fired on every session end with full payload (`entry_id`, `person_id`, `duration_s`, `started_at`, `ended_at`).
+- **Event `beurer_daylight_lamps_therapy_session`**: fired on every session end with full payload: `entry_id`, `lamp_name`, `light_entity_id`, `person_id`, `start_time` (ISO), `end_time` (ISO), `duration_minutes`, `color_temp_kelvin`, `brightness_pct`.
 - **Options-flow field `default_therapy_user`**: per-entry default attribution used when no person is selected on the lamp select entity.
 
 ### Notes

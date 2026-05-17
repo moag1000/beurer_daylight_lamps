@@ -873,6 +873,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> b
             if hub is not None:
                 hub.remove_device()
                 domain_data.pop(HUB_DATA_KEY, None)
+            # Clear the sensors-added marker so re-adding the entry recreates
+            # per-person sensors correctly.
+            domain_data.pop(f"{HUB_DATA_KEY}_sensors_added", None)
 
     return unload_ok
 

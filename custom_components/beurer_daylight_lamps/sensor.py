@@ -406,7 +406,8 @@ class BeurerPersonTherapySensor(SensorEntity):
         self._person = person_entity_id
         self._kind = kind
         self._attr_unique_id = f"therapy_{kind}_{slug}"
-        self._attr_translation_key = f"therapy_{kind}_person"
+        # _attr_name is set directly below, so no translation_key needed here.
+        # The per-person name already embeds the slug, making placeholders redundant.
         if kind == "progress":
             self._attr_native_unit_of_measurement = "%"
         else:
