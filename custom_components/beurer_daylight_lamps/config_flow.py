@@ -23,6 +23,8 @@ from homeassistant.core import callback
 from homeassistant.helpers.device_registry import format_mac
 from homeassistant.helpers.selector import (
     BooleanSelector,
+    EntitySelector,
+    EntitySelectorConfig,
     NumberSelector,
     NumberSelectorConfig,
     NumberSelectorMode,
@@ -32,7 +34,7 @@ from homeassistant.helpers.selector import (
 )
 
 from .beurer_daylight_lamps import BeurerInstance
-from .const import DEVICE_NAME_PREFIXES, DOMAIN, LOGGER
+from .const import CONF_DEFAULT_THERAPY_USER, DEVICE_NAME_PREFIXES, DOMAIN, LOGGER
 
 if TYPE_CHECKING:
     from bleak.backends.device import BLEDevice
@@ -617,6 +619,14 @@ class BeurerOptionsFlowHandler(OptionsFlow):
                         CONF_ADAPTIVE_LIGHTING_DEFAULT,
                         default=adaptive_lighting,
                     ): BooleanSelector(),
+                    vol.Optional(
+                        CONF_DEFAULT_THERAPY_USER,
+                        description={
+                            "suggested_value": current_options.get(
+                                CONF_DEFAULT_THERAPY_USER
+                            ),
+                        },
+                    ): EntitySelector(EntitySelectorConfig(domain="person")),
                 }
             ),
         )

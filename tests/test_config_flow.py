@@ -1386,3 +1386,65 @@ class TestConnectionDisconnectErrors:
             result = await flow._test_connection()
 
         assert result is True
+
+
+# =============================================================================
+# Options Flow Tests
+# =============================================================================
+
+
+class TestOptionsFlowDefaultTherapyUser:
+    """Tests for default_therapy_user field in BeurerOptionsFlowHandler."""
+
+    @pytest.mark.asyncio
+    async def test_options_flow_accepts_default_therapy_user(
+        self, hass: HomeAssistant
+    ) -> None:
+        """Options-flow form contains CONF_DEFAULT_THERAPY_USER and persists value."""
+        from custom_components.beurer_daylight_lamps.config_flow import (
+            BeurerOptionsFlowHandler,
+            CONF_THERAPY_GOAL,
+            CONF_UPDATE_INTERVAL,
+            CONF_ADAPTIVE_LIGHTING_DEFAULT,
+        )
+        from custom_components.beurer_daylight_lamps.const import (
+            CONF_DEFAULT_THERAPY_USER,
+        )
+
+        # Build a mock config entry with no existing options.
+        mock_entry = MagicMock()
+        mock_entry.entry_id = "test_entry_id"
+        mock_entry.options = {}
+
+        # Wire up hass so that config_entry property resolves to our mock entry.
+        hass.config_entries.async_get_known_entry = MagicMock(return_value=mock_entry)
+
+        # Instantiate and attach the flow.
+        flow = BeurerOptionsFlowHandler()
+        flow.hass = hass
+        flow.handler = "test_entry_id"
+
+        # --- First call: no user_input → should show form ---
+        result = await flow.async_step_init(user_input=None)
+
+        assert result["type"] == "form"
+        schema_keys = [
+            k.schema if hasattr(k, "schema") else k
+            for k in result["data_schema"].schema
+        ]
+        assert CONF_DEFAULT_THERAPY_USER in schema_keys, (
+            f"CONF_DEFAULT_THERAPY_USER not found in schema keys: {schema_keys}"
+        )
+
+        # --- Second call: submit a person entity ---
+        result2 = await flow.async_step_init(
+            user_input={
+                CONF_THERAPY_GOAL: 30,
+                CONF_UPDATE_INTERVAL: 60,
+                CONF_ADAPTIVE_LIGHTING_DEFAULT: True,
+                CONF_DEFAULT_THERAPY_USER: "person.michael",
+            }
+        )
+
+        assert result2["type"] == "create_entry"
+        assert result2["data"][CONF_DEFAULT_THERAPY_USER] == "person.michael"
