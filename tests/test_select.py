@@ -123,8 +123,11 @@ class TestAsyncSetupEntry:
 
     @pytest.mark.asyncio
     async def test_creates_select_entity(self, mock_coordinator: MagicMock) -> None:
-        """Test that async_setup_entry creates select entity."""
-        from custom_components.beurer_daylight_lamps.select import async_setup_entry
+        """Test that async_setup_entry creates effect and therapy_user select entities."""
+        from custom_components.beurer_daylight_lamps.select import (
+            BeurerTherapyUserSelect,
+            async_setup_entry,
+        )
 
         mock_runtime_data = MagicMock()
         mock_runtime_data.coordinator = mock_coordinator
@@ -132,8 +135,10 @@ class TestAsyncSetupEntry:
         mock_entry = MagicMock()
         mock_entry.runtime_data = mock_runtime_data
         mock_entry.data = {"name": "Test Lamp"}
+        mock_entry.options = {}
 
         mock_hass = MagicMock()
+        mock_hass.states.async_all.return_value = []
         added_entities = []
 
         def capture_entities(entities):
@@ -141,9 +146,12 @@ class TestAsyncSetupEntry:
 
         await async_setup_entry(mock_hass, mock_entry, capture_entities)
 
-        # Should create 1 entity for effect select
-        assert len(added_entities) == 1
-        assert isinstance(added_entities[0], BeurerEffectSelect)
+        # Should create 2 entities: effect select + therapy_user select
+        assert len(added_entities) == 2
+        effect_selects = [e for e in added_entities if isinstance(e, BeurerEffectSelect)]
+        therapy_selects = [e for e in added_entities if isinstance(e, BeurerTherapyUserSelect)]
+        assert len(effect_selects) == 1
+        assert len(therapy_selects) == 1
 
     @pytest.mark.asyncio
     async def test_uses_default_name(self, mock_coordinator: MagicMock) -> None:
