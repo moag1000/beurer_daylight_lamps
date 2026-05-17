@@ -117,6 +117,7 @@ class TherapyTracker:
         self,
         color_temp_kelvin: int = 5300,
         brightness_pct: int = 100,
+        person_id: str | None = None,
     ) -> None:
         """Start tracking a new therapy session."""
         if self._current_session is not None:
@@ -126,11 +127,13 @@ class TherapyTracker:
             start_time=datetime.now(tz=UTC),
             color_temp_kelvin=color_temp_kelvin,
             brightness_pct=brightness_pct,
+            person_id=person_id,
         )
         LOGGER.debug(
-            "Started therapy session: %dK @ %d%%",
+            "Started therapy session: %dK @ %d%% (person=%s)",
             color_temp_kelvin,
             brightness_pct,
+            person_id,
         )
 
     def update_session(

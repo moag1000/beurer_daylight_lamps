@@ -760,6 +760,28 @@ class TestTherapyEdgeCases:
         assert SunriseProfile.THERAPY.value == "therapy"
 
 
+def test_tracker_records_person_on_start() -> None:
+    from custom_components.beurer_daylight_lamps.therapy import TherapyTracker
+
+    tracker = TherapyTracker()
+    tracker.start_session(
+        color_temp_kelvin=5300, brightness_pct=100, person_id="person.anna"
+    )
+    ended = tracker.end_session()
+    assert ended is not None
+    assert ended.person_id == "person.anna"
+
+
+def test_tracker_person_id_optional() -> None:
+    from custom_components.beurer_daylight_lamps.therapy import TherapyTracker
+
+    tracker = TherapyTracker()
+    tracker.start_session(color_temp_kelvin=5300, brightness_pct=100)
+    ended = tracker.end_session()
+    assert ended is not None
+    assert ended.person_id is None
+
+
 def test_session_stores_person_id() -> None:
     session = TherapySession(
         start_time=datetime.now(tz=UTC),
