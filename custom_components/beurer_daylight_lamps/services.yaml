@@ -273,3 +273,23 @@ set_alarm:
           step: 5
           unit_of_measurement: "%"
           mode: slider
+
+set_therapy_user:
+  name: Set therapy user
+  description: Set the active therapy user for a Beurer lamp.
+  fields:
+    entity_id:
+      name: Lamp
+      description: The Beurer light entity.
+      required: true
+      selector:
+        entity:
+          domain: light
+          integration: beurer_daylight_lamps
+    person:
+      name: Person
+      description: The HA person to attribute therapy sessions to.
+      required: true
+      selector:
+        entity:
+          domain: person

@@ -22,6 +22,7 @@ from custom_components.beurer_daylight_lamps import (
     SERVICE_RAW_SCHEMA,
     SERVICE_SCHEMA,
     SERVICE_SEND_RAW,
+    SERVICE_SET_THERAPY_USER,
     SERVICE_SET_TIMER,
     SERVICE_START_SUNRISE,
     SERVICE_START_SUNSET,
@@ -31,6 +32,7 @@ from custom_components.beurer_daylight_lamps import (
     SERVICE_TIMER_SCHEMA,
     SUNRISE_PROFILES,
     _async_get_instances_from_target,
+    _async_setup_services,
 )
 from custom_components.beurer_daylight_lamps.const import DOMAIN
 from custom_components.beurer_daylight_lamps.therapy import SunriseProfile
@@ -963,9 +965,152 @@ class TestServiceRegistration:
             SERVICE_START_SUNRISE,
             SERVICE_START_SUNSET,
             SERVICE_STOP_SIMULATION,
+            SERVICE_SET_THERAPY_USER,
         ]
 
         for service in expected_services:
             assert hass.services.has_service(DOMAIN, service), (
                 f"Service {service} not registered"
             )
+
+
+# =============================================================================
+# SET_THERAPY_USER SERVICE TESTS
+# =============================================================================
+
+
+class TestSetTherapyUserService:
+    """Test set_therapy_user service handler."""
+
+    @pytest.mark.asyncio
+    async def test_set_therapy_user_success(self, hass: HomeAssistant) -> None:
+        """Test set_therapy_user delegates to select.select_option.
+
+        Registers a real stub for select.select_option so that the real
+        hass.services.async_call machinery routes the inner delegate call
+        to our stub, letting us assert what was passed.
+        """
+        hass.states.async_set("person.anna", "home")
+
+        mac = "aa:bb:cc:dd:ee:ff"
+        light_unique_id = mac  # Light unique_id is format_mac(mac)
+        select_unique_id = f"{mac}_therapy_user"
+        light_entity_id = "light.beurer_lamp"
+        select_entity_id = "select.beurer_lamp_therapy_user"
+
+        mock_light_entry = MagicMock()
+        mock_light_entry.platform = DOMAIN
+        mock_light_entry.unique_id = light_unique_id
+
+        def fake_async_get(entity_id: str) -> MagicMock | None:
+            if entity_id == light_entity_id:
+                return mock_light_entry
+            return None
+
+        def fake_async_get_entity_id(
+            domain: str, platform: str, unique_id: str
+        ) -> str | None:
+            if domain == "select" and platform == DOMAIN and unique_id == select_unique_id:
+                return select_entity_id
+            return None
+
+        mock_registry = MagicMock()
+        mock_registry.async_get.side_effect = fake_async_get
+        mock_registry.async_get_entity_id.side_effect = fake_async_get_entity_id
+
+        # Capture calls to select.select_option by registering a stub handler.
+        captured: list[dict] = []
+
+        async def stub_select_option(call: ServiceCall) -> None:
+            captured.append(dict(call.data))
+
+        hass.services.async_register("select", "select_option", stub_select_option)
+
+        with patch(
+            "custom_components.beurer_daylight_lamps.er.async_get",
+            return_value=mock_registry,
+        ):
+            await _async_setup_services(hass)
+
+            await hass.services.async_call(
+                DOMAIN,
+                SERVICE_SET_THERAPY_USER,
+                {"entity_id": light_entity_id, "person": "person.anna"},
+                blocking=True,
+            )
+
+        assert len(captured) == 1
+        assert captured[0]["entity_id"] == select_entity_id
+        assert captured[0]["option"] == "person.anna"
+
+    @pytest.mark.asyncio
+    async def test_set_therapy_user_bad_light_entity(self, hass: HomeAssistant) -> None:
+        """Test raises ServiceValidationError when light entity not in registry."""
+        mock_registry = MagicMock()
+        mock_registry.async_get.return_value = None
+
+        with patch(
+            "custom_components.beurer_daylight_lamps.er.async_get",
+            return_value=mock_registry,
+        ):
+            await _async_setup_services(hass)
+
+            with pytest.raises(ServiceValidationError):
+                await hass.services.async_call(
+                    DOMAIN,
+                    SERVICE_SET_THERAPY_USER,
+                    {"entity_id": "light.not_beurer", "person": "person.anna"},
+                    blocking=True,
+                )
+
+    @pytest.mark.asyncio
+    async def test_set_therapy_user_wrong_platform(self, hass: HomeAssistant) -> None:
+        """Test raises ServiceValidationError when entity belongs to wrong platform."""
+        mock_light_entry = MagicMock()
+        mock_light_entry.platform = "hue"
+        mock_light_entry.unique_id = "some_unique_id"
+
+        mock_registry = MagicMock()
+        mock_registry.async_get.return_value = mock_light_entry
+
+        with patch(
+            "custom_components.beurer_daylight_lamps.er.async_get",
+            return_value=mock_registry,
+        ):
+            await _async_setup_services(hass)
+
+            with pytest.raises(ServiceValidationError):
+                await hass.services.async_call(
+                    DOMAIN,
+                    SERVICE_SET_THERAPY_USER,
+                    {"entity_id": "light.hue_lamp", "person": "person.anna"},
+                    blocking=True,
+                )
+
+    @pytest.mark.asyncio
+    async def test_set_therapy_user_no_select_entity(self, hass: HomeAssistant) -> None:
+        """Test raises ServiceValidationError when therapy_user select is missing."""
+        mac = "aa:bb:cc:dd:ee:ff"
+        light_entity_id = "light.beurer_lamp"
+
+        mock_light_entry = MagicMock()
+        mock_light_entry.platform = DOMAIN
+        mock_light_entry.unique_id = mac
+
+        mock_registry = MagicMock()
+        mock_registry.async_get.return_value = mock_light_entry
+        mock_registry.async_get_entity_id.return_value = None
+
+        with patch(
+            "custom_components.beurer_daylight_lamps.er.async_get",
+            return_value=mock_registry,
+        ):
+            await _async_setup_services(hass)
+
+            with pytest.raises(ServiceValidationError):
+                await hass.services.async_call(
+                    DOMAIN,
+                    SERVICE_SET_THERAPY_USER,
+                    {"entity_id": light_entity_id, "person": "person.anna"},
+                    blocking=True,
+                )

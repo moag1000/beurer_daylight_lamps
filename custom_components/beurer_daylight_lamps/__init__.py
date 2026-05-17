@@ -41,6 +41,7 @@ from .wl90 import AlarmItem
 # Service constants
 SERVICE_APPLY_PRESET = "apply_preset"
 SERVICE_SEND_RAW = "send_raw_command"
+SERVICE_SET_THERAPY_USER = "set_therapy_user"
 SERVICE_SET_TIMER = "set_timer"
 SERVICE_START_SUNRISE = "start_sunrise"
 SERVICE_START_SUNSET = "start_sunset"
@@ -145,6 +146,13 @@ SERVICE_SUNSET_SCHEMA = vol.Schema(
 )
 
 SERVICE_STOP_SIMULATION_SCHEMA = vol.Schema({})
+
+SERVICE_SET_THERAPY_USER_SCHEMA = vol.Schema(
+    {
+        vol.Required("entity_id"): cv.entity_id,
+        vol.Required("person"): cv.entity_id,
+    }
+)
 
 # WL90-specific services
 SERVICE_SET_ALARM = "set_alarm"
@@ -510,6 +518,7 @@ async def _async_setup_services(hass: HomeAssistant) -> None:
     _register_timer_service(hass)
     _register_simulation_services(hass)
     _register_alarm_service(hass)
+    _register_therapy_user_service(hass)
 
 
 def _register_preset_service(hass: HomeAssistant) -> None:
@@ -782,6 +791,55 @@ def _register_alarm_service(hass: HomeAssistant) -> None:
         schema=SERVICE_ALARM_SCHEMA,
     )
     LOGGER.debug("Registered service %s.%s", DOMAIN, SERVICE_SET_ALARM)
+
+
+def _register_therapy_user_service(hass: HomeAssistant) -> None:
+    """Register the set_therapy_user service."""
+
+    async def _set_therapy_user(call: ServiceCall) -> None:
+        """Set the active therapy user for a Beurer lamp.
+
+        Finds the therapy_user select entity that belongs to the same device as
+        the given light entity, then delegates to select.select_option.
+        """
+        light_entity_id = call.data["entity_id"]
+        person = call.data["person"]
+
+        entity_registry = er.async_get(hass)
+        light_entry = entity_registry.async_get(light_entity_id)
+
+        if light_entry is None or light_entry.platform != DOMAIN:
+            raise ServiceValidationError(
+                f"{light_entity_id} is not a Beurer light entity"
+            )
+
+        # The light unique_id is format_mac(mac) — the full formatted MAC.
+        # The therapy_user select unique_id is format_mac(mac) + "_therapy_user".
+        mac = light_entry.unique_id
+        select_unique = f"{mac}_therapy_user"
+
+        select_entity_id = entity_registry.async_get_entity_id(
+            "select", DOMAIN, select_unique
+        )
+        if select_entity_id is None:
+            raise ServiceValidationError(
+                "Therapy user select entity not found for this lamp"
+            )
+
+        await hass.services.async_call(
+            "select",
+            "select_option",
+            {"entity_id": select_entity_id, "option": person},
+            blocking=True,
+        )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SET_THERAPY_USER,
+        _set_therapy_user,
+        schema=SERVICE_SET_THERAPY_USER_SCHEMA,
+    )
+    LOGGER.debug("Registered service %s.%s", DOMAIN, SERVICE_SET_THERAPY_USER)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> bool:

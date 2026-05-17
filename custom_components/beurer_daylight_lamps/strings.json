@@ -182,6 +182,9 @@
         "select": {
             "effect": {
                 "name": "Effect"
+            },
+            "therapy_user": {
+                "name": "Therapy user"
             }
         },
         "number": {
@@ -410,6 +413,20 @@
                 "sunrise_brightness": {
                     "name": "Sunrise brightness",
                     "description": "Maximum sunrise brightness percentage (0-100)"
+                }
+            }
+        },
+        "set_therapy_user": {
+            "name": "Set therapy user",
+            "description": "Set the active therapy user for a Beurer lamp.",
+            "fields": {
+                "entity_id": {
+                    "name": "Lamp",
+                    "description": "Beurer light entity."
+                },
+                "person": {
+                    "name": "Person",
+                    "description": "HA person to attribute sessions to."
                 }
             }
         }
