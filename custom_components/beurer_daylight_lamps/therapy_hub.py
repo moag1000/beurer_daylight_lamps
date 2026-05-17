@@ -10,8 +10,12 @@ from homeassistant.helpers import device_registry as dr
 from .const import DOMAIN, THERAPY_HUB_IDENTIFIER
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
+
+    from .therapy import TherapyTracker
 
 HUB_DATA_KEY = "therapy_hub"
 
@@ -20,6 +24,7 @@ class TherapyHub:
     """Singleton that owns the virtual 'Beurer Therapy Hub' device."""
 
     def __init__(self, hass: HomeAssistant) -> None:
+        """Initialize TherapyHub."""
         self.hass = hass
         self.owning_entry_id: str | None = None
 
@@ -74,7 +79,7 @@ def get_or_create_hub(hass: HomeAssistant) -> TherapyHub:
 # ---------------------------------------------------------------------------
 
 
-def _iter_trackers(hass: HomeAssistant):
+def _iter_trackers(hass: HomeAssistant) -> Iterator[TherapyTracker]:
     """Yield each lamp's TherapyTracker from runtime_data."""
     for entry in hass.config_entries.async_entries(DOMAIN):
         runtime = getattr(entry, "runtime_data", None)

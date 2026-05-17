@@ -25,7 +25,8 @@ from homeassistant.helpers.entity import EntityCategory  # type: ignore[attr-def
 from homeassistant.helpers.event import async_track_state_added_domain
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, VERSION, THERAPY_HUB_IDENTIFIER, detect_model
+from .config_flow import CONF_THERAPY_GOAL, DEFAULT_THERAPY_GOAL
+from .const import DOMAIN, THERAPY_HUB_IDENTIFIER, VERSION, detect_model
 from .coordinator import BeurerDataUpdateCoordinator
 from .therapy_hub import (
     HUB_DATA_KEY,
@@ -117,10 +118,10 @@ CONNECTION_HEALTH_SENSOR_DESCRIPTIONS: tuple[SensorEntityDescription, ...] = (
 
 
 def _make_person_listener(
-    hass: "HomeAssistant",
-    async_add_entities: "AddEntitiesCallback",
+    hass: HomeAssistant,
+    async_add_entities: AddEntitiesCallback,
     known_persons: set[str],
-) -> "callback":
+) -> callback:
     """Return a callback that adds per-person sensors for any newly created person entity.
 
     The *known_persons* set is mutated in-place to prevent duplicate entity creation
@@ -128,7 +129,7 @@ def _make_person_listener(
     """
 
     @callback
-    def _handle_new_person(event: "Event") -> None:
+    def _handle_new_person(event: Event) -> None:
         new_id: str = event.data["entity_id"]
         if new_id in known_persons:
             return
@@ -440,8 +441,6 @@ class BeurerPersonTherapySensor(SensorEntity):
 
     def _first_goal(self) -> int:
         """Return the therapy goal from the first configured entry."""
-        from .config_flow import CONF_THERAPY_GOAL, DEFAULT_THERAPY_GOAL
-
         for entry in self._hass.config_entries.async_entries(DOMAIN):
             return int(entry.options.get(CONF_THERAPY_GOAL, DEFAULT_THERAPY_GOAL))
         return DEFAULT_THERAPY_GOAL

@@ -113,7 +113,9 @@ class TestBeurerTherapyUserSelectUniqueId:
         mock_entry: MagicMock,
     ) -> None:
         """Unique ID must end with '_therapy_user' (matches entity registry filter)."""
-        from custom_components.beurer_daylight_lamps.select import BeurerTherapyUserSelect
+        from custom_components.beurer_daylight_lamps.select import (
+            BeurerTherapyUserSelect,
+        )
 
         entity = BeurerTherapyUserSelect(
             mock_hass_no_persons, mock_coordinator, "Test Lamp", mock_entry
@@ -132,7 +134,9 @@ class TestBeurerTherapyUserSelectDefaultState:
         mock_entry: MagicMock,
     ) -> None:
         """Default current_option is THERAPY_USER_UNKNOWN when no previous state."""
-        from custom_components.beurer_daylight_lamps.select import BeurerTherapyUserSelect
+        from custom_components.beurer_daylight_lamps.select import (
+            BeurerTherapyUserSelect,
+        )
 
         entity = BeurerTherapyUserSelect(
             mock_hass_no_persons, mock_coordinator, "Test Lamp", mock_entry
@@ -146,7 +150,9 @@ class TestBeurerTherapyUserSelectDefaultState:
         mock_entry: MagicMock,
     ) -> None:
         """Options list always starts with THERAPY_USER_UNKNOWN sentinel."""
-        from custom_components.beurer_daylight_lamps.select import BeurerTherapyUserSelect
+        from custom_components.beurer_daylight_lamps.select import (
+            BeurerTherapyUserSelect,
+        )
 
         entity = BeurerTherapyUserSelect(
             mock_hass_no_persons, mock_coordinator, "Test Lamp", mock_entry
@@ -161,7 +167,9 @@ class TestBeurerTherapyUserSelectDefaultState:
         mock_entry: MagicMock,
     ) -> None:
         """When no HA person entities exist, options contains only the unknown sentinel."""
-        from custom_components.beurer_daylight_lamps.select import BeurerTherapyUserSelect
+        from custom_components.beurer_daylight_lamps.select import (
+            BeurerTherapyUserSelect,
+        )
 
         entity = BeurerTherapyUserSelect(
             mock_hass_no_persons, mock_coordinator, "Test Lamp", mock_entry
@@ -175,7 +183,9 @@ class TestBeurerTherapyUserSelectDefaultState:
         mock_entry: MagicMock,
     ) -> None:
         """Options includes all HA person entity_ids in sorted order after unknown."""
-        from custom_components.beurer_daylight_lamps.select import BeurerTherapyUserSelect
+        from custom_components.beurer_daylight_lamps.select import (
+            BeurerTherapyUserSelect,
+        )
 
         entity = BeurerTherapyUserSelect(
             mock_hass_with_persons, mock_coordinator, "Test Lamp", mock_entry
@@ -201,7 +211,9 @@ class TestBeurerTherapyUserSelectOption:
         """Selecting a valid option updates current_option."""
         from unittest.mock import patch as _patch
 
-        from custom_components.beurer_daylight_lamps.select import BeurerTherapyUserSelect
+        from custom_components.beurer_daylight_lamps.select import (
+            BeurerTherapyUserSelect,
+        )
 
         entity = BeurerTherapyUserSelect(
             mock_hass_with_persons, mock_coordinator, "Test Lamp", mock_entry
@@ -224,7 +236,9 @@ class TestBeurerTherapyUserSelectOption:
         """Selecting THERAPY_USER_UNKNOWN resets the current option."""
         from unittest.mock import patch as _patch
 
-        from custom_components.beurer_daylight_lamps.select import BeurerTherapyUserSelect
+        from custom_components.beurer_daylight_lamps.select import (
+            BeurerTherapyUserSelect,
+        )
 
         entity = BeurerTherapyUserSelect(
             mock_hass_with_persons, mock_coordinator, "Test Lamp", mock_entry
@@ -245,7 +259,9 @@ class TestBeurerTherapyUserSelectOption:
         mock_entry: MagicMock,
     ) -> None:
         """Selecting an invalid option raises HomeAssistantError."""
-        from custom_components.beurer_daylight_lamps.select import BeurerTherapyUserSelect
+        from custom_components.beurer_daylight_lamps.select import (
+            BeurerTherapyUserSelect,
+        )
 
         entity = BeurerTherapyUserSelect(
             mock_hass_no_persons, mock_coordinator, "Test Lamp", mock_entry
@@ -267,7 +283,9 @@ class TestBeurerTherapyUserSelectRestoreState:
         mock_entry: MagicMock,
     ) -> None:
         """If last state is a valid option, it is restored on startup."""
-        from custom_components.beurer_daylight_lamps.select import BeurerTherapyUserSelect
+        from custom_components.beurer_daylight_lamps.select import (
+            BeurerTherapyUserSelect,
+        )
 
         entity = BeurerTherapyUserSelect(
             mock_hass_with_persons, mock_coordinator, "Test Lamp", mock_entry
@@ -299,8 +317,12 @@ class TestBeurerTherapyUserSelectRestoreState:
         mock_entry: MagicMock,
     ) -> None:
         """If no saved state but options default set, it is applied."""
-        from custom_components.beurer_daylight_lamps.select import BeurerTherapyUserSelect
-        from custom_components.beurer_daylight_lamps.const import CONF_DEFAULT_THERAPY_USER
+        from custom_components.beurer_daylight_lamps.const import (
+            CONF_DEFAULT_THERAPY_USER,
+        )
+        from custom_components.beurer_daylight_lamps.select import (
+            BeurerTherapyUserSelect,
+        )
 
         mock_entry.options = {CONF_DEFAULT_THERAPY_USER: "person.michael"}
 
@@ -329,7 +351,9 @@ class TestBeurerTherapyUserSelectRestoreState:
         mock_entry: MagicMock,
     ) -> None:
         """If restored state is not in current options list, stay at UNKNOWN."""
-        from custom_components.beurer_daylight_lamps.select import BeurerTherapyUserSelect
+        from custom_components.beurer_daylight_lamps.select import (
+            BeurerTherapyUserSelect,
+        )
 
         entity = BeurerTherapyUserSelect(
             mock_hass_no_persons, mock_coordinator, "Test Lamp", mock_entry
@@ -362,7 +386,9 @@ class TestBeurerTherapyUserSelectDeviceInfo:
         mock_entry: MagicMock,
     ) -> None:
         """Device info manufacturer is Beurer."""
-        from custom_components.beurer_daylight_lamps.select import BeurerTherapyUserSelect
+        from custom_components.beurer_daylight_lamps.select import (
+            BeurerTherapyUserSelect,
+        )
 
         entity = BeurerTherapyUserSelect(
             mock_hass_no_persons, mock_coordinator, "Test Lamp", mock_entry
@@ -377,7 +403,9 @@ class TestBeurerTherapyUserSelectDeviceInfo:
         mock_entry: MagicMock,
     ) -> None:
         """Device info identifiers use the integration domain."""
-        from custom_components.beurer_daylight_lamps.select import BeurerTherapyUserSelect
+        from custom_components.beurer_daylight_lamps.select import (
+            BeurerTherapyUserSelect,
+        )
 
         entity = BeurerTherapyUserSelect(
             mock_hass_no_persons, mock_coordinator, "Test Lamp", mock_entry
@@ -397,7 +425,9 @@ class TestBeurerTherapyUserSelectAvailability:
         mock_entry: MagicMock,
     ) -> None:
         """Entity must remain available when the lamp is unreachable (HA-side state)."""
-        from custom_components.beurer_daylight_lamps.select import BeurerTherapyUserSelect
+        from custom_components.beurer_daylight_lamps.select import (
+            BeurerTherapyUserSelect,
+        )
 
         mock_coordinator.instance.available = False
 
@@ -411,7 +441,7 @@ class TestBeurerTherapyUserSelectAvailability:
 # Tests for BeurerInstance._resolve_therapy_person and auto-session wiring
 # ---------------------------------------------------------------------------
 
-def _make_beurer_instance(mac: str = "AA:BB:CC:DD:EE:FF") -> "BeurerInstance":  # noqa: F821
+def _make_beurer_instance(mac: str = "AA:BB:CC:DD:EE:FF") -> BeurerInstance:  # noqa: F821
     """Construct a BeurerInstance with BleakClient mocked out."""
     from custom_components.beurer_daylight_lamps.beurer_daylight_lamps import (
         BeurerInstance,
@@ -439,7 +469,7 @@ class TestResolveTherapyPerson:
         self,
         entity_id: str | None,
         state_value: str | None,
-    ) -> "BeurerInstance":  # noqa: F821
+    ) -> BeurerInstance:  # noqa: F821
         """Helper: build instance with a mock hass wired to the given entity/state."""
         instance = _make_beurer_instance()
 
@@ -460,9 +490,7 @@ class TestResolveTherapyPerson:
             "custom_components.beurer_daylight_lamps.beurer_daylight_lamps.er.async_get",
             return_value=mock_registry,
         ):
-            result = instance._resolve_therapy_person()
-
-        return result
+            return instance._resolve_therapy_person()
 
     def test_returns_person_id_when_select_has_valid_state(self) -> None:
         """Returns the state string when the select entity has a valid person entity_id."""

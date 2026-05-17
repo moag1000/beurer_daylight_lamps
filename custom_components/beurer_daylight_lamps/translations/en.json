@@ -175,7 +175,7 @@
             },
             "therapy_progress": {
                 "name": "Daily goal progress"
-            },
+            }
         },
         "binary_sensor": {
             "connected": {

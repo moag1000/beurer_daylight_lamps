@@ -1402,10 +1402,10 @@ class TestOptionsFlowDefaultTherapyUser:
     ) -> None:
         """Options-flow form contains CONF_DEFAULT_THERAPY_USER and persists value."""
         from custom_components.beurer_daylight_lamps.config_flow import (
-            BeurerOptionsFlowHandler,
+            CONF_ADAPTIVE_LIGHTING_DEFAULT,
             CONF_THERAPY_GOAL,
             CONF_UPDATE_INTERVAL,
-            CONF_ADAPTIVE_LIGHTING_DEFAULT,
+            BeurerOptionsFlowHandler,
         )
         from custom_components.beurer_daylight_lamps.const import (
             CONF_DEFAULT_THERAPY_USER,

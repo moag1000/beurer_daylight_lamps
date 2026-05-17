@@ -118,7 +118,7 @@ class TherapyTracker:
         color_temp_kelvin: int = 5300,
         brightness_pct: int = 100,
         person_id: str | None = None,
-    ) -> "TherapySession | None":
+    ) -> TherapySession | None:
         """Start tracking a new therapy session.
 
         Returns the previously active session if one was implicitly ended, so

@@ -40,11 +40,12 @@ from bleak_retry_connector import (
 )
 from homeassistant.components import bluetooth
 from homeassistant.components.light import ColorMode  # type: ignore[attr-defined]
+from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.device_registry import format_mac
 
-from .therapy import SunriseSimulation, TherapyTracker
+from .therapy import SunriseSimulation, TherapySession, TherapyTracker
 from .wl90 import WL90Controller
 
 if TYPE_CHECKING:
@@ -83,6 +84,7 @@ from .const import (
     CONNECTION_WATCHDOG_INTERVAL,
     DOMAIN,
     EFFECT_DELAY,
+    EVENT_THERAPY_SESSION,
     LOGGER,
     MIN_COMMAND_INTERVAL,
     MODE_CHANGE_DELAY,
@@ -1594,8 +1596,6 @@ class BeurerInstance:
 
     def _resolve_therapy_person(self) -> str | None:
         """Resolve the active therapy person from this lamp's therapy_user select entity."""
-        from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
-
         if self._hass is None:
             return None
         registry = er.async_get(self._hass)
@@ -1613,11 +1613,8 @@ class BeurerInstance:
             return None
         return state.state
 
-    def _emit_session_end(self, session: "TherapySession | None") -> None:
+    def _emit_session_end(self, session: TherapySession | None) -> None:
         """Fire EVENT_THERAPY_SESSION for an already-ended session."""
-        from .const import EVENT_THERAPY_SESSION
-        from .therapy import TherapySession  # noqa: F401 (type reference)
-
         if session is None or session.end_time is None or self._hass is None:
             return
         registry = er.async_get(self._hass)

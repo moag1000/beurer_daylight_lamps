@@ -17,7 +17,7 @@ from custom_components.beurer_daylight_lamps.const import (
 def _make_beurer_instance(
     mac: str = "AA:BB:CC:DD:EE:FF",
     hass: MagicMock | None = None,
-) -> "BeurerInstance":  # noqa: F821
+) -> BeurerInstance:  # noqa: F821
     """Construct a BeurerInstance with BleakClient mocked out."""
     from custom_components.beurer_daylight_lamps.beurer_daylight_lamps import (
         BeurerInstance,
@@ -307,7 +307,9 @@ class TestTherapyHubDevice:
 
     def test_get_or_create_hub_returns_singleton(self) -> None:
         """get_or_create_hub always returns the same TherapyHub instance per hass."""
-        from custom_components.beurer_daylight_lamps.therapy_hub import get_or_create_hub
+        from custom_components.beurer_daylight_lamps.therapy_hub import (
+            get_or_create_hub,
+        )
 
         hass = _make_mock_hass_for_hub()
 
@@ -388,11 +390,13 @@ class TestAggregationHelpers:
 
     def test_today_minutes_for_aggregates_across_lamps(self) -> None:
         """today_minutes_for sums qualifying sessions for one person across all entries."""
-        from custom_components.beurer_daylight_lamps.therapy_hub import today_minutes_for
+        from custom_components.beurer_daylight_lamps.therapy_hub import (
+            today_minutes_for,
+        )
 
         # Two lamps, each with one session for person.alice today
-        s1 = _make_session("person.alice", True, start_offset_minutes=60, duration_minutes=15.0)
-        s2 = _make_session("person.alice", True, start_offset_minutes=30, duration_minutes=20.0)
+        s1 = _make_session("person.alice", is_therapy=True, start_offset_minutes=60, duration_minutes=15.0)
+        s2 = _make_session("person.alice", is_therapy=True, start_offset_minutes=30, duration_minutes=20.0)
         tracker1 = _make_tracker([s1])
         tracker2 = _make_tracker([s2])
         entry1 = _make_entry_with_tracker(tracker1)
@@ -405,11 +409,13 @@ class TestAggregationHelpers:
 
     def test_today_minutes_for_only_today(self) -> None:
         """Sessions from yesterday are excluded."""
-        from custom_components.beurer_daylight_lamps.therapy_hub import today_minutes_for
+        from custom_components.beurer_daylight_lamps.therapy_hub import (
+            today_minutes_for,
+        )
 
         # Session started 26 hours ago (yesterday)
         yesterday_session = _make_session(
-            "person.alice", True, start_offset_minutes=26 * 60, duration_minutes=10.0
+            "person.alice", is_therapy=True, start_offset_minutes=26 * 60, duration_minutes=10.0
         )
         tracker = _make_tracker([yesterday_session])
         entry = _make_entry_with_tracker(tracker)
@@ -421,10 +427,12 @@ class TestAggregationHelpers:
 
     def test_today_minutes_for_only_qualifying(self) -> None:
         """Sessions that are not is_therapy_light are excluded."""
-        from custom_components.beurer_daylight_lamps.therapy_hub import today_minutes_for
+        from custom_components.beurer_daylight_lamps.therapy_hub import (
+            today_minutes_for,
+        )
 
         # Not therapy light (is_therapy_light=False)
-        non_therapy = _make_session("person.alice", False, start_offset_minutes=60, duration_minutes=15.0)
+        non_therapy = _make_session("person.alice", is_therapy=False, start_offset_minutes=60, duration_minutes=15.0)
         tracker = _make_tracker([non_therapy])
         entry = _make_entry_with_tracker(tracker)
         hass = _make_hass_with_entries([entry])
@@ -435,10 +443,12 @@ class TestAggregationHelpers:
 
     def test_today_minutes_for_only_matching_person(self) -> None:
         """Sessions for other persons are excluded."""
-        from custom_components.beurer_daylight_lamps.therapy_hub import today_minutes_for
+        from custom_components.beurer_daylight_lamps.therapy_hub import (
+            today_minutes_for,
+        )
 
-        alice_session = _make_session("person.alice", True, start_offset_minutes=60, duration_minutes=15.0)
-        bob_session = _make_session("person.bob", True, start_offset_minutes=60, duration_minutes=20.0)
+        alice_session = _make_session("person.alice", is_therapy=True, start_offset_minutes=60, duration_minutes=15.0)
+        bob_session = _make_session("person.bob", is_therapy=True, start_offset_minutes=60, duration_minutes=20.0)
         tracker = _make_tracker([alice_session, bob_session])
         entry = _make_entry_with_tracker(tracker)
         hass = _make_hass_with_entries([entry])
@@ -449,9 +459,11 @@ class TestAggregationHelpers:
 
     def test_today_minutes_for_includes_active_session(self) -> None:
         """The current (in-progress) session counts if it qualifies."""
-        from custom_components.beurer_daylight_lamps.therapy_hub import today_minutes_for
+        from custom_components.beurer_daylight_lamps.therapy_hub import (
+            today_minutes_for,
+        )
 
-        active = _make_session("person.alice", True, start_offset_minutes=5, duration_minutes=5.0)
+        active = _make_session("person.alice", is_therapy=True, start_offset_minutes=5, duration_minutes=5.0)
         tracker = _make_tracker([], current_session=active)
         entry = _make_entry_with_tracker(tracker)
         hass = _make_hass_with_entries([entry])
@@ -465,9 +477,9 @@ class TestAggregationHelpers:
         from custom_components.beurer_daylight_lamps.therapy_hub import week_minutes_for
 
         # Session 3 days ago (this week)
-        this_week = _make_session("person.alice", True, start_offset_minutes=3 * 24 * 60, duration_minutes=30.0)
+        this_week = _make_session("person.alice", is_therapy=True, start_offset_minutes=3 * 24 * 60, duration_minutes=30.0)
         # Session 8 days ago (last week)
-        last_week = _make_session("person.alice", True, start_offset_minutes=8 * 24 * 60, duration_minutes=20.0)
+        last_week = _make_session("person.alice", is_therapy=True, start_offset_minutes=8 * 24 * 60, duration_minutes=20.0)
         tracker = _make_tracker([this_week, last_week])
         entry = _make_entry_with_tracker(tracker)
         hass = _make_hass_with_entries([entry])
@@ -479,10 +491,12 @@ class TestAggregationHelpers:
 
     def test_goal_progress_for_caps_at_100(self) -> None:
         """goal_progress_for returns at most 100 even when minutes exceed goal."""
-        from custom_components.beurer_daylight_lamps.therapy_hub import goal_progress_for
+        from custom_components.beurer_daylight_lamps.therapy_hub import (
+            goal_progress_for,
+        )
 
         # 60 minutes done today, goal is only 30
-        s = _make_session("person.alice", True, start_offset_minutes=90, duration_minutes=60.0)
+        s = _make_session("person.alice", is_therapy=True, start_offset_minutes=90, duration_minutes=60.0)
         tracker = _make_tracker([s])
         entry = _make_entry_with_tracker(tracker)
         hass = _make_hass_with_entries([entry])
@@ -493,7 +507,9 @@ class TestAggregationHelpers:
 
     def test_goal_progress_for_zero_goal(self) -> None:
         """goal_progress_for returns 0 when goal_minutes is 0 (avoid division by zero)."""
-        from custom_components.beurer_daylight_lamps.therapy_hub import goal_progress_for
+        from custom_components.beurer_daylight_lamps.therapy_hub import (
+            goal_progress_for,
+        )
 
         hass = _make_hass_with_entries([])
 
@@ -503,7 +519,9 @@ class TestAggregationHelpers:
 
     def test_iter_trackers_skips_missing_runtime_data(self) -> None:
         """_iter_trackers skips entries whose runtime_data is None."""
-        from custom_components.beurer_daylight_lamps.therapy_hub import today_minutes_for
+        from custom_components.beurer_daylight_lamps.therapy_hub import (
+            today_minutes_for,
+        )
 
         entry_no_runtime = MagicMock()
         entry_no_runtime.runtime_data = None  # simulate missing
@@ -523,9 +541,11 @@ class TestBeurerPersonTherapySensor:
 
     def test_person_therapy_sensor_native_value_today(self) -> None:
         """BeurerPersonTherapySensor with kind='today' returns today_minutes_for result."""
-        from custom_components.beurer_daylight_lamps.sensor import BeurerPersonTherapySensor
+        from custom_components.beurer_daylight_lamps.sensor import (
+            BeurerPersonTherapySensor,
+        )
 
-        session = _make_session("person.alice", True, start_offset_minutes=60, duration_minutes=25.0)
+        session = _make_session("person.alice", is_therapy=True, start_offset_minutes=60, duration_minutes=25.0)
         tracker = _make_tracker([session])
         entry = _make_entry_with_tracker(tracker)
         hass = _make_hass_with_entries([entry])
@@ -536,9 +556,11 @@ class TestBeurerPersonTherapySensor:
 
     def test_person_therapy_sensor_native_value_week(self) -> None:
         """BeurerPersonTherapySensor with kind='week' returns week_minutes_for result."""
-        from custom_components.beurer_daylight_lamps.sensor import BeurerPersonTherapySensor
+        from custom_components.beurer_daylight_lamps.sensor import (
+            BeurerPersonTherapySensor,
+        )
 
-        session = _make_session("person.alice", True, start_offset_minutes=2 * 24 * 60, duration_minutes=40.0)
+        session = _make_session("person.alice", is_therapy=True, start_offset_minutes=2 * 24 * 60, duration_minutes=40.0)
         tracker = _make_tracker([session])
         entry = _make_entry_with_tracker(tracker)
         hass = _make_hass_with_entries([entry])
@@ -549,10 +571,12 @@ class TestBeurerPersonTherapySensor:
 
     def test_person_therapy_sensor_native_value_progress(self) -> None:
         """BeurerPersonTherapySensor with kind='progress' returns goal_progress_for result."""
-        from custom_components.beurer_daylight_lamps.sensor import BeurerPersonTherapySensor
+        from custom_components.beurer_daylight_lamps.sensor import (
+            BeurerPersonTherapySensor,
+        )
 
         # 15 minutes today, goal=30 → 50%
-        session = _make_session("person.alice", True, start_offset_minutes=60, duration_minutes=15.0)
+        session = _make_session("person.alice", is_therapy=True, start_offset_minutes=60, duration_minutes=15.0)
         tracker = _make_tracker([session])
         entry = _make_entry_with_tracker(tracker)
         hass = _make_hass_with_entries([entry])
@@ -565,8 +589,13 @@ class TestBeurerPersonTherapySensor:
 
     def test_person_therapy_sensor_device_info_uses_hub_identifier(self) -> None:
         """BeurerPersonTherapySensor device_info references the hub identifier."""
-        from custom_components.beurer_daylight_lamps.const import DOMAIN, THERAPY_HUB_IDENTIFIER
-        from custom_components.beurer_daylight_lamps.sensor import BeurerPersonTherapySensor
+        from custom_components.beurer_daylight_lamps.const import (
+            DOMAIN,
+            THERAPY_HUB_IDENTIFIER,
+        )
+        from custom_components.beurer_daylight_lamps.sensor import (
+            BeurerPersonTherapySensor,
+        )
 
         hass = _make_hass_with_entries([])
         sensor = BeurerPersonTherapySensor(hass, "person.alice", "alice", "today")
@@ -576,7 +605,9 @@ class TestBeurerPersonTherapySensor:
 
     def test_person_therapy_sensor_unique_ids_are_distinct(self) -> None:
         """Three kinds produce three distinct unique IDs for the same person."""
-        from custom_components.beurer_daylight_lamps.sensor import BeurerPersonTherapySensor
+        from custom_components.beurer_daylight_lamps.sensor import (
+            BeurerPersonTherapySensor,
+        )
 
         hass = _make_hass_with_entries([])
         s_today = BeurerPersonTherapySensor(hass, "person.alice", "alice", "today")
@@ -588,7 +619,9 @@ class TestBeurerPersonTherapySensor:
 
     def test_person_therapy_sensor_units(self) -> None:
         """today and week sensors use minutes; progress uses percent."""
-        from custom_components.beurer_daylight_lamps.sensor import BeurerPersonTherapySensor
+        from custom_components.beurer_daylight_lamps.sensor import (
+            BeurerPersonTherapySensor,
+        )
 
         hass = _make_hass_with_entries([])
         s_today = BeurerPersonTherapySensor(hass, "person.alice", "alice", "today")
@@ -610,7 +643,7 @@ class TestDynamicPersonListener:
 
     def test_handle_new_person_adds_three_sensors(self) -> None:
         """_handle_new_person adds today/week/progress sensors for a newly seen person."""
-        from unittest.mock import MagicMock, call
+        from unittest.mock import MagicMock
 
         from custom_components.beurer_daylight_lamps.sensor import _make_person_listener
 
@@ -708,7 +741,7 @@ class TestImplicitSessionEnd:
         # Start session for person A
         tracker.start_session(5300, 100, person_id="person.alice")
         # Backdate to ensure session qualifies (>= 1 min, therapy light)
-        from datetime import UTC, timedelta, datetime
+        from datetime import UTC, datetime, timedelta
         tracker._current_session.start_time = datetime.now(UTC) - timedelta(minutes=5)
 
         # Starting session for person B should return A's ended session
@@ -737,8 +770,9 @@ class TestImplicitSessionEnd:
         instance._entry = mock_entry
         instance._device_name = "Implicit Lamp"
 
+        from datetime import UTC, datetime, timedelta
+
         from custom_components.beurer_daylight_lamps.therapy import TherapyTracker
-        from datetime import UTC, timedelta, datetime
 
         instance._therapy_tracker = TherapyTracker()
 
@@ -787,8 +821,9 @@ class TestLightEntityIdInPayload:
         instance._entry = mock_entry
         instance._device_name = "Light Lamp"
 
+        from datetime import UTC, datetime, timedelta
+
         from custom_components.beurer_daylight_lamps.therapy import TherapyTracker
-        from datetime import UTC, timedelta, datetime
 
         instance._therapy_tracker = TherapyTracker()
         instance._therapy_tracker.start_session(5300, 100, person_id="person.alice")
@@ -820,8 +855,9 @@ class TestLightEntityIdInPayload:
         instance._entry = mock_entry
         instance._device_name = "No Light"
 
+        from datetime import UTC, datetime, timedelta
+
         from custom_components.beurer_daylight_lamps.therapy import TherapyTracker
-        from datetime import UTC, timedelta, datetime
 
         instance._therapy_tracker = TherapyTracker()
         instance._therapy_tracker.start_session(5300, 100, person_id=None)

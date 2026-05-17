@@ -196,7 +196,7 @@
             },
             "therapy_progress": {
                 "name": "Tagesfortschritt"
-            },
+            }
         },
         "binary_sensor": {
             "connected": {

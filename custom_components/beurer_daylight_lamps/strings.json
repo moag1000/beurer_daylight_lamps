@@ -241,7 +241,7 @@
             },
             "connection_uptime": {
                 "name": "Connection uptime"
-            },
+            }
         },
         "binary_sensor": {
             "connected": {

@@ -36,6 +36,7 @@ from .coordinator import BeurerDataUpdateCoordinator
 from .data import BeurerConfigEntry, BeurerRuntimeData
 from .exceptions import BeurerInitializationError as BeurerInitializationError
 from .therapy import SunriseProfile
+from .therapy_hub import HUB_DATA_KEY, get_or_create_hub
 from .wl90 import AlarmItem
 
 # Service constants
@@ -416,8 +417,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> bo
     await _async_setup_services(hass)
 
     # Ensure the virtual Therapy Hub device exists (singleton per hass instance)
-    from .therapy_hub import get_or_create_hub
-
     hub = get_or_create_hub(hass)
     hub.ensure_device(entry)
 
@@ -860,8 +859,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> b
         await entry.runtime_data.instance.disconnect()
 
         # Remove the virtual Therapy Hub device only when the last entry is gone
-        from .therapy_hub import HUB_DATA_KEY
-
         remaining = [
             e
             for e in hass.config_entries.async_entries(DOMAIN)
