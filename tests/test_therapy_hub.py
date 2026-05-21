@@ -543,8 +543,12 @@ class TestAggregationHelpers:
         week_start = (now - timedelta(days=now.weekday())).replace(
             hour=0, minute=0, second=0, microsecond=0
         )
-        in_week_offset = (now - (week_start + timedelta(minutes=1))).total_seconds() / 60
-        last_week_offset = (now - (week_start - timedelta(minutes=1))).total_seconds() / 60
+        in_week_offset = (
+            now - (week_start + timedelta(minutes=1))
+        ).total_seconds() / 60
+        last_week_offset = (
+            now - (week_start - timedelta(minutes=1))
+        ).total_seconds() / 60
 
         this_week = _make_session(
             "person.alice",
@@ -654,7 +658,9 @@ class TestBeurerPersonTherapySensor:
         week_start = (now - timedelta(days=now.weekday())).replace(
             hour=0, minute=0, second=0, microsecond=0
         )
-        in_week_offset = (now - (week_start + timedelta(minutes=1))).total_seconds() / 60
+        in_week_offset = (
+            now - (week_start + timedelta(minutes=1))
+        ).total_seconds() / 60
 
         session = _make_session(
             "person.alice",
