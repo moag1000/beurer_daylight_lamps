@@ -537,18 +537,25 @@ class TestAggregationHelpers:
         """week_minutes_for sums sessions from the start of the current week."""
         from custom_components.beurer_daylight_lamps.therapy_hub import week_minutes_for
 
-        # Session 3 days ago (this week)
+        # Offsets must straddle the current week boundary regardless of weekday,
+        # otherwise "3 days ago" can fall into last week (e.g., when run Mon-Wed).
+        now = datetime.now(UTC)
+        week_start = (now - timedelta(days=now.weekday())).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        in_week_offset = (now - (week_start + timedelta(minutes=1))).total_seconds() / 60
+        last_week_offset = (now - (week_start - timedelta(minutes=1))).total_seconds() / 60
+
         this_week = _make_session(
             "person.alice",
             is_therapy=True,
-            start_offset_minutes=3 * 24 * 60,
+            start_offset_minutes=in_week_offset,
             duration_minutes=30.0,
         )
-        # Session 8 days ago (last week)
         last_week = _make_session(
             "person.alice",
             is_therapy=True,
-            start_offset_minutes=8 * 24 * 60,
+            start_offset_minutes=last_week_offset,
             duration_minutes=20.0,
         )
         tracker = _make_tracker([this_week, last_week])
@@ -641,10 +648,18 @@ class TestBeurerPersonTherapySensor:
             BeurerPersonTherapySensor,
         )
 
+        # Anchor offset to this week's start so the session is always inside
+        # the current week regardless of the weekday the test runs on.
+        now = datetime.now(UTC)
+        week_start = (now - timedelta(days=now.weekday())).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        in_week_offset = (now - (week_start + timedelta(minutes=1))).total_seconds() / 60
+
         session = _make_session(
             "person.alice",
             is_therapy=True,
-            start_offset_minutes=2 * 24 * 60,
+            start_offset_minutes=in_week_offset,
             duration_minutes=40.0,
         )
         tracker = _make_tracker([session])

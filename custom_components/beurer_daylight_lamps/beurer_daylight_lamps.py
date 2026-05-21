@@ -89,6 +89,7 @@ from .const import (
     MIN_COMMAND_INTERVAL,
     MODE_CHANGE_DELAY,
     MODE_RGB,
+    MODE_SWITCH_SETTLE_DELAY,
     MODE_WHITE,
     POST_CONNECT_SETTLE,
     READ_CHARACTERISTIC_UUID,
@@ -982,6 +983,20 @@ class BeurerInstance:
         self._last_command_time = time.monotonic()
         return result
 
+    async def _switch_to_mode(self, mode_byte: int) -> None:
+        """Perform isolated mode switch with extended firmware settle.
+
+        Some Beurer firmwares crash when functional commands (brightness,
+        color, effect) follow CMD_MODE too closely. This helper sends only
+        the mode switch, requests a confirmation status, and waits for the
+        device to settle before the caller emits any further packets.
+        """
+        LOGGER.debug("Switching device %s to mode 0x%02X", self._mac, mode_byte)
+        await self._send_packet([CMD_MODE, mode_byte])
+        await asyncio.sleep(MODE_CHANGE_DELAY)
+        await self._send_packet([CMD_STATUS, mode_byte])
+        await asyncio.sleep(MODE_SWITCH_SETTLE_DELAY)
+
     async def set_color(
         self, rgb: tuple[int, int, int], _from_turn_on: bool = False
     ) -> None:
@@ -1003,8 +1018,7 @@ class BeurerInstance:
             # Activate RGB mode if not already active
             if not self._color_on:
                 LOGGER.debug("Activating RGB mode")
-                await self._send_packet([CMD_MODE, MODE_RGB])
-                await asyncio.sleep(MODE_CHANGE_DELAY)
+                await self._switch_to_mode(MODE_RGB)
                 self._color_on = True
                 self._light_on = False
                 self._available = True
@@ -1052,8 +1066,7 @@ class BeurerInstance:
             # Activate RGB mode if not already active
             if not self._color_on:
                 LOGGER.debug("Activating RGB mode")
-                await self._send_packet([CMD_MODE, MODE_RGB])
-                await asyncio.sleep(MODE_CHANGE_DELAY)
+                await self._switch_to_mode(MODE_RGB)
                 self._color_on = True
                 self._light_on = False
                 self._available = True
@@ -1105,8 +1118,7 @@ class BeurerInstance:
             # Lightweight guard only around mode-switch part (no _request_status here)
             self._mode_switch_target = ColorMode.RGB
             try:
-                await self._send_packet([CMD_MODE, MODE_RGB])
-                await asyncio.sleep(MODE_CHANGE_DELAY)
+                await self._switch_to_mode(MODE_RGB)
                 self._color_on = True
                 self._light_on = False
                 self._mode = ColorMode.RGB
@@ -1158,8 +1170,7 @@ class BeurerInstance:
             if not self._color_on:
                 LOGGER.debug("Switching to RGB mode for brightness change")
                 self._mode = ColorMode.RGB
-                await self._send_packet([CMD_MODE, MODE_RGB])
-                await asyncio.sleep(MODE_CHANGE_DELAY)
+                await self._switch_to_mode(MODE_RGB)
                 self._color_on = True
                 self._light_on = False
                 self._available = True
@@ -1298,8 +1309,7 @@ class BeurerInstance:
                     self._light_on,
                     self._color_on,
                 )
-                await self._send_packet([CMD_MODE, MODE_WHITE])
-                await asyncio.sleep(MODE_CHANGE_DELAY)
+                await self._switch_to_mode(MODE_WHITE)
                 self._light_on = True
                 self._color_on = False
                 self._available = True
@@ -1334,8 +1344,7 @@ class BeurerInstance:
             if not self._color_on:
                 LOGGER.debug("Activating RGB mode for effect")
                 self._mode = ColorMode.RGB
-                await self._send_packet([CMD_MODE, MODE_RGB])
-                await asyncio.sleep(MODE_CHANGE_DELAY)
+                await self._switch_to_mode(MODE_RGB)
                 self._color_on = True
                 self._light_on = False
                 self._available = True
@@ -1435,13 +1444,11 @@ class BeurerInstance:
             return
 
         if self._mode == ColorMode.WHITE:
-            await self._send_packet([CMD_MODE, MODE_WHITE])
-            await asyncio.sleep(MODE_CHANGE_DELAY)
+            await self._switch_to_mode(MODE_WHITE)
             self._light_on = True
             self._color_on = False
         else:
-            await self._send_packet([CMD_MODE, MODE_RGB])
-            await asyncio.sleep(MODE_CHANGE_DELAY)
+            await self._switch_to_mode(MODE_RGB)
             self._color_on = True
             self._light_on = False
 

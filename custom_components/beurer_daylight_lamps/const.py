@@ -6,7 +6,7 @@ import logging
 from typing import Final
 
 DOMAIN: Final = "beurer_daylight_lamps"
-VERSION: Final = "1.36.3"
+VERSION: Final = "1.36.4"
 LOGGER = logging.getLogger(__package__)
 
 # BLE Characteristic UUIDs
@@ -95,6 +95,10 @@ MODE_RGB: Final = 0x02
 # The device needs delays between commands to process them correctly
 COMMAND_DELAY: Final = 0.3  # Standard delay after most commands
 MODE_CHANGE_DELAY: Final = 0.5  # Longer delay after mode changes
+# Extra settle window after a mode switch before any further functional
+# command (color/brightness/effect). Firmware crashed when chained commands
+# arrived too soon after CMD_MODE in white<->RGB transitions.
+MODE_SWITCH_SETTLE_DELAY: Final = 1.0
 EFFECT_DELAY: Final = 0.5  # Delay after effect changes
 STATUS_DELAY: Final = 0.2  # Delay after status request
 TURN_OFF_DELAY: Final = 0.15  # Short delay after turn off sequence

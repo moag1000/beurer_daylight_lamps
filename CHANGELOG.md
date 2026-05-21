@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.36.4] - 2026-05-21
+
+### Fixed
+
+- **Firmware crash on white↔RGB mode switch**: BLE mode-switch packets are now isolated from any follow-up brightness/color/effect commands. New helper `_switch_to_mode()` sends `CMD_MODE`, waits, queries `CMD_STATUS` for confirmation, then waits the new `MODE_SWITCH_SETTLE_DELAY` (1.0 s) before the caller emits further packets. Chained command bursts after `CMD_MODE` previously froze the lamp firmware and required a power-cycle.
+- Refactored `set_color`, `set_color_with_brightness`, `set_color_with_brightness_fast`, `set_color_brightness`, `set_white`, `set_effect`, and `turn_on` to route every mode change through the new helper.
+- Made week-based tests in `test_therapy_hub.py` independent of the current weekday so they no longer fail when run on Mon–Wed.
+
 ## [1.36.3] - 2026-05-17
 
 ### Fixed
