@@ -33,10 +33,10 @@
     "codeowners": ["@moag1000"],
     "config_flow": true,
     "dependencies": ["bluetooth"],
-    "documentation": "https://github.com/moag1000/beurer_daylight_lamps",
+    "documentation": "https://github.com/mike-vention/beurer_daylight_lamps",
     "integration_type": "device",
     "iot_class": "local_push",
     "issue_tracker": "https://github.com/mike-vention/beurer_daylight_lamps/issues",
     "requirements": ["bleak-retry-connector>=4.0.0"],
-    "version": "1.36.5"
+    "version": "1.36.6"
 }

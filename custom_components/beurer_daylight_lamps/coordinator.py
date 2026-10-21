@@ -91,9 +91,10 @@ class BeurerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         We update the coordinator data and notify all listeners.
         """
         LOGGER.debug("Push update received from %s", self.instance.mac)
-        self.async_set_updated_data(self._get_current_data())
-        # Adjust polling interval based on new state
+        # Interval first: async_set_updated_data schedules the next refresh with
+        # the current interval (300 s after off -> on would delay the next poll).
         self._adjust_polling_interval()
+        self.async_set_updated_data(self._get_current_data())
 
     def _get_adaptive_interval(self) -> timedelta:
         """Calculate the appropriate polling interval based on device state.

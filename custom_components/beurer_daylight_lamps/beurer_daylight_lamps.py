@@ -24,7 +24,9 @@ Notification versions (byte 8 of response):
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import datetime
+import functools
 import time
 from typing import TYPE_CHECKING, Any
 
@@ -111,6 +113,50 @@ from .const import (
     WRITE_CHARACTERISTIC_UUID,
     is_wl_model,
 )
+
+
+class _TaskLock:
+    """asyncio.Lock that the task holding it may enter again.
+
+    Commands call each other (turn_on -> set_effect) and connect() can be
+    reached again from its own setup, so a plain Lock would deadlock.
+    """
+
+    def __init__(self) -> None:
+        """Initialize the lock."""
+        self._lock = asyncio.Lock()
+        self._owner: asyncio.Task[Any] | None = None
+
+    @contextlib.asynccontextmanager
+    async def hold(self) -> Any:
+        """Hold the lock for the current task (re-entrant)."""
+        task = asyncio.current_task()
+        if task is not None and self._owner is task:
+            yield
+            return
+        async with self._lock:
+            self._owner = task
+            try:
+                yield
+            finally:
+                self._owner = None
+
+
+def _serialized(func: Any) -> Any:
+    """Run a command method under the instance's command lock.
+
+    Commands are packet sequences with delays between packets; without the
+    lock, a second command (another entity, an automation, a poll) interleaves
+    with the first, which breaks the isolated mode switch and lets one command
+    clear the other's _mode_switch_target.
+    """
+
+    @functools.wraps(func)
+    async def wrapper(self: BeurerInstance, *args: Any, **kwargs: Any) -> Any:
+        async with self._command_lock.hold():
+            return await func(self, *args, **kwargs)
+
+    return wrapper
 
 
 def ha_brightness_to_percent(brightness: int) -> int:
@@ -205,6 +251,8 @@ class BeurerInstance:
     def _init_connection_state(self) -> None:
         """Initialize connection health and reconnection state."""
         self._reconnect_lock: asyncio.Lock = asyncio.Lock()
+        self._command_lock = _TaskLock()
+        self._connect_lock = _TaskLock()
         self._reconnect_backoff: float = RECONNECT_INITIAL_BACKOFF
         self._last_reconnect_attempt: float = 0.0
         self._adapter_failures: dict[str, float] = {}
@@ -573,6 +621,10 @@ class BeurerInstance:
 
     def _on_disconnect(self, client: BleakClient) -> None:
         """Handle disconnection callback."""
+        if self._client is not None and client is not self._client:
+            # A replaced client going away must not tear down the live one.
+            LOGGER.debug("Ignoring disconnect of a stale client for %s", self._mac)
+            return
         LOGGER.info("Disconnected from %s - will attempt reconnect", self._mac)
         self._available = False
         self._light_on = False
@@ -1008,6 +1060,7 @@ class BeurerInstance:
         await self._send_packet([CMD_STATUS, mode_byte])
         await asyncio.sleep(MODE_SWITCH_SETTLE_DELAY)
 
+    @_serialized
     async def set_color(
         self, rgb: tuple[int, int, int], _from_turn_on: bool = False
     ) -> None:
@@ -1041,10 +1094,14 @@ class BeurerInstance:
 
             await self._send_packet([CMD_COLOR, r, g, b])
             await asyncio.sleep(COMMAND_DELAY)
+            # Push the optimistic state: the confirming status equals it and
+            # would not count as a change (same as turn_off).
+            await self._trigger_update()
             await self._request_status()
         finally:
             self._mode_switch_target = None
 
+    @_serialized
     async def set_color_with_brightness(
         self,
         rgb: tuple[int, int, int],
@@ -1103,10 +1160,14 @@ class BeurerInstance:
                 await asyncio.sleep(COMMAND_DELAY)
 
             # Single status request at the end
+            # Push the optimistic state: the confirming status equals it and
+            # would not count as a change (same as turn_off).
+            await self._trigger_update()
             await self._request_status()
         finally:
             self._mode_switch_target = None
 
+    @_serialized
     async def set_color_with_brightness_fast(
         self,
         rgb: tuple[int, int, int],
@@ -1159,8 +1220,11 @@ class BeurerInstance:
             await self._send_packet([CMD_BRIGHTNESS, MODE_RGB, brightness_percent])
             await asyncio.sleep(COMMAND_DELAY)
 
-        # No status request - caller can request if needed
+        # No status request - caller can request if needed; push the new
+        # color so sunrise/sunset steps show up in HA.
+        await self._trigger_update()
 
+    @_serialized
     async def set_color_brightness(
         self, brightness: float | None, _from_turn_on: bool = False
     ) -> None:
@@ -1189,6 +1253,9 @@ class BeurerInstance:
             brightness_percent = ha_brightness_to_percent(brightness)
             await self._send_packet([CMD_BRIGHTNESS, MODE_RGB, brightness_percent])
             await asyncio.sleep(COMMAND_DELAY)
+            # Push the optimistic state: the confirming status equals it and
+            # would not count as a change (same as turn_off).
+            await self._trigger_update()
             await self._request_status()
         finally:
             self._mode_switch_target = None
@@ -1293,6 +1360,7 @@ class BeurerInstance:
             await self._trigger_update()
         return result
 
+    @_serialized
     async def set_white(
         self, intensity: float | None, _from_turn_on: bool = False
     ) -> None:
@@ -1332,10 +1400,14 @@ class BeurerInstance:
                 intensity_percent = 99
             await self._send_packet([CMD_BRIGHTNESS, MODE_WHITE, intensity_percent])
             await asyncio.sleep(COMMAND_DELAY)
+            # Push the optimistic state: the confirming status equals it and
+            # would not count as a change (same as turn_off).
+            await self._trigger_update()
             await self._request_status()
         finally:
             self._mode_switch_target = None
 
+    @_serialized
     async def set_effect(self, effect: str | None, _from_turn_on: bool = False) -> None:
         """Set light effect.
 
@@ -1362,10 +1434,14 @@ class BeurerInstance:
 
             await self._send_packet([CMD_EFFECT, self._find_effect_index(effect)])
             await asyncio.sleep(EFFECT_DELAY)
+            # Push the optimistic state: the confirming status equals it and
+            # would not count as a change (same as turn_off).
+            await self._trigger_update()
             await self._request_status()
         finally:
             self._mode_switch_target = None
 
+    @_serialized
     async def set_timer(self, minutes: int) -> bool:
         """Set auto-off timer to specified duration.
 
@@ -1406,10 +1482,12 @@ class BeurerInstance:
         if result:
             self._timer_active = True
             self._timer_minutes = minutes
+            await self._trigger_update()
             await asyncio.sleep(COMMAND_DELAY)
             await self._request_status()
         return result
 
+    @_serialized
     async def cancel_timer(self) -> bool:
         """Cancel the auto-off timer.
 
@@ -1431,10 +1509,12 @@ class BeurerInstance:
         if result:
             self._timer_active = False
             self._timer_minutes = 0
+            await self._trigger_update()
             await asyncio.sleep(COMMAND_DELAY)
             await self._request_status()
         return result
 
+    @_serialized
     async def turn_on(self) -> None:
         """Turn on the lamp.
 
@@ -1480,6 +1560,7 @@ class BeurerInstance:
         await asyncio.sleep(MODE_CHANGE_DELAY)
         await self._request_status()
 
+    @_serialized
     async def turn_off(self) -> None:
         """Turn off the lamp.
 
@@ -1523,7 +1604,9 @@ class BeurerInstance:
         """
         changed = False
         new_light_on = data[9] == 1
-        new_brightness = int(data[10] * 255 / 100) if new_light_on else None
+        # Off keeps the last brightness (like the RGB branch): None made the
+        # next set_white(None) start at 99 %.
+        new_brightness = int(data[10] * 255 / 100) if new_light_on else self._brightness
 
         if self._light_on != new_light_on or self._brightness != new_brightness:
             changed = True
@@ -2234,7 +2317,17 @@ class BeurerInstance:
         await asyncio.sleep(STATUS_DELAY)
         await self._send_packet([CMD_MUSIC_QUERY])
 
-    async def connect(self) -> bool:  # noqa: PLR0912, PLR0915
+    async def connect(self) -> bool:
+        """Connect to the device, one attempt at a time.
+
+        Without the lock, a command or poll arriving while a reconnect is in
+        progress opened a second connection; the first client stayed connected
+        and held an extra proxy slot.
+        """
+        async with self._connect_lock.hold():
+            return await self._connect()
+
+    async def _connect(self) -> bool:  # noqa: PLR0912, PLR0915
         """Connect to the device using Home Assistant's Bluetooth stack.
 
         Preferentially selects GATT-capable adapters (ESPHome Proxies,
@@ -2394,6 +2487,7 @@ class BeurerInstance:
             return
         ir.async_delete_issue(self._hass, DOMAIN, self._adapter_full_issue_id())
 
+    @_serialized
     async def update(self) -> None:
         """Update device state by requesting current status."""
         LOGGER.debug("Update called for %s", self._mac)
