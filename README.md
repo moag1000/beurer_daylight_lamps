@@ -1,5 +1,7 @@
 # Beurer Daylight Therapy Lamps
 
+> **Fork** of [moag1000/beurer_daylight_lamps](https://github.com/moag1000/beurer_daylight_lamps) with fixes for the light entity: `turn_off` state refresh, `white:` support, brightness-only after native white, and low-brightness rounding (upstream #6, #7, #8). See [CHANGELOG](CHANGELOG.md) 1.36.5. Install via HACS as a custom repository: `https://github.com/mike-vention/beurer_daylight_lamps`.
+
 [![HACS Default](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://github.com/hacs/integration)
 [![GitHub Release](https://img.shields.io/github/v/release/moag1000/beurer_daylight_lamps)](https://github.com/moag1000/beurer_daylight_lamps/releases)
 [![Validate](https://github.com/moag1000/beurer_daylight_lamps/actions/workflows/validate-hacs-hassfest.yml/badge.svg)](https://github.com/moag1000/beurer_daylight_lamps/actions/workflows/validate-hacs-hassfest.yml)

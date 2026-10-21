@@ -1268,6 +1268,30 @@ class TestBeurerTurnOnOff:
         assert instance._color_on is False
 
     @pytest.mark.asyncio
+    async def test_turn_off_refreshes_entity(self, mock_device):
+        """turn_off must notify HA itself.
+
+        The lamp's off notification matches the optimistic state set here, so
+        it is not a change and would leave the entity "on" until the next poll.
+        """
+        from custom_components.beurer_daylight_lamps.beurer_daylight_lamps import (
+            BeurerInstance,
+        )
+
+        instance = BeurerInstance(mock_device)
+        instance._client = MagicMock()
+        instance._client.is_connected = True
+        instance._client.write_gatt_char = AsyncMock()
+        instance._write_uuid = "test-uuid"
+        instance._color_on = True
+        callback = MagicMock()
+        instance.set_update_callback(callback)
+
+        await instance.turn_off()
+
+        callback.assert_called()
+
+    @pytest.mark.asyncio
     async def test_turn_on_white_mode(self, mock_device):
         """Test turn_on in white mode."""
         from homeassistant.components.light import ColorMode
@@ -2040,3 +2064,16 @@ class TestModeSwitchGuard:
 
         assert instance._light_on is False
         assert instance._color_on is False
+
+
+@pytest.mark.parametrize(
+    ("brightness", "percent"),
+    [(0, 0), (1, 1), (2, 1), (3, 1), (128, 50), (254, 100), (255, 100)],
+)
+def test_ha_brightness_to_percent(brightness: int, percent: int) -> None:
+    """Non-zero HA brightness never becomes 0 % (1-2 used to floor to 0)."""
+    from custom_components.beurer_daylight_lamps.beurer_daylight_lamps import (
+        ha_brightness_to_percent,
+    )
+
+    assert ha_brightness_to_percent(brightness) == percent

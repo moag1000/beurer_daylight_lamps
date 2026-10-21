@@ -113,6 +113,17 @@ from .const import (
 )
 
 
+def ha_brightness_to_percent(brightness: int) -> int:
+    """Convert HA brightness (0-255) to the lamp's 0-100 %.
+
+    Rounds instead of flooring, and keeps any non-zero brightness at
+    least 1 %, so HA brightness 1-2 does not turn into 0 %.
+    """
+    if brightness <= 0:
+        return 0
+    return max(1, min(100, round(brightness / 255 * 100)))
+
+
 class BeurerInstance:
     """Representation of a Beurer daylight lamp BLE device."""
 
@@ -1087,7 +1098,7 @@ class BeurerInstance:
             if brightness is not None:
                 brightness = int(brightness)
                 self._color_brightness = brightness
-                brightness_percent = max(0, min(100, int(brightness / 255 * 100)))
+                brightness_percent = ha_brightness_to_percent(brightness)
                 await self._send_packet([CMD_BRIGHTNESS, MODE_RGB, brightness_percent])
                 await asyncio.sleep(COMMAND_DELAY)
 
@@ -1144,7 +1155,7 @@ class BeurerInstance:
         if brightness is not None:
             brightness = int(brightness)
             self._color_brightness = brightness
-            brightness_percent = max(0, min(100, int(brightness / 255 * 100)))
+            brightness_percent = ha_brightness_to_percent(brightness)
             await self._send_packet([CMD_BRIGHTNESS, MODE_RGB, brightness_percent])
             await asyncio.sleep(COMMAND_DELAY)
 
@@ -1175,7 +1186,7 @@ class BeurerInstance:
                 self._light_on = False
                 self._available = True
 
-            brightness_percent = max(0, min(100, int(brightness / 255 * 100)))
+            brightness_percent = ha_brightness_to_percent(brightness)
             await self._send_packet([CMD_BRIGHTNESS, MODE_RGB, brightness_percent])
             await asyncio.sleep(COMMAND_DELAY)
             await self._request_status()
@@ -1314,7 +1325,7 @@ class BeurerInstance:
                 self._color_on = False
                 self._available = True
 
-            intensity_percent = max(0, min(100, int(intensity / 255 * 100)))
+            intensity_percent = ha_brightness_to_percent(intensity)
             # Cap at 99% to work around firmware bug where 100% in white mode
             # causes some devices to switch to red/RGB mode (see Deadolus#11)
             if intensity_percent == 100:
@@ -1481,6 +1492,9 @@ class BeurerInstance:
         await self._send_packet([CMD_OFF, MODE_RGB])
         self._light_on = False
         self._color_on = False
+        # The off notification that follows matches this optimistic state, so
+        # it is not seen as a change and would not refresh the entity.
+        await self._trigger_update()
         await asyncio.sleep(TURN_OFF_DELAY)
         await self._request_status()
 

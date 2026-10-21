@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.36.5] - 2026-10-21
+
+Fork of [moag1000/beurer_daylight_lamps](https://github.com/moag1000/beurer_daylight_lamps) with fixes for upstream issues #6, #7 and #8, plus one more.
+
+### Fixed
+
+- **`turn_off` left the entity "on" until the next poll**: `turn_off` set the off state optimistically without refreshing the entity, so the lamp's off notification no longer looked like a change and was not pushed to HA. The entity stayed "on" for up to 30 s (adaptive polling) and a toggle sent another `turn_off` instead of `turn_on`. `turn_off` now refreshes the entity immediately.
+- **`light.turn_on` with `white:` was ignored** (#6): `ATTR_WHITE` is now handled and switches to native white at the given intensity.
+- **Brightness-only `turn_on` after native white lit the RGB LEDs** (#7): `_handle_brightness_only` now checks native white mode first, so a colour temperature >= 5000 K followed by a brightness change stays white.
+- **HA brightness 1-2 was sent as 0 %** (#8): new `ha_brightness_to_percent()` rounds and keeps any non-zero brightness at least 1 %. Used by `set_color_with_brightness`, `set_color_with_brightness_fast`, `set_color_brightness` and `set_white`.
+
 ## [1.36.4] - 2026-05-21
 
 ### Fixed

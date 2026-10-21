@@ -7,6 +7,7 @@ from homeassistant.components.light import (
     ATTR_BRIGHTNESS,
     ATTR_EFFECT,
     ATTR_RGB_COLOR,
+    ATTR_WHITE,
     ColorMode,
 )
 
@@ -467,3 +468,32 @@ class TestAsyncSetupEntry:
         await async_setup_entry(mock_hass, mock_entry, added_entities.extend)
 
         assert added_entities[0]._device_name == "Beurer Lamp"
+
+
+@pytest.mark.asyncio
+async def test_turn_on_white_attribute(mock_coordinator: MagicMock) -> None:
+    """`white:` switches to native white at the given intensity."""
+    light = BeurerLight(mock_coordinator, "Test", "entry_id")
+    light._color_temp_kelvin = 3000
+
+    await light.async_turn_on(**{ATTR_WHITE: 128})
+
+    mock_coordinator.instance.set_white.assert_called_once_with(128)
+    assert light._color_temp_kelvin is None
+
+
+@pytest.mark.asyncio
+async def test_turn_on_brightness_only_after_native_white(
+    mock_coordinator: MagicMock,
+) -> None:
+    """Brightness alone keeps native white chosen by a high color temp."""
+    mock_coordinator.instance.color_mode = ColorMode.WHITE
+    mock_coordinator.instance.color_on = False
+
+    light = BeurerLight(mock_coordinator, "Test", "entry_id")
+    light._color_temp_kelvin = 6500  # set by the >= 5000 K native-white path
+
+    await light.async_turn_on(**{ATTR_BRIGHTNESS: 200})
+
+    mock_coordinator.instance.set_white.assert_called_once_with(200)
+    mock_coordinator.instance.set_color_brightness.assert_not_called()

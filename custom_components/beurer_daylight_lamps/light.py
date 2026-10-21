@@ -10,6 +10,7 @@ from homeassistant.components.light import (  # type: ignore[attr-defined]
     ATTR_COLOR_TEMP_KELVIN,
     ATTR_EFFECT,
     ATTR_RGB_COLOR,
+    ATTR_WHITE,
     ColorMode,
     LightEntity,
     LightEntityFeature,
@@ -265,7 +266,11 @@ class BeurerLight(
 
     async def _handle_brightness_only(self, brightness: int | None) -> None:
         """Handle brightness-only turn-on mode."""
-        if (
+        # Native white first: _color_temp_kelvin is also set when a color
+        # temperature >= WHITE_MODE_THRESHOLD_KELVIN chose native white.
+        if self._instance.color_mode == ColorMode.WHITE:
+            await self._instance.set_white(brightness)
+        elif (
             self._color_temp_kelvin is not None
             or self._instance.color_mode == ColorMode.RGB
             or self._instance.color_on
@@ -292,6 +297,11 @@ class BeurerLight(
 
         if not kwargs:
             await self._instance.turn_on()
+            return
+
+        if ATTR_WHITE in kwargs:
+            self._color_temp_kelvin = None
+            await self._instance.set_white(kwargs[ATTR_WHITE])
             return
 
         has_color = ATTR_RGB_COLOR in kwargs
