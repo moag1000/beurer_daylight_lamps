@@ -6,7 +6,11 @@ import logging
 from typing import Final
 
 DOMAIN: Final = "beurer_daylight_lamps"
-VERSION: Final = "1.36.6"
+VERSION: Final = "1.37.0"
+
+# Color temperature at or above which light.turn_on and presets use the native
+# white LEDs (TL100 daylight is 5300 K) instead of emulating it with RGB.
+WHITE_MODE_THRESHOLD_KELVIN: Final = 5000
 LOGGER = logging.getLogger(__package__)
 
 # BLE Characteristic UUIDs

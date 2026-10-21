@@ -173,3 +173,99 @@ def test_push_update_sets_interval_before_scheduling() -> None:
     BeurerDataUpdateCoordinator._handle_push_update(coordinator)
 
     assert calls == ["interval", "data"]
+
+
+async def test_lost_packet_is_retried_after_link_error(
+    instance: lib.BeurerInstance,
+) -> None:
+    """A packet lost to a dead link is sent once more after reconnecting."""
+    del instance._send_packet  # use the real one, fake only _write
+    calls = []
+
+    async def write(_data: bytearray) -> bool:
+        calls.append(1)
+        instance._last_write_link_error = len(calls) == 1
+        return len(calls) > 1
+
+    with patch.object(instance, "_write", side_effect=write):
+        assert await instance._send_packet([0x35, 1]) is True
+
+    assert len(calls) == 2
+
+
+async def test_watchdog_does_not_cancel_itself(instance: lib.BeurerInstance) -> None:
+    """disconnect() called from the watchdog must not cancel the watchdog."""
+
+    async def watchdog_body() -> int:
+        instance._stop_watchdog()
+        await _real_sleep(0)  # a cancel would raise here
+        return 1
+
+    task = asyncio.ensure_future(watchdog_body())
+    instance._watchdog_task = task
+    assert await task == 1
+
+
+async def test_shutdown_stops_reconnects(instance: lib.BeurerInstance) -> None:
+    """After unload, a disconnect callback must not schedule a reconnect."""
+    with (
+        patch.object(instance, "_safe_create_task") as create_task,
+        patch.object(instance, "disconnect", AsyncMock()),
+    ):
+        await instance.shutdown()
+        instance._on_disconnect(instance._client)
+        await instance._auto_reconnect()
+
+    create_task.assert_not_called()
+
+
+def test_not_advertising_while_connected_stays_available(
+    instance: lib.BeurerInstance,
+) -> None:
+    """Missing advertisements must not mark a connected lamp unavailable."""
+    instance._available = True
+    instance._ble_available = True
+
+    instance.mark_unavailable()
+
+    assert instance._available is True
+
+
+async def test_filtered_confirmation_asks_status_again(
+    instance: lib.BeurerInstance,
+) -> None:
+    """If the mode-switch filter dropped a status, ask once more afterwards."""
+
+    async def run(drop: bool) -> int:
+        instance.sent.clear()
+        instance._color_on = False
+        instance._light_on = True
+        original = instance._send_packet
+
+        async def record(packet: list[int]) -> bool:
+            if drop and packet == [CMD_STATUS, MODE_WHITE]:
+                instance._is_mode_switch_filtered(1)  # stale white during RGB switch
+            return await original(packet)
+
+        with (
+            patch.object(instance, "_send_packet", record),
+            patch.object(lib.asyncio, "sleep", _no_wait),
+        ):
+            await instance.set_color((1, 2, 3))
+        return sum(1 for p in instance.sent if p[0] == CMD_STATUS)
+
+    assert await run(drop=True) == await run(drop=False) + 2
+    assert instance._filtered_during_switch is False
+
+
+async def test_effect_off_without_color_does_not_switch_to_rgb(
+    instance: lib.BeurerInstance,
+) -> None:
+    """effect Off while native white is on sends nothing (no RGB switch)."""
+    instance._light_on = True
+    instance._color_on = False
+
+    with patch.object(lib.asyncio, "sleep", _no_wait):
+        await instance.set_effect("Off")
+
+    assert instance.sent == []

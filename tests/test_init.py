@@ -19,6 +19,7 @@ async def test_setup_entry_success(hass: HomeAssistant) -> None:
     mock_instance.mac = "AA:BB:CC:DD:EE:FF"
     mock_instance.update = AsyncMock()
     mock_instance.disconnect = AsyncMock()
+    mock_instance.shutdown = AsyncMock()
     mock_instance.set_update_callback = MagicMock()
     mock_instance._ble_available = True
 
@@ -134,6 +135,7 @@ async def test_unload_entry(hass: HomeAssistant) -> None:
     """Test unloading config entry."""
     mock_instance = MagicMock()
     mock_instance.disconnect = AsyncMock()
+    mock_instance.shutdown = AsyncMock()
 
     mock_coordinator = MagicMock()
     mock_coordinator.async_shutdown = AsyncMock()
@@ -153,4 +155,4 @@ async def test_unload_entry(hass: HomeAssistant) -> None:
 
     assert result is True
     mock_coordinator.async_shutdown.assert_called_once()
-    mock_instance.disconnect.assert_called_once()
+    mock_instance.shutdown.assert_called_once()

@@ -894,8 +894,9 @@ class TestBeurerDisconnectCallback:
         instance._on_disconnect(mock_client)
 
         assert instance._available is False
-        assert instance._light_on is False
-        assert instance._color_on is False
+        # Last known on/off state is kept (assumed_state marks it stale)
+        assert instance._light_on is True
+        assert instance._color_on is True
         assert instance._write_uuid is None
         assert instance._read_uuid is None
 

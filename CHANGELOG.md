@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.37.0] - 2026-10-21
+
+### Fixed
+
+- **Emulated color temperature was reported without Kelvin**: `color_temp_kelvin` checked the instance mode, which is only ever WHITE or RGB, so it always returned `None`; scenes saved in that state did nothing. The entity now reports COLOR_TEMP (with Kelvin) only while the lamp still shows the RGB that emulates it, without an effect; any change made elsewhere (select, number, preset, remote, restored state) is reported as RGB instead of a stale COLOR_TEMP.
+- **`effect: Off` in native white lit the RGB LEDs**: both the light entity and `set_effect` (select) no longer switch to RGB to stop an effect that is not running.
+- **Effect sent together with a color was lost**: a scene captured during an effect (effect + rgb_color) now applies the effect after the color.
+- **`apply_preset` used RGB for daylight**: presets at or above 5000 K use the native white LEDs like `light.turn_on`; RGB presets set color and brightness in one call (which also clears a running effect). `WHITE_MODE_THRESHOLD_KELVIN` moved to `const.py`.
+- **A packet lost to a dead link was not resent**: when a write times out or fails with a link error, `_send_packet` reconnects and sends it once more (e.g. turn_off's OFF WHITE no longer gets lost, leaving the light on). Link errors are logged as warnings.
+- **Watchdog cancelled itself inside `disconnect()`**: the disconnect was aborted half-way, leaving a dead link marked connected.
+- **Unload left a reconnecting instance behind**: `async_unload_entry` calls the new `shutdown()`; no reconnect is scheduled afterwards, so a reload no longer leaks a proxy slot.
+- **Connected lamp marked unavailable when advertisements stopped**: `mark_unavailable` is ignored while connected.
+- **Light showed "unknown" during every reconnect**: a disconnect keeps the last known on/off state (`assumed_state` marks it stale) instead of clearing it.
+- **Mode-switch filter could drop the only real status**: if a notification was filtered during a mode switch, the command requests status once more afterwards.
+
 ## [1.36.6] - 2026-10-21
 
 ### Fixed

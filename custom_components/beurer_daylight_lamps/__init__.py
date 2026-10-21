@@ -31,7 +31,7 @@ from homeassistant.helpers.service import async_extract_entity_ids
 from homeassistant.util.color import color_temperature_to_rgb
 
 from .beurer_daylight_lamps import BeurerInstance
-from .const import DOMAIN, LOGGER
+from .const import DOMAIN, LOGGER, WHITE_MODE_THRESHOLD_KELVIN
 from .coordinator import BeurerDataUpdateCoordinator
 from .data import BeurerConfigEntry, BeurerRuntimeData
 from .exceptions import BeurerInitializationError as BeurerInitializationError
@@ -546,19 +546,23 @@ def _register_preset_service(hass: HomeAssistant) -> None:
         for instance in instances:
             LOGGER.debug("Applying preset '%s' to %s", preset_name, instance.mac)
 
+            brightness = preset.get("brightness")
+            kelvin = preset.get("color_temp_kelvin")
             if "rgb" in preset:
-                await instance.set_color(preset["rgb"])
-            elif "color_temp_kelvin" in preset:
-                rgb_float = color_temperature_to_rgb(preset["color_temp_kelvin"])
+                await instance.set_color_with_brightness(preset["rgb"], brightness)
+            elif kelvin is not None and kelvin >= WHITE_MODE_THRESHOLD_KELVIN:
+                # Daylight presets use the native white LEDs, like light.turn_on.
+                await instance.set_white(brightness)
+            elif kelvin is not None:
+                rgb_float = color_temperature_to_rgb(kelvin)
                 rgb: tuple[int, int, int] = (
                     int(rgb_float[0]),
                     int(rgb_float[1]),
                     int(rgb_float[2]),
                 )
-                await instance.set_color(rgb)
-
-            if "brightness" in preset:
-                await instance.set_color_brightness(preset["brightness"])
+                await instance.set_color_with_brightness(rgb, brightness)
+            elif brightness is not None:
+                await instance.set_color_brightness(brightness)
 
             LOGGER.info("Applied preset '%s' to %s", preset_name, instance.mac)
 
@@ -857,8 +861,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> b
     if unload_ok:
         # Shutdown coordinator first
         await entry.runtime_data.coordinator.async_shutdown()
-        # Then disconnect the BLE instance
-        await entry.runtime_data.instance.disconnect()
+        # Then disconnect the BLE instance for good (no auto-reconnect: an
+        # orphaned reconnect kept a proxy slot until HA restarted)
+        await entry.runtime_data.instance.shutdown()
 
         # Remove the virtual Therapy Hub device only when the last entry is gone
         remaining = [

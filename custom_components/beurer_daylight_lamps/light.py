@@ -27,7 +27,13 @@ from homeassistant.util.color import (
     match_max_scale,
 )
 
-from .const import DOMAIN, LOGGER, VERSION, detect_model
+from .const import (
+    DOMAIN,
+    LOGGER,
+    VERSION,
+    WHITE_MODE_THRESHOLD_KELVIN,
+    detect_model,
+)
 from .coordinator import BeurerDataUpdateCoordinator
 
 if TYPE_CHECKING:
@@ -68,10 +74,11 @@ class BeurerLightExtraStoredData(ExtraStoredData):
 MIN_COLOR_TEMP_KELVIN = 2700  # Warm white
 MAX_COLOR_TEMP_KELVIN = 6500  # Cool daylight
 
-# Threshold for switching to native white mode (Kelvin)
-# When color temp is >= this value, use the lamp's native white mode
-# The TL100's white mode is optimized 5300K daylight therapy light
-WHITE_MODE_THRESHOLD_KELVIN = 5000
+
+def _color_temp_rgb(kelvin: int) -> tuple[int, int, int]:
+    """RGB sent to the lamp to emulate a color temperature."""
+    rgb = color_temperature_to_rgb(kelvin)
+    return (int(rgb[0]), int(rgb[1]), int(rgb[2]))
 
 
 async def async_setup_entry(
@@ -191,9 +198,26 @@ class BeurerLight(
     @property
     def color_temp_kelvin(self) -> int | None:
         """Return the color temperature in Kelvin."""
-        if self._instance.color_mode == ColorMode.COLOR_TEMP:
+        if self.color_mode == ColorMode.COLOR_TEMP:
             return self._color_temp_kelvin
         return None
+
+    def _emulated_color_temp_active(self) -> bool:
+        """Return True if the lamp still shows the RGB we set for a color temp.
+
+        The instance only knows WHITE and RGB. A color temperature below the
+        native-white threshold is emulated with RGB, so it is still "on" only
+        while the lamp shows exactly that RGB without an effect; any other
+        change (select, number, preset, remote, restore) means plain RGB.
+        """
+        kelvin = self._color_temp_kelvin
+        if kelvin is None or kelvin >= WHITE_MODE_THRESHOLD_KELVIN:
+            return False
+        if self._instance.color_mode != ColorMode.RGB:
+            return False
+        if self._instance.effect not in (None, "Off"):
+            return False
+        return tuple(self._instance.rgb_color) == _color_temp_rgb(kelvin)
 
     @property
     def effect(self) -> str | None:
@@ -213,8 +237,8 @@ class BeurerLight(
         # If native white mode is active, report WHITE
         if self._instance.color_mode == ColorMode.WHITE:
             return ColorMode.WHITE
-        # If we set a color temperature (simulated via RGB), report COLOR_TEMP
-        if self._color_temp_kelvin is not None:
+        # Color temperature emulated via RGB, as long as the lamp still shows it
+        if self._emulated_color_temp_active():
             return ColorMode.COLOR_TEMP
         # Otherwise report the instance's mode (RGB)
         return self._instance.color_mode
@@ -252,12 +276,7 @@ class BeurerLight(
                 brightness if has_brightness else self._instance.white_brightness
             )
         else:
-            ct_rgb_float = color_temperature_to_rgb(kelvin)
-            ct_rgb: tuple[int, int, int] = (
-                int(ct_rgb_float[0]),
-                int(ct_rgb_float[1]),
-                int(ct_rgb_float[2]),
-            )
+            ct_rgb = _color_temp_rgb(kelvin)
             LOGGER.debug("Color temp %dK -> RGB %s", kelvin, ct_rgb)
             await self._instance.set_color_with_brightness(
                 ct_rgb,
@@ -338,12 +357,29 @@ class BeurerLight(
                 brightness if has_brightness else self._instance.color_brightness,
             )
         elif has_effect:
+            effect = kwargs[ATTR_EFFECT]
+            if effect in (None, "Off") and self._instance.color_mode == ColorMode.WHITE:
+                # No effect runs in native white; switching to RGB would light
+                # the RGB LEDs instead.
+                if has_brightness:
+                    await self._instance.set_white(brightness)
+                return
             self._color_temp_kelvin = None
-            await self._instance.set_effect(kwargs[ATTR_EFFECT])
+            await self._instance.set_effect(effect)
             if has_brightness:
                 await self._instance.set_color_brightness(brightness)
         elif has_brightness:
             await self._handle_brightness_only(brightness)
+
+        # A scene captured during an effect sends effect + rgb_color together;
+        # setting the color clears the effect, so apply the effect last.
+        if (
+            has_effect
+            and (has_color or has_color_temp)
+            and kwargs[ATTR_EFFECT] not in (None, "Off")
+        ):
+            self._color_temp_kelvin = None
+            await self._instance.set_effect(kwargs[ATTR_EFFECT])
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off the light."""

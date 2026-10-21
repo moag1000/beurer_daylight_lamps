@@ -154,7 +154,13 @@ def _serialized(func: Any) -> Any:
     @functools.wraps(func)
     async def wrapper(self: BeurerInstance, *args: Any, **kwargs: Any) -> Any:
         async with self._command_lock.hold():
-            return await func(self, *args, **kwargs)
+            result = await func(self, *args, **kwargs)
+            # The mode-switch filter may have dropped the only real status (a
+            # failed switch): ask once more, now unfiltered.
+            if self._filtered_during_switch and self._mode_switch_target is None:
+                self._filtered_during_switch = False
+                await self._request_status()
+            return result
 
     return wrapper
 
@@ -253,6 +259,10 @@ class BeurerInstance:
         self._reconnect_lock: asyncio.Lock = asyncio.Lock()
         self._command_lock = _TaskLock()
         self._connect_lock = _TaskLock()
+        self._filtered_during_switch = False
+        self._last_write_link_error = False
+        # Set on unload: no reconnects, the instance is going away.
+        self._closing = False
         self._reconnect_backoff: float = RECONNECT_INITIAL_BACKOFF
         self._last_reconnect_attempt: float = 0.0
         self._adapter_failures: dict[str, float] = {}
@@ -324,6 +334,10 @@ class BeurerInstance:
 
     def mark_unavailable(self) -> None:
         """Mark the device as unavailable (not seen by any adapter)."""
+        if self.is_connected:
+            # Advertisements may stop while connected; the live link wins.
+            LOGGER.debug("Device %s not advertising but connected", self._mac)
+            return
         if self._ble_available:
             LOGGER.debug(
                 "Device %s marked as unavailable (no BLE advertisements)", self._mac
@@ -351,8 +365,8 @@ class BeurerInstance:
         Only one reconnect loop runs at a time. If a loop is already active,
         new calls return immediately (the running loop will pick up state changes).
         """
-        # Prevent duplicate reconnect loops
-        if self._reconnect_loop_active:
+        # Prevent duplicate reconnect loops (and any reconnect after unload)
+        if self._reconnect_loop_active or self._closing:
             LOGGER.debug(
                 "Auto-reconnect to %s skipped - loop already active",
                 self._mac,
@@ -399,7 +413,12 @@ class BeurerInstance:
                 # Re-check conditions after delay (state may have changed during sleep)
                 # Note: mypy thinks these are unreachable because it doesn't understand
                 # that state can change during await. These checks ARE necessary.
-                if self._available or self.is_connected or not self._ble_available:
+                if (
+                    self._available
+                    or self.is_connected
+                    or not self._ble_available
+                    or self._closing
+                ):
                     reason = (  # type: ignore[unreachable]
                         "connected during backoff"
                         if (self._available or self.is_connected)
@@ -625,10 +644,12 @@ class BeurerInstance:
             # A replaced client going away must not tear down the live one.
             LOGGER.debug("Ignoring disconnect of a stale client for %s", self._mac)
             return
+        if self._closing:
+            return
         LOGGER.info("Disconnected from %s - will attempt reconnect", self._mac)
         self._available = False
-        self._light_on = False
-        self._color_on = False
+        # Keep the last known on/off state: assumed_state already flags it as
+        # stale, and clearing it showed the light as "unknown" until reconnect.
         self._write_uuid = None
         self._read_uuid = None
         self._connection_start_time = None  # Clear connection uptime
@@ -773,7 +794,13 @@ class BeurerInstance:
 
     def _stop_watchdog(self) -> None:
         """Stop the connection watchdog task."""
-        if self._watchdog_task is not None:
+        try:
+            current = asyncio.current_task()
+        except RuntimeError:
+            current = None
+        # The watchdog calls disconnect() itself; cancelling its own task there
+        # aborted the disconnect half-way and left the dead link "connected".
+        if self._watchdog_task is not None and self._watchdog_task is not current:
             self._watchdog_task.cancel()
             # Don't set to None here - the finally block in the task will do it
             LOGGER.debug("Stopping connection watchdog for %s", self._mac)
@@ -932,6 +959,7 @@ class BeurerInstance:
         Returns:
             True if write was successful, False otherwise.
         """
+        self._last_write_link_error = False
         if not self._client or not self._client.is_connected:
             LOGGER.debug("Device not connected, attempting reconnect for write")
             if not await self.connect():
@@ -968,11 +996,13 @@ class BeurerInstance:
                 self._mac,
             )
             self._command_failure_count += 1
+            self._last_write_link_error = True
             await self.disconnect()
             return False
         except (BleakError, OSError) as err:
-            LOGGER.debug("Error during write to %s: %s", self._mac, err)
+            LOGGER.warning("Error during write to %s: %s", self._mac, err)
             self._command_failure_count += 1
+            self._last_write_link_error = True
             await self.disconnect()
             return False
         else:
@@ -1043,6 +1073,11 @@ class BeurerInstance:
         )
 
         result = await self._write(packet)
+        if not result and self._last_write_link_error and not self._closing:
+            # The link died under this packet (e.g. turn_off's OFF WHITE): the
+            # packet is lost, not delivered. Reconnect and send it once more.
+            LOGGER.warning("Retrying command to %s after link error", self._mac)
+            result = await self._write(packet)
         self._last_command_time = time.monotonic()
         return result
 
@@ -1420,6 +1455,12 @@ class BeurerInstance:
 
         LOGGER.debug("Setting effect to '%s' for %s", effect, self._mac)
         self._effect = effect
+
+        if effect == "Off" and not self._color_on:
+            # Nothing to stop; switching to RGB here lit the RGB LEDs while
+            # native white was on.
+            await self._trigger_update()
+            return
 
         self._mode_switch_target = ColorMode.RGB
         try:
@@ -1862,6 +1903,7 @@ class BeurerInstance:
                 version,
             )
             self._last_seen = time.time()
+            self._filtered_during_switch = True
             return True
         if (
             self._mode_switch_target == ColorMode.RGB
@@ -1872,6 +1914,7 @@ class BeurerInstance:
                 version,
             )
             self._last_seen = time.time()
+            self._filtered_during_switch = True
             return True
         return False
 
@@ -2511,6 +2554,11 @@ class BeurerInstance:
         except OSError as err:
             LOGGER.error("OS error during update for %s: %s", self._mac, err)
             await self.disconnect()
+
+    async def shutdown(self) -> None:
+        """Disconnect for good (config entry unload): no reconnect afterwards."""
+        self._closing = True
+        await self.disconnect()
 
     async def disconnect(self) -> None:
         """Disconnect from the device and reset connection state."""
