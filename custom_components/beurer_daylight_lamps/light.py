@@ -99,7 +99,6 @@ class BeurerLight(
     _attr_supported_color_modes: set[ColorMode] = {
         ColorMode.RGB,
         ColorMode.COLOR_TEMP,
-        ColorMode.WHITE,
     }
     _attr_supported_features: LightEntityFeature = LightEntityFeature.EFFECT
     _attr_min_color_temp_kelvin: int = MIN_COLOR_TEMP_KELVIN
@@ -190,7 +189,9 @@ class BeurerLight(
     @property
     def color_temp_kelvin(self) -> int | None:
         """Return the color temperature in Kelvin."""
-        if self._instance.color_mode == ColorMode.COLOR_TEMP:
+        if self._instance.color_mode == ColorMode.WHITE or self._instance.light_on:
+            return WHITE_MODE_THRESHOLD_KELVIN  # 5000K daylight white
+        if self._color_temp_kelvin is not None:
             return self._color_temp_kelvin
         return None
 
@@ -209,14 +210,14 @@ class BeurerLight(
     @property
     def color_mode(self) -> ColorMode:
         """Return the color mode of the light."""
-        # If native white mode is active, report WHITE
-        if self._instance.color_mode == ColorMode.WHITE:
-            return ColorMode.WHITE
+        # If native white mode is active, report COLOR_TEMP so UI keeps color picker accessible
+        if self._instance.color_mode == ColorMode.WHITE or self._instance.light_on:
+            return ColorMode.COLOR_TEMP
         # If we set a color temperature (simulated via RGB), report COLOR_TEMP
         if self._color_temp_kelvin is not None:
             return ColorMode.COLOR_TEMP
-        # Otherwise report the instance's mode (RGB)
-        return self._instance.color_mode
+        # Otherwise report RGB
+        return ColorMode.RGB
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -279,7 +280,7 @@ class BeurerLight(
         r, g, b = rgb[0], rgb[1], rgb[2]
         min_val = min(r, g, b)
         max_val = max(r, g, b)
-        return min_val >= 200 and (max_val - min_val) <= 55
+        return min_val >= 245 and (max_val - min_val) <= 10
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on the light."""

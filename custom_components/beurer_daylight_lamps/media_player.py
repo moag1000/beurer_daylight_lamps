@@ -45,14 +45,16 @@ async def async_setup_entry(
     instance = entry.runtime_data.instance
     name = entry.data.get("name", "Beurer Lamp")
 
-    # Only add media player entities for WL90 devices
+    # Only add media player entities for WL devices
     if not instance.is_wl:
         return
 
     entities: list[MediaPlayerEntity] = [
         BeurerRadioPlayer(coordinator, name),
-        BeurerMusicPlayer(coordinator, name),
     ]
+    # WL75 does not have Bluetooth speaker / music playback
+    if instance.is_wl90:
+        entities.append(BeurerMusicPlayer(coordinator, name))
     async_add_entities(entities)
 
 

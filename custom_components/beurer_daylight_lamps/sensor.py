@@ -63,6 +63,14 @@ SENSOR_DESCRIPTIONS: tuple[SensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=True,
     ),
+    SensorEntityDescription(
+        key="last_time_sync",
+        translation_key="last_time_sync",
+        icon="mdi:clock-check-outline",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=True,
+    ),
 )
 
 # Therapy tracking sensors (lifestyle/wellness feature, NOT medical)
@@ -246,6 +254,13 @@ class BeurerSensor(CoordinatorEntity[BeurerDataUpdateCoordinator], SensorEntity)
             return self._instance.rssi
         if self.entity_description.key == "last_notification":
             return self._instance.last_raw_notification
+        if self.entity_description.key == "last_time_sync":
+            if self._instance.last_time_sync:
+                import datetime
+                return datetime.datetime.fromtimestamp(
+                    self._instance.last_time_sync, tz=datetime.timezone.utc
+                )
+            return None
         return None
 
     @property

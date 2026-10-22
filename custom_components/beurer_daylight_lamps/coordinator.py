@@ -11,6 +11,7 @@ For BLE devices, we use a hybrid approach:
 
 from __future__ import annotations
 
+import time
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
@@ -187,6 +188,7 @@ class BeurerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "fade_enabled": self.instance.fade_enabled,
             # WL90-specific data
             "is_wl": self.instance.is_wl,
+            "last_time_sync": self.instance.last_time_sync,
         }
 
         # Add WL90 data if applicable
@@ -252,6 +254,17 @@ class BeurerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # Only actively update if device is available
             if self.instance.ble_available:
                 await self.instance.update()
+                # Automatically sync time every 24 hours if connected
+                if self.instance.is_connected and (
+                    self.instance.last_time_sync is None
+                    or (time.time() - self.instance.last_time_sync) > 86400
+                ):
+                    LOGGER.debug(
+                        "Periodic time sync for %s (last sync: %s)",
+                        self.instance.mac,
+                        self.instance.last_time_sync,
+                    )
+                    await self.instance.sync_time()
             else:
                 LOGGER.debug(
                     "Skipping update - device %s not BLE available",
