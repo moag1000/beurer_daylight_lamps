@@ -22,7 +22,7 @@ I heavily used claude as I did in other projects but focused on keeping it tight
 | TL70  | ⚠️ Untested | Should work |
 | TL80  | ⚠️ Untested | Should work |
 | TL90  | ⚠️ Untested | Should work |
-| WL75  | ⚠️ Untested | Wake-up Light (same protocol family as WL90) |
+| WL75  | ✅ Tested | Full support |
 | WL90  | ⚠️ Untested | Wake-up Light with Radio, Speaker, Alarms |
 
 ## Features

@@ -28,6 +28,9 @@
         },
         {
             "local_name": "WL75*"
+        },
+        {
+            "local_name": "WL 75*"
         }
     ],
     "codeowners": ["@moag1000"],

@@ -48,6 +48,7 @@ from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.device_registry import format_mac
 
 from .therapy import SunriseSimulation, TherapySession, TherapyTracker
+from .wl75 import WL75Controller
 from .wl90 import WL90Controller
 
 if TYPE_CHECKING:
@@ -73,6 +74,24 @@ from .const import (
     CMD_SETTINGS_READ,
     CMD_SETTINGS_WRITE,
     CMD_STATUS,
+    # WL75 protocol commands
+    CMD_WL75_ALARM_READ,
+    CMD_WL75_LIGHT_BRIGHTNESS,
+    CMD_WL75_LIGHT_STATUS,
+    CMD_WL75_LIGHT_SWITCH,
+    CMD_WL75_LIGHT_TIMER_SWITCH,
+    CMD_WL75_LIGHT_TIMER_VALUE,
+    CMD_WL75_MOODLIGHT_BRIGHTNESS,
+    CMD_WL75_MOODLIGHT_COLOR,
+    CMD_WL75_MOODLIGHT_SCENE,
+    CMD_WL75_MOODLIGHT_STATUS,
+    CMD_WL75_MOODLIGHT_SWITCH,
+    CMD_WL75_MOODLIGHT_TIMER_SWITCH,
+    CMD_WL75_MOODLIGHT_TIMER_VALUE,
+    CMD_WL75_PERMISSION,
+    CMD_WL75_SETTINGS_READ,
+    CMD_WL75_SETTINGS_WRITE,
+    CMD_WL75_TIME_SYNC,
     # APK-discovered commands
     CMD_TIME_SYNC,
     CMD_TIMER_CANCEL,
@@ -106,12 +125,28 @@ from .const import (
     RESP_MOONLIGHT_TIMER_END,
     RESP_SETTINGS_FROM_DEVICE,
     RESP_SETTINGS_SYNC,
+    # WL75 response command bytes
+    RESP_WL75_LIGHT_BRIGHTNESS,
+    RESP_WL75_LIGHT_STATUS,
+    RESP_WL75_LIGHT_SWITCH,
+    RESP_WL75_MOODLIGHT_BRIGHTNESS,
+    RESP_WL75_MOODLIGHT_COLOR,
+    RESP_WL75_MOODLIGHT_SCENE,
+    RESP_WL75_MOODLIGHT_STATUS,
+    RESP_WL75_MOODLIGHT_SWITCH,
+    RESP_WL75_PERMISSION,
+    RESP_WL75_SETTINGS,
+    RESP_WL75_TIMER_END,
+    RESP_WL75_UPDATE_SETTINGS,
+    RESP_WL75_UPDATE_TIME,
     STATUS_DELAY,
     SUPPORTED_EFFECTS,
     THERAPY_USER_UNKNOWN,
     TURN_OFF_DELAY,
     WRITE_CHARACTERISTIC_UUID,
     is_wl_model,
+    is_wl75_model,
+    is_wl90_model,
 )
 
 
@@ -241,18 +276,25 @@ class BeurerInstance:
         self._display_setting: int = 0
         self._date_format: int = 0
         self._time_format: int = 0
+        self._last_time_sync: float | None = None
 
         # Connection health and reconnection
         self._init_connection_state()
 
-        # Therapy tracking and WL90
+        # Therapy tracking and WL90 / WL75
         self._sunrise_simulation: SunriseSimulation | None = None
         self._therapy_tracker: TherapyTracker = TherapyTracker()
         self.adaptive_lighting_switch: Any = None
-        self._is_wl: bool = is_wl_model(getattr(device, "name", None))
-        self._wl90: WL90Controller | None = (
-            WL90Controller(self) if self._is_wl else None
-        )
+        dev_name = getattr(device, "name", None)
+        self._is_wl: bool = is_wl_model(dev_name)
+        self._is_wl75: bool = is_wl75_model(dev_name)
+        self._is_wl90: bool = is_wl90_model(dev_name)
+        if self._is_wl75:
+            self._wl90: WL90Controller | None = WL75Controller(self)
+        elif self._is_wl90 or self._is_wl:
+            self._wl90 = WL90Controller(self)
+        else:
+            self._wl90 = None
 
     def _init_connection_state(self) -> None:
         """Initialize connection health and reconnection state."""
@@ -542,9 +584,24 @@ class BeurerInstance:
         return self._is_wl
 
     @property
+    def is_wl75(self) -> bool:
+        """Return True if this device is a WL75 model."""
+        return self._is_wl75
+
+    @property
+    def is_wl90(self) -> bool:
+        """Return True if this device is a WL90 model."""
+        return self._is_wl90
+
+    @property
     def wl90(self) -> WL90Controller | None:
         """Return the WL90 controller, or None if not a WL90 device."""
         return self._wl90
+
+    @property
+    def last_time_sync(self) -> float | None:
+        """Return the timestamp of the last successful time sync."""
+        return self._last_time_sync
 
     # Device settings properties (from APK reverse engineering)
     @property
@@ -1040,37 +1097,48 @@ class BeurerInstance:
             await asyncio.sleep(MIN_COMMAND_INTERVAL - elapsed)
 
         length = len(message)
-        plen = length + 2  # payload_len includes command bytes + checksum
+        if self._is_wl75:
+            # WL75 packet framing from APK (WL75Wrapper):
+            # [0xFE, 0xEF, plen, *message, checksum]
+            # where plen = len(message) + 1
+            # checksum = plen ^ message[0] ^ message[1] ^ ...
+            plen = length + 1
+            checksum = plen
+            for byte in message:
+                checksum ^= byte
+            packet = bytearray([0xFE, 0xEF, plen, *message, checksum])
+        else:
+            plen = length + 2  # payload_len includes command bytes + checksum
 
-        # Calculate checksum: plen XOR all command bytes
-        checksum = plen
-        for byte in message:
-            checksum ^= byte
+            # Calculate checksum: plen XOR all command bytes
+            checksum = plen
+            for byte in message:
+                checksum ^= byte
 
-        # Packet format from btsnoop analysis:
-        # - Header: FE EF 0A
-        # - outer_len = command_len + 7
-        # - Magic: AB AA
-        # - payload_len = command_len + 2 (includes checksum)
-        # - Command bytes
-        # - Checksum: plen XOR cmd_bytes
-        # - Trailer: 55 0D 0A
-        packet = bytearray(
-            [
-                0xFE,
-                0xEF,
-                0x0A,
-                length + 7,
-                0xAB,
-                0xAA,
-                plen,
-                *message,
-                checksum,
-                0x55,
-                0x0D,
-                0x0A,
-            ]
-        )
+            # Packet format from btsnoop analysis:
+            # - Header: FE EF 0A
+            # - outer_len = command_len + 7
+            # - Magic: AB AA
+            # - payload_len = command_len + 2 (includes checksum)
+            # - Command bytes
+            # - Checksum: plen XOR cmd_bytes
+            # - Trailer: 55 0D 0A
+            packet = bytearray(
+                [
+                    0xFE,
+                    0xEF,
+                    0x0A,
+                    length + 7,
+                    0xAB,
+                    0xAA,
+                    plen,
+                    *message,
+                    checksum,
+                    0x55,
+                    0x0D,
+                    0x0A,
+                ]
+            )
 
         result = await self._write(packet)
         if not result and self._last_write_link_error and not self._closing:
@@ -1090,6 +1158,22 @@ class BeurerInstance:
         device to settle before the caller emits any further packets.
         """
         LOGGER.debug("Switching device %s to mode 0x%02X", self._mac, mode_byte)
+        if self._is_wl75:
+            if mode_byte == MODE_WHITE:
+                await self._send_packet([CMD_WL75_MOODLIGHT_SWITCH, 0])
+                await asyncio.sleep(COMMAND_DELAY)
+                await self._send_packet([CMD_WL75_LIGHT_SWITCH, 1])
+                await asyncio.sleep(MODE_CHANGE_DELAY)
+                await self._send_packet([CMD_WL75_LIGHT_STATUS])
+            else:
+                await self._send_packet([CMD_WL75_LIGHT_SWITCH, 0])
+                await asyncio.sleep(COMMAND_DELAY)
+                await self._send_packet([CMD_WL75_MOODLIGHT_SWITCH, 1])
+                await asyncio.sleep(MODE_CHANGE_DELAY)
+                await self._send_packet([CMD_WL75_MOODLIGHT_STATUS])
+            await asyncio.sleep(MODE_SWITCH_SETTLE_DELAY)
+            return
+
         await self._send_packet([CMD_MODE, mode_byte])
         await asyncio.sleep(MODE_CHANGE_DELAY)
         await self._send_packet([CMD_STATUS, mode_byte])
@@ -1114,6 +1198,23 @@ class BeurerInstance:
 
         self._mode_switch_target = ColorMode.RGB
         try:
+            if self._is_wl75:
+                # Ensure device exits any running animated scene to display static color
+                self._effect = "Off"
+                await self._send_packet([CMD_WL75_MOODLIGHT_SCENE, 0])
+                await asyncio.sleep(COMMAND_DELAY)
+
+                if not self._color_on:
+                    LOGGER.debug("Activating WL75 RGB mode")
+                    await self._switch_to_mode(MODE_RGB)
+                    self._color_on = True
+                    self._light_on = False
+                    self._available = True
+                await self._send_packet([CMD_WL75_MOODLIGHT_COLOR, r, g, b])
+                await asyncio.sleep(COMMAND_DELAY)
+                await self._request_status()
+                return
+
             # Activate RGB mode if not already active
             if not self._color_on:
                 LOGGER.debug("Activating RGB mode")
@@ -1166,6 +1267,35 @@ class BeurerInstance:
 
         self._mode_switch_target = ColorMode.RGB
         try:
+            if self._is_wl75:
+                # Ensure device exits any running animated scene to display static color
+                self._effect = "Off"
+                await self._send_packet([CMD_WL75_MOODLIGHT_SCENE, 0])
+                await asyncio.sleep(COMMAND_DELAY)
+
+                if not self._color_on:
+                    LOGGER.debug("Activating WL75 RGB mode")
+                    await self._switch_to_mode(MODE_RGB)
+                    self._color_on = True
+                    self._light_on = False
+                    self._available = True
+
+                await self._send_packet([CMD_WL75_MOODLIGHT_COLOR, r, g, b])
+                await asyncio.sleep(COMMAND_DELAY)
+
+                target_brightness = (
+                    int(brightness)
+                    if brightness is not None
+                    else (self._color_brightness or self._brightness or 255)
+                )
+                self._color_brightness = target_brightness
+                brightness_percent = max(1, min(100, int(target_brightness / 255 * 100)))
+                await self._send_packet([CMD_WL75_MOODLIGHT_BRIGHTNESS, brightness_percent])
+                await asyncio.sleep(COMMAND_DELAY)
+
+                await self._request_status()
+                return
+
             # Activate RGB mode if not already active
             if not self._color_on:
                 LOGGER.debug("Activating RGB mode")
@@ -1218,6 +1348,37 @@ class BeurerInstance:
             brightness: Brightness value (0-255), or None to keep current
         """
         r, g, b = int(rgb[0]), int(rgb[1]), int(rgb[2])
+
+        if self._is_wl75:
+            if not self._color_on:
+                LOGGER.debug("Fast color: Activating WL75 RGB mode")
+                self._mode_switch_target = ColorMode.RGB
+                try:
+                    await self._switch_to_mode(MODE_RGB)
+                    self._color_on = True
+                    self._light_on = False
+                    self._mode = ColorMode.RGB
+
+                    if self._effect != "Off":
+                        self._effect = "Off"
+                        await self._send_packet([CMD_WL75_MOODLIGHT_SCENE, 0])
+                        await asyncio.sleep(COMMAND_DELAY)
+                finally:
+                    self._mode_switch_target = None
+
+            self._rgb_color = (r, g, b)
+            self._available = True
+
+            await self._send_packet([CMD_WL75_MOODLIGHT_COLOR, r, g, b])
+            await asyncio.sleep(COMMAND_DELAY)
+
+            if brightness is not None:
+                brightness = int(brightness)
+                self._color_brightness = brightness
+                brightness_percent = max(0, min(100, int(brightness / 255 * 100)))
+                await self._send_packet([CMD_WL75_MOODLIGHT_BRIGHTNESS, brightness_percent])
+                await asyncio.sleep(COMMAND_DELAY)
+            return
 
         # Only switch mode if not already in RGB mode
         if not self._color_on:
@@ -1276,6 +1437,21 @@ class BeurerInstance:
 
         self._mode_switch_target = ColorMode.RGB
         try:
+            if self._is_wl75:
+                if not self._color_on:
+                    LOGGER.debug("Switching to WL75 RGB mode for brightness change")
+                    self._mode = ColorMode.RGB
+                    await self._switch_to_mode(MODE_RGB)
+                    self._color_on = True
+                    self._light_on = False
+                    self._available = True
+
+                brightness_percent = max(0, min(100, int(brightness / 255 * 100)))
+                await self._send_packet([CMD_WL75_MOODLIGHT_BRIGHTNESS, brightness_percent])
+                await asyncio.sleep(COMMAND_DELAY)
+                await self._request_status()
+                return
+
             # If not in RGB mode, switch to it first
             if not self._color_on:
                 LOGGER.debug("Switching to RGB mode for brightness change")
@@ -1299,29 +1475,56 @@ class BeurerInstance:
         """Sync current time from Home Assistant to the device.
 
         Sends the current date/time so the device clock stays accurate.
-        Format: CMD_TIME_SYNC SEC MIN HOUR WEEKDAY DAY MONTH YEAR(offset from 2000)
+        Uses Home Assistant local time so the lamp clock displays the correct local hour.
 
         Returns:
             True if time sync command was sent successfully.
         """
-        now = datetime.datetime.now(tz=datetime.UTC)
+        if self._hass:
+            from homeassistant.util import dt as dt_util
+            now = dt_util.now()
+        else:
+            now = datetime.datetime.now().astimezone()
+
         LOGGER.info(
-            "Syncing time to %s: %s", self._mac, now.strftime("%Y-%m-%d %H:%M:%S")
+            "Syncing time to %s: %s (tz=%s)",
+            self._mac,
+            now.strftime("%Y-%m-%d %H:%M:%S"),
+            now.tzinfo,
         )
 
+        if self._is_wl75:
+            result = await self._send_packet(
+                [
+                    CMD_WL75_TIME_SYNC,
+                    now.second,
+                    now.minute,
+                    now.hour,
+                    now.day,
+                    now.month,
+                    now.year - 2000,
+                ]
+            )
+            if result:
+                self._last_time_sync = time.time()
+                await asyncio.sleep(COMMAND_DELAY)
+            return result
+
+        weekday = (now.weekday() + 1) % 7  # 0=Sunday, 1=Monday, ..., 6=Saturday (matches Java Calendar.DAY_OF_WEEK - 1)
         result = await self._send_packet(
             [
                 CMD_TIME_SYNC,
                 now.second,
                 now.minute,
                 now.hour,
-                now.isoweekday(),  # 1=Monday, 7=Sunday
+                weekday,
                 now.day,
                 now.month,
                 now.year - 2000,
             ]
         )
         if result:
+            self._last_time_sync = time.time()
             await asyncio.sleep(COMMAND_DELAY)
         return result
 
@@ -1334,7 +1537,8 @@ class BeurerInstance:
             True if settings query was sent successfully.
         """
         LOGGER.debug("Querying settings from %s", self._mac)
-        result = await self._send_packet([CMD_SETTINGS_READ])
+        cmd = CMD_WL75_SETTINGS_READ if self._is_wl75 else CMD_SETTINGS_READ
+        result = await self._send_packet([cmd])
         if result:
             await asyncio.sleep(COMMAND_DELAY)
         return result
@@ -1351,6 +1555,22 @@ class BeurerInstance:
         LOGGER.info("Setting feedback sound to %s on %s", enabled, self._mac)
         # APK inverts the value: 0 = enabled, 1 = disabled
         feedback_value = 0 if enabled else 1
+        if self._is_wl75:
+            result = await self._send_packet(
+                [
+                    CMD_WL75_SETTINGS_WRITE,
+                    self._display_setting or 0,
+                    self._date_format or 0,
+                    self._time_format or 0,
+                    feedback_value,
+                ]
+            )
+            if result:
+                self._feedback_enabled = enabled
+                await asyncio.sleep(COMMAND_DELAY)
+                await self._trigger_update()
+            return result
+
         result = await self._send_packet(
             [
                 CMD_SETTINGS_WRITE,
@@ -1376,6 +1596,10 @@ class BeurerInstance:
         Returns:
             True if settings command was sent successfully.
         """
+        if self._is_wl75:
+            LOGGER.debug("Fade is not supported on WL75")
+            return False
+
         LOGGER.info("Setting fade to %s on %s", enabled, self._mac)
         # APK inverts the value: 0 = enabled, 1 = disabled
         fade_value = 0 if enabled else 1
@@ -1410,12 +1634,27 @@ class BeurerInstance:
         LOGGER.debug("Setting white intensity to %d for %s", intensity, self._mac)
         self._mode = ColorMode.WHITE
         self._brightness = intensity
+        self._white_brightness = intensity
 
         # Guard wraps entire sequence: mode switch + brightness + status request.
         # This ensures stale RGB notifications from _request_status() don't
         # overwrite the new white state (fixes sunrise→white race condition).
         self._mode_switch_target = ColorMode.WHITE
         try:
+            if self._is_wl75:
+                if not self._light_on or self._color_on:
+                    LOGGER.debug("Activating WL75 white mode")
+                    await self._switch_to_mode(MODE_WHITE)
+                    self._light_on = True
+                    self._color_on = False
+                    self._available = True
+
+                intensity_percent = max(0, min(100, int(intensity / 255 * 100)))
+                await self._send_packet([CMD_WL75_LIGHT_BRIGHTNESS, intensity_percent])
+                await asyncio.sleep(COMMAND_DELAY)
+                await self._request_status()
+                return
+
             # Switch to white mode if not already active
             if not self._light_on or self._color_on:
                 LOGGER.debug(
@@ -1464,6 +1703,21 @@ class BeurerInstance:
 
         self._mode_switch_target = ColorMode.RGB
         try:
+            if self._is_wl75:
+                if not self._color_on:
+                    LOGGER.debug("Activating WL75 RGB mode for effect")
+                    self._mode = ColorMode.RGB
+                    await self._switch_to_mode(MODE_RGB)
+                    self._color_on = True
+                    self._light_on = False
+                    self._available = True
+
+                effect_idx = self._find_effect_index(effect)
+                await self._send_packet([CMD_WL75_MOODLIGHT_SCENE, effect_idx])
+                await asyncio.sleep(EFFECT_DELAY)
+                await self._request_status()
+                return
+
             # Switch to RGB mode if not already active (effects require RGB mode)
             if not self._color_on:
                 LOGGER.debug("Activating RGB mode for effect")
@@ -1499,6 +1753,32 @@ class BeurerInstance:
         if not 1 <= minutes <= 120:
             LOGGER.error("Timer minutes must be between 1 and 120, got %d", minutes)
             return False
+
+        if self._is_wl75:
+            LOGGER.info(
+                "Setting timer to %d min for WL75 %s (mode=%s)",
+                minutes,
+                self._mac,
+                self._mode,
+            )
+            if self._mode == ColorMode.RGB or self._color_on:
+                result = await self._send_packet([CMD_WL75_MOODLIGHT_TIMER_SWITCH, 1])
+                if not result:
+                    return False
+                await asyncio.sleep(COMMAND_DELAY)
+                result = await self._send_packet([CMD_WL75_MOODLIGHT_TIMER_VALUE, minutes])
+            else:
+                result = await self._send_packet([CMD_WL75_LIGHT_TIMER_SWITCH, 1])
+                if not result:
+                    return False
+                await asyncio.sleep(COMMAND_DELAY)
+                result = await self._send_packet([CMD_WL75_LIGHT_TIMER_VALUE, minutes])
+            if result:
+                self._timer_active = True
+                self._timer_minutes = minutes
+                await asyncio.sleep(COMMAND_DELAY)
+                await self._request_status()
+            return result
 
         # Determine current mode from color_mode (more reliable than _color_on)
         mode_byte = MODE_RGB if self._mode == ColorMode.RGB else MODE_WHITE
@@ -1537,6 +1817,23 @@ class BeurerInstance:
         Returns:
             True if cancel command was sent successfully, False otherwise.
         """
+        if self._is_wl75:
+            LOGGER.info(
+                "Cancelling timer for WL75 %s (mode=%s)",
+                self._mac,
+                self._mode,
+            )
+            if self._mode == ColorMode.RGB or self._color_on:
+                result = await self._send_packet([CMD_WL75_MOODLIGHT_TIMER_SWITCH, 0])
+            else:
+                result = await self._send_packet([CMD_WL75_LIGHT_TIMER_SWITCH, 0])
+            if result:
+                self._timer_active = False
+                self._timer_minutes = 0
+                await asyncio.sleep(COMMAND_DELAY)
+                await self._request_status()
+            return result
+
         mode_byte = MODE_RGB if self._mode == ColorMode.RGB else MODE_WHITE
 
         LOGGER.info(
@@ -1575,6 +1872,32 @@ class BeurerInstance:
             LOGGER.error("Failed to connect for turn_on")
             return
 
+        if self._is_wl75:
+            if self._mode == ColorMode.WHITE:
+                await self._switch_to_mode(MODE_WHITE)
+                self._light_on = True
+                self._color_on = False
+            else:
+                await self._switch_to_mode(MODE_RGB)
+                self._color_on = True
+                self._light_on = False
+                if not self._available:
+                    await asyncio.sleep(MODE_CHANGE_DELAY)
+                    await self.set_effect(self._effect or "Off", _from_turn_on=True)
+                    await asyncio.sleep(MODE_CHANGE_DELAY)
+                    if self._rgb_color != (0, 0, 0):
+                        await self.set_color(self._rgb_color, _from_turn_on=True)
+                    await asyncio.sleep(MODE_CHANGE_DELAY)
+                    if self._color_brightness:
+                        await self.set_color_brightness(
+                            self._color_brightness, _from_turn_on=True
+                        )
+            self._is_on = True
+            self._available = True
+            await asyncio.sleep(MODE_CHANGE_DELAY)
+            await self._request_status()
+            return
+
         if self._mode == ColorMode.WHITE:
             await self._switch_to_mode(MODE_WHITE)
             self._light_on = True
@@ -1609,6 +1932,17 @@ class BeurerInstance:
         is fully turned off.
         """
         LOGGER.debug("Turning off %s", self._mac)
+        if self._is_wl75:
+            await self._send_packet([CMD_WL75_LIGHT_SWITCH, 0])
+            await asyncio.sleep(0.1)
+            await self._send_packet([CMD_WL75_MOODLIGHT_SWITCH, 0])
+            self._light_on = False
+            self._color_on = False
+            self._is_on = False
+            await asyncio.sleep(TURN_OFF_DELAY)
+            await self._request_status()
+            return
+
         await self._send_packet([CMD_OFF, MODE_WHITE])
         await asyncio.sleep(0.1)
         await self._send_packet([CMD_OFF, MODE_RGB])
@@ -1626,6 +1960,12 @@ class BeurerInstance:
         Requests status for both white and RGB modes to get complete state.
         """
         LOGGER.debug("Requesting status from %s", self._mac)
+        if self._is_wl75:
+            await self._send_packet([CMD_WL75_LIGHT_STATUS])
+            await asyncio.sleep(STATUS_DELAY)
+            await self._send_packet([CMD_WL75_MOODLIGHT_STATUS])
+            return
+
         await self._send_packet([CMD_STATUS, MODE_WHITE])
         await asyncio.sleep(STATUS_DELAY)
         await self._send_packet([CMD_STATUS, MODE_RGB])
@@ -1918,6 +2258,171 @@ class BeurerInstance:
             return True
         return False
 
+    async def _handle_wl75_notification(self, data: bytearray) -> None:
+        """Handle BLE notification for WL75 (Protocol 2).
+
+        Packet format: [0xFE, 0xEF, plen, *payload, checksum]
+        where plen = len(payload) + 1, checksum = plen ^ payload[0] ^ ...
+        """
+        if len(data) < 4:
+            LOGGER.debug("WL75 short notification (%d bytes), ignoring", len(data))
+            return
+
+        if data[0] != 0xFE or data[1] != 0xEF:
+            LOGGER.debug("WL75 invalid packet header: %s", data[:2].hex())
+            return
+
+        plen = data[2]
+        expected_len = plen + 3
+        if len(data) < expected_len:
+            LOGGER.debug("WL75 short payload (%d < %d)", len(data), expected_len)
+            return
+
+        payload = bytearray(data[3 : 3 + plen - 1])
+        received_checksum = data[3 + plen - 1]
+        calc_checksum = plen
+        for b in payload:
+            calc_checksum ^= b
+
+        if calc_checksum != received_checksum:
+            LOGGER.warning(
+                "WL75 checksum mismatch on %s: calc 0x%02X != recv 0x%02X",
+                self._mac,
+                calc_checksum,
+                received_checksum,
+            )
+            return
+
+        if not payload:
+            return
+
+        self._last_seen = time.time()
+        self._heartbeat_count += 1
+        resp_cmd = payload[0]
+
+        # White light status
+        if resp_cmd == RESP_WL75_LIGHT_STATUS:
+            if len(payload) >= 5:
+                is_enabled = payload[1] == 1
+                brightness_pct = payload[2]
+                timer_enabled = payload[3] == 1
+                timer_min = payload[4]
+
+                self._white_brightness = int(max(0, min(100, brightness_pct)) / 100 * 255)
+                self._timer_active = timer_enabled
+                self._timer_minutes = timer_min if timer_enabled else 0
+
+                if is_enabled:
+                    self._light_on = True
+                    self._color_on = False
+                    self._mode = ColorMode.WHITE
+                    self._is_on = True
+                    self._brightness = self._white_brightness
+                else:
+                    self._light_on = False
+                    if not self._color_on:
+                        self._is_on = False
+                if not self._available:
+                    self._available = True
+                await self._trigger_update()
+            return
+
+        # Mood light status
+        if resp_cmd == RESP_WL75_MOODLIGHT_STATUS:
+            if len(payload) >= 9:
+                is_enabled = payload[1] in (1, 0xFF)
+                brightness_pct = payload[2] if payload[1] != 0xFF else 100
+                timer_enabled = payload[3] == 1
+                timer_min = payload[4]
+                r = payload[5]
+                g = payload[6]
+                b = payload[7]
+                scene = payload[8]
+
+                self._color_brightness = int(max(0, min(100, brightness_pct)) / 100 * 255)
+                self._rgb_color = (r, g, b)
+                if 0 <= scene < len(SUPPORTED_EFFECTS):
+                    self._effect = SUPPORTED_EFFECTS[scene]
+                else:
+                    self._effect = "Off"
+
+                self._timer_active = timer_enabled
+                self._timer_minutes = timer_min if timer_enabled else 0
+
+                if is_enabled:
+                    self._color_on = True
+                    self._light_on = False
+                    self._mode = ColorMode.RGB
+                    self._is_on = True
+                    self._brightness = self._color_brightness
+                else:
+                    self._color_on = False
+                    if not self._light_on:
+                        self._is_on = False
+                if not self._available:
+                    self._available = True
+                await self._trigger_update()
+            return
+
+        # Timer expired
+        if resp_cmd == RESP_WL75_TIMER_END:
+            if len(payload) > 1:
+                timer_type = payload[1]
+                LOGGER.info("WL75 timer ended: type=%d on %s", timer_type, self._mac)
+                if timer_type in (2, 3):
+                    self._light_on = False
+                    self._color_on = False
+                    self._is_on = False
+                    self._timer_active = False
+                    self._timer_minutes = 0
+                elif timer_type == 1 and self._wl90:
+                    self._wl90.radio.sleep_timer_on = False
+                    self._wl90.radio.sleep_timer_minutes = 0
+            await self._trigger_update()
+            return
+
+        # Permission response
+        if resp_cmd == RESP_WL75_PERMISSION:
+            self._device_permission_granted = len(payload) > 1 and payload[1] == 0x75
+            if self._device_permission_granted:
+                LOGGER.debug("WL75 device permission granted on %s", self._mac)
+            else:
+                LOGGER.warning("WL75 device permission DENIED on %s", self._mac)
+            return
+
+        # Settings response
+        if resp_cmd == RESP_WL75_SETTINGS:
+            if len(payload) >= 5:
+                self._display_setting = payload[1]
+                self._date_format = payload[2]
+                self._time_format = payload[3]
+                self._feedback_enabled = payload[4] == 0
+                await self._trigger_update()
+            return
+
+        # Radio & Alarm responses delegated to controller
+        if self._wl90 is not None and self._wl90.handle_notification(resp_cmd, payload):
+            if not self._available:
+                self._available = True
+            await self._trigger_update()
+            return
+
+        # White / Mood light ACK responses
+        if resp_cmd in (
+            RESP_WL75_LIGHT_SWITCH,
+            RESP_WL75_LIGHT_BRIGHTNESS,
+            RESP_WL75_MOODLIGHT_SWITCH,
+            RESP_WL75_MOODLIGHT_BRIGHTNESS,
+            RESP_WL75_MOODLIGHT_COLOR,
+            RESP_WL75_MOODLIGHT_SCENE,
+            RESP_WL75_UPDATE_SETTINGS,
+            RESP_WL75_UPDATE_TIME,
+        ):
+            LOGGER.debug("WL75 ACK response 0x%02X on %s", resp_cmd, self._mac)
+            return
+
+        LOGGER.debug("WL75 unhandled response 0x%02X on %s", resp_cmd, self._mac)
+
     async def _handle_notification(
         self, characteristic: BleakGATTCharacteristic, data: bytearray
     ) -> None:
@@ -1931,6 +2436,10 @@ class BeurerInstance:
         hex_str = data.hex()
         LOGGER.debug("Notification from %s: %s", self._mac, hex_str)
         self._last_raw_notification = hex_str
+
+        if self._is_wl75:
+            await self._handle_wl75_notification(data)
+            return
 
         if len(data) < 10:
             LOGGER.debug("Short notification (%d bytes), ignoring", len(data))
@@ -2331,24 +2840,44 @@ class BeurerInstance:
                 raise
 
         # Initial device setup sequence
-        await self._send_packet([CMD_DEVICE_PERMISSION])
-        await asyncio.sleep(STATUS_DELAY)
-        await self._request_status()
-        await asyncio.sleep(STATUS_DELAY)
-        await self.sync_time()
-
-        if self._feedback_enabled is None:
+        if self._is_wl75:
+            await self._send_packet([CMD_WL75_PERMISSION, 0x75])
             await asyncio.sleep(STATUS_DELAY)
-            await self._send_packet([CMD_SETTINGS_READ])
+            await self.query_settings()
+            await asyncio.sleep(STATUS_DELAY)
+            await self.sync_time()
+            await asyncio.sleep(STATUS_DELAY)
+            await self._request_status()
+            if self._wl90 is not None:
+                await self._query_wl75_state()
+        else:
+            await self._send_packet([CMD_DEVICE_PERMISSION])
+            await asyncio.sleep(STATUS_DELAY)
+            await self._request_status()
+            await asyncio.sleep(STATUS_DELAY)
+            await self.sync_time()
 
-        if self._wl90 is not None:
-            await self._query_wl90_state()
+            if self._feedback_enabled is None:
+                await asyncio.sleep(STATUS_DELAY)
+                await self._send_packet([CMD_SETTINGS_READ])
+
+            if self._wl90 is not None:
+                await self._query_wl90_state()
 
         if not self._available:
             self._available = True
             await self._trigger_update()
 
         return True
+
+    async def _query_wl75_state(self) -> None:
+        """Query WL75-specific state (alarms, radio)."""
+        await asyncio.sleep(STATUS_DELAY)
+        for slot_id in (1, 2):
+            await self._send_packet([CMD_WL75_ALARM_READ, slot_id])
+            await asyncio.sleep(STATUS_DELAY)
+        if self._wl90 is not None:
+            await self._wl90.query_radio_status()
 
     async def _query_wl90_state(self) -> None:
         """Query WL90-specific state (alarms, radio, music)."""

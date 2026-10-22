@@ -136,8 +136,8 @@ stop_simulation:
       domain: light
 
 set_alarm:
-  name: Set Alarm (WL90)
-  description: "Configure an alarm on a WL90 Wake-up Light. Supports sunrise simulation, weekday selection, tone, and snooze. Only works with WL90 devices."
+  name: Set Alarm
+  description: "Configure an alarm on a WL75 or WL90 Wake-up Light. Supports sunrise simulation, weekday selection, tone, and snooze."
   target:
     entity:
       integration: beurer_daylight_lamps
@@ -145,7 +145,7 @@ set_alarm:
   fields:
     slot:
       name: Alarm slot
-      description: "Alarm slot number (0, 1, or 2). The WL90 has 3 independent alarm slots."
+      description: "Alarm slot number: 0 or 1 on WL75; 0, 1, or 2 on WL90."
       required: true
       selector:
         number:
@@ -194,7 +194,7 @@ set_alarm:
           options:
             - label: "Buzzer"
               value: "0"
-            - label: "Radio (WL90 only)"
+            - label: "Radio"
               value: "1"
             - label: "Melody 1"
               value: "2"
@@ -273,6 +273,13 @@ set_alarm:
           step: 5
           unit_of_measurement: "%"
           mode: slider
+
+sync_time:
+  name: Sync Time
+  description: "Synchronize current Home Assistant local time and date to the lamp's internal clock."
+  target:
+    entity:
+      integration: beurer_daylight_lamps
 
 set_therapy_user:
   name: Set therapy user
