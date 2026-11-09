@@ -126,6 +126,33 @@
           "off": "mdi:alarm-off"
         }
       }
+    },
+    "event": {
+      "lamp_event": {
+        "default": "mdi:bell-ring-outline",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "timer_finished": "mdi:timer-check-outline",
+              "timer_cancelled": "mdi:timer-cancel-outline",
+              "sleep_timer_finished": "mdi:sleep",
+              "sunrise_finished": "mdi:weather-sunset-up",
+              "sunset_finished": "mdi:weather-sunset-down"
+            }
+          }
+        }
+      }
+    },
+    "time": {
+      "alarm_1_time": {
+        "default": "mdi:alarm"
+      },
+      "alarm_2_time": {
+        "default": "mdi:alarm"
+      },
+      "alarm_3_time": {
+        "default": "mdi:alarm"
+      }
     }
   },
   "services": {
@@ -138,5 +165,33 @@
     "set_alarm": "mdi:alarm",
     "sync_time": "mdi:clock-sync",
     "set_therapy_user": "mdi:account"
+  },
+  "triggers": {
+    "timer_finished": {
+      "trigger": "mdi:timer-check-outline"
+    },
+    "timer_cancelled": {
+      "trigger": "mdi:timer-cancel-outline"
+    },
+    "sleep_timer_finished": {
+      "trigger": "mdi:sleep"
+    },
+    "sunrise_finished": {
+      "trigger": "mdi:weather-sunset-up"
+    },
+    "sunset_finished": {
+      "trigger": "mdi:weather-sunset-down"
+    },
+    "therapy_goal_reached": {
+      "trigger": "mdi:trophy-outline"
+    }
+  },
+  "conditions": {
+    "is_therapy_goal_reached": {
+      "condition": "mdi:trophy-outline"
+    },
+    "is_connected": {
+      "condition": "mdi:bluetooth-connect"
+    }
   }
 }

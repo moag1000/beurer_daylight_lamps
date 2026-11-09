@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
     from .beurer_daylight_lamps import BeurerInstance
 
-from .const import LOGGER
+from .const import EVENT_TYPE_SUNRISE_FINISHED, EVENT_TYPE_SUNSET_FINISHED, LOGGER
 
 
 class SunriseProfile(Enum):
@@ -490,6 +490,7 @@ class SunriseSimulation:
                     LOGGER.debug("Non-critical: failed to request status after sunrise")
 
             LOGGER.info("Sunrise simulation completed")
+            self._instance.emit_lamp_event(EVENT_TYPE_SUNRISE_FINISHED)
 
         except asyncio.CancelledError:
             LOGGER.debug("Sunrise simulation cancelled")
@@ -603,6 +604,7 @@ class SunriseSimulation:
                     LOGGER.debug("Non-critical: failed to request status after sunset")
 
             LOGGER.info("Sunset simulation completed")
+            self._instance.emit_lamp_event(EVENT_TYPE_SUNSET_FINISHED)
 
         except asyncio.CancelledError:
             LOGGER.debug("Sunset simulation cancelled")

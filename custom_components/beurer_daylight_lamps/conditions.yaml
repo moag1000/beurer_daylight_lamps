@@ -1,0 +1,25 @@
+is_therapy_goal_reached:
+  target:
+    entity:
+      integration: beurer_daylight_lamps
+      domain: binary_sensor
+  fields: &condition_fields
+    behavior:
+      required: true
+      default: any
+      selector:
+        automation_behavior:
+          mode: condition
+    for:
+      required: true
+      default: 00:00:00
+      selector:
+        duration:
+
+is_connected:
+  target:
+    entity:
+      integration: beurer_daylight_lamps
+      domain: binary_sensor
+      device_class: connectivity
+  fields: *condition_fields

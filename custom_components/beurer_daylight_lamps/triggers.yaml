@@ -1,0 +1,27 @@
+timer_finished: &lamp_event_trigger
+  target:
+    entity:
+      integration: beurer_daylight_lamps
+      domain: event
+timer_cancelled: *lamp_event_trigger
+sleep_timer_finished: *lamp_event_trigger
+sunrise_finished: *lamp_event_trigger
+sunset_finished: *lamp_event_trigger
+
+therapy_goal_reached:
+  target:
+    entity:
+      integration: beurer_daylight_lamps
+      domain: binary_sensor
+  fields:
+    behavior:
+      required: true
+      default: each
+      selector:
+        automation_behavior:
+          mode: trigger
+    for:
+      required: true
+      default: 00:00:00
+      selector:
+        duration:

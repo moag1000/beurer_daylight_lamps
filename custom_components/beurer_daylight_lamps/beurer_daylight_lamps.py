@@ -106,6 +106,9 @@ from .const import (
     DOMAIN,
     EFFECT_DELAY,
     EVENT_THERAPY_SESSION,
+    EVENT_TYPE_SLEEP_TIMER_FINISHED,
+    EVENT_TYPE_TIMER_CANCELLED,
+    EVENT_TYPE_TIMER_FINISHED,
     LOGGER,
     MIN_COMMAND_INTERVAL,
     MODE_CHANGE_DELAY,
@@ -239,6 +242,7 @@ class BeurerInstance:
         self._device_name: str = getattr(device, "name", None) or "Beurer Lamp"
         self._client: BleakClient | None = None
         self._update_callbacks: list[Callable[[], None]] = []
+        self._event_listeners: list[Callable[[str, dict[str, Any]], None]] = []
         self._rssi: int | None = rssi
 
         # Light state
@@ -873,6 +877,33 @@ class BeurerInstance:
         """Remove a callback from state updates."""
         if callback in self._update_callbacks:
             self._update_callbacks.remove(callback)
+
+    def add_event_listener(
+        self, listener: Callable[[str, dict[str, Any]], None]
+    ) -> Callable[[], None]:
+        """Register a listener for lamp events (see LAMP_EVENT_TYPES).
+
+        Returns:
+            A callable that removes the listener again.
+        """
+        self._event_listeners.append(listener)
+
+        def _remove() -> None:
+            if listener in self._event_listeners:
+                self._event_listeners.remove(listener)
+
+        return _remove
+
+    def emit_lamp_event(
+        self, event_type: str, data: dict[str, Any] | None = None
+    ) -> None:
+        """Notify listeners (the event entity) of a momentary lamp event."""
+        LOGGER.debug("Lamp event %s on %s: %s", event_type, self._mac, data)
+        for listener in list(self._event_listeners):
+            try:
+                listener(event_type, data or {})
+            except Exception:  # noqa: BLE001 - a broken listener must not stop BLE handling
+                LOGGER.exception("Error in lamp event listener for %s", self._mac)
 
     @property
     def mac(self) -> str:
@@ -2193,6 +2224,12 @@ class BeurerInstance:
             if result == 1:
                 self._light_on = False
                 self._color_on = False
+            self.emit_lamp_event(
+                EVENT_TYPE_TIMER_FINISHED
+                if result == 1
+                else EVENT_TYPE_TIMER_CANCELLED,
+                {"timer": timer_type},
+            )
             await self._trigger_update()
             return True
 
@@ -2374,9 +2411,16 @@ class BeurerInstance:
                     self._color_on = False
                     self._timer_active = False
                     self._timer_minutes = 0
+                    self.emit_lamp_event(
+                        EVENT_TYPE_TIMER_FINISHED,
+                        {"timer": "light" if timer_type == 2 else "moonlight"},
+                    )
                 elif timer_type == 1 and self._wl90:
                     self._wl90.radio.sleep_timer_on = False
                     self._wl90.radio.sleep_timer_minutes = 0
+                    self.emit_lamp_event(
+                        EVENT_TYPE_SLEEP_TIMER_FINISHED, {"timer": "radio"}
+                    )
             await self._trigger_update()
             return
 

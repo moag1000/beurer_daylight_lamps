@@ -352,6 +352,21 @@ def is_wl90_model(name: str | None) -> bool:
     return any(name_upper.startswith(prefix) for prefix in WL90_MODELS)
 
 
+# Lamp events (event entity, integration triggers)
+EVENT_TYPE_TIMER_FINISHED: Final = "timer_finished"
+EVENT_TYPE_TIMER_CANCELLED: Final = "timer_cancelled"
+EVENT_TYPE_SLEEP_TIMER_FINISHED: Final = "sleep_timer_finished"
+EVENT_TYPE_SUNRISE_FINISHED: Final = "sunrise_finished"
+EVENT_TYPE_SUNSET_FINISHED: Final = "sunset_finished"
+LAMP_EVENT_TYPES: Final[list[str]] = [
+    EVENT_TYPE_TIMER_FINISHED,
+    EVENT_TYPE_TIMER_CANCELLED,
+    EVENT_TYPE_SLEEP_TIMER_FINISHED,
+    EVENT_TYPE_SUNRISE_FINISHED,
+    EVENT_TYPE_SUNSET_FINISHED,
+]
+
+
 # Per-person therapy attribution
 CONF_DEFAULT_THERAPY_USER = "default_therapy_user"
 DEFAULT_THERAPY_USER: str | None = None

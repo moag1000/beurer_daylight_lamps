@@ -70,6 +70,7 @@ I heavily used claude as I did in other projects but focused on keeping it tight
 | **Binary Sensor** | Connected | BLE connection status |
 | **Binary Sensor** | Bluetooth reachable | Device seen by any adapter |
 | **Binary Sensor** | Daily goal reached | True when daily exposure goal is met |
+| **Event** | Lamp event | Timer finished/cancelled, sleep timer finished, sunrise/sunset finished |
 | **Switch** | Feedback sound | Enable/disable device beep on button press |
 | **Switch** | Fade | Enable/disable smooth brightness transitions |
 | **Switch** | Adaptive Lighting | Allow/block Adaptive Lighting (HACS) control |
@@ -86,6 +87,7 @@ I heavily used claude as I did in other projects but focused on keeping it tight
 | **Number** | Radio volume | Radio volume slider 0-10 (WL75, WL90) |
 | **Number** | Speaker volume | Speaker volume slider 0-10 (WL90 only) |
 | **Switch** | Alarm 1-3 | Enable/disable an alarm slot (WL75: 2 slots, WL90: 3 slots) |
+| **Time** | Alarm 1-3 time | Wake-up time of an alarm slot, written to the lamp on change |
 | **Sensor** | Last time sync | When the lamp clock was last synced (all models, diagnostic) |
 
 #### Entity Notes
@@ -457,6 +459,47 @@ Alternatively, copy the blueprint files manually:
 1. Download the YAML files from [`blueprints/automation/beurer_daylight_lamps/`](blueprints/automation/beurer_daylight_lamps/)
 2. Copy to `config/blueprints/automation/beurer_daylight_lamps/` in your Home Assistant
 3. Restart Home Assistant or reload automations
+
+## Automation Triggers & Conditions
+
+Besides the device triggers, the integration adds its own triggers and conditions to the automation editor (search for "Beurer"):
+
+| Type | Name | Fires / tests when |
+|------|------|--------------------|
+| Trigger | Lamp timer finished | the auto-off timer ran out |
+| Trigger | Lamp timer cancelled | a running timer was cancelled on the lamp |
+| Trigger | Lamp sleep timer finished | the radio/music sleep timer of a WL75/WL90 ran out |
+| Trigger | Sunrise / Sunset simulation finished | a simulation started by `start_sunrise` / `start_sunset` completed |
+| Trigger | Daily light therapy goal reached | the *Daily goal reached* sensor turns on |
+| Condition | Daily light therapy goal reached | the daily goal is reached |
+| Condition | Lamp is connected | the lamp is connected via Bluetooth |
+
+```yaml
+triggers:
+  - trigger: beurer_daylight_lamps.sunrise_finished
+    target:
+      entity_id: event.bedroom_lamp_lamp_event
+conditions:
+  - condition: beurer_daylight_lamps.is_therapy_goal_reached
+    target:
+      entity_id: binary_sensor.bedroom_lamp_daily_goal_reached
+actions:
+  - action: notify.mobile_app_phone
+    data:
+      message: "Good morning, the sunrise is done."
+```
+
+The event triggers use the **Lamp event** entity; you can also trigger on it directly with a state trigger and its `event_type` attribute.
+
+## Assist (Voice) Tools
+
+Conversation agents using the Assist API (e.g. an LLM agent) get these tools for lamps whose light entity is exposed to Assist:
+
+- **start sunrise** / **start sunset** with duration and profile / end brightness
+- **stop simulation**
+- **get therapy status**: minutes today and this week, daily goal, progress and whether a simulation is running
+
+So you can say "Start a 20 minute sunrise on the bedroom lamp" or "Did I reach my light goal today?".
 
 ## Example Automations
 

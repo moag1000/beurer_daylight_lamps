@@ -211,6 +211,8 @@ PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,
     Platform.SWITCH,
     Platform.MEDIA_PLAYER,
+    Platform.EVENT,
+    Platform.TIME,
 ]
 
 
