@@ -143,6 +143,8 @@ async def test_unload_entry(hass: HomeAssistant) -> None:
     mock_runtime_data = MagicMock()
     mock_runtime_data.instance = mock_instance
     mock_runtime_data.coordinator = mock_coordinator
+    mock_runtime_data.therapy_store = MagicMock(async_save=AsyncMock())
+    mock_instance.therapy_tracker.as_storage_dict.return_value = {"sessions": []}
 
     entry = MagicMock()
     entry.entry_id = "test_entry_id"
@@ -156,3 +158,6 @@ async def test_unload_entry(hass: HomeAssistant) -> None:
     assert result is True
     mock_coordinator.async_shutdown.assert_called_once()
     mock_instance.shutdown.assert_called_once()
+    mock_runtime_data.therapy_store.async_save.assert_awaited_once_with(
+        {"sessions": []}
+    )

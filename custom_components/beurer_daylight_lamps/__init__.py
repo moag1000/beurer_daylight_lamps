@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import homeassistant.helpers.config_validation as cv
-import voluptuous as vol
+import probatio as vol
 from bleak.backends.device import BLEDevice
 from bleak.exc import BleakError
 from homeassistant.components import bluetooth
@@ -28,9 +28,11 @@ from homeassistant.helpers import (
     issue_registry as ir,
 )
 from homeassistant.helpers.service import async_extract_entity_ids
+from homeassistant.helpers.storage import Store
 from homeassistant.util.color import color_temperature_to_rgb
 
 from .beurer_daylight_lamps import BeurerInstance
+from .config_flow import CONF_THERAPY_GOAL
 from .const import DOMAIN, LOGGER, WHITE_MODE_THRESHOLD_KELVIN
 from .coordinator import BeurerDataUpdateCoordinator
 from .data import BeurerConfigEntry, BeurerRuntimeData
@@ -38,6 +40,9 @@ from .exceptions import BeurerInitializationError as BeurerInitializationError
 from .therapy import SunriseProfile
 from .therapy_hub import HUB_DATA_KEY, get_or_create_hub
 from .wl90 import AlarmItem
+
+if TYPE_CHECKING:
+    from homeassistant.helpers.typing import ConfigType
 
 # Service constants
 SERVICE_APPLY_PRESET = "apply_preset"
@@ -211,6 +216,8 @@ PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,
     Platform.SWITCH,
     Platform.MEDIA_PLAYER,
+    Platform.EVENT,
+    Platform.TIME,
 ]
 
 
@@ -385,6 +392,55 @@ def _register_bluetooth_callbacks(
     LOGGER.debug("Registered unavailability tracker for %s", mac_address)
 
 
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Register the integration's services (available even without a lamp)."""
+    await _async_setup_services(hass)
+    return True
+
+
+THERAPY_STORAGE_VERSION = 1
+THERAPY_SAVE_DELAY = 30  # seconds; pending saves are flushed when HA stops
+
+
+def _therapy_store(hass: HomeAssistant, entry_id: str) -> Store[dict[str, Any]]:
+    """Return the store holding a lamp's therapy history and daily goal."""
+    return Store(hass, THERAPY_STORAGE_VERSION, f"{DOMAIN}.therapy.{entry_id}")
+
+
+async def _async_setup_therapy_storage(
+    hass: HomeAssistant, entry: BeurerConfigEntry, instance: BeurerInstance
+) -> Store[dict[str, Any]]:
+    """Restore therapy minutes and goal, and save them again when they change."""
+    store = _therapy_store(hass, entry.entry_id)
+    tracker = instance.therapy_tracker
+    if (data := await store.async_load()) is not None:
+        tracker.load_storage_dict(data)
+        LOGGER.debug(
+            "Restored %d therapy sessions for %s", len(tracker.sessions), entry.title
+        )
+    elif (goal := entry.options.get(CONF_THERAPY_GOAL)) is not None:
+        # First start: take the goal from the options
+        tracker.daily_goal_minutes = int(goal)
+
+    @callback
+    def _schedule_save() -> None:
+        store.async_delay_save(tracker.as_storage_dict, THERAPY_SAVE_DELAY)
+
+    tracker.on_change = _schedule_save
+    return store
+
+
+async def _async_options_updated(hass: HomeAssistant, entry: BeurerConfigEntry) -> None:
+    """Apply a changed daily goal from the options to the lamp."""
+    if (goal := entry.options.get(CONF_THERAPY_GOAL)) is not None:
+        instance = entry.runtime_data.instance
+        if int(goal) != instance.therapy_daily_goal:
+            instance.set_therapy_daily_goal(int(goal))
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> bool:
     """Set up Beurer daylight lamp from a config entry."""
     mac_address = entry.data[CONF_MAC]
@@ -407,16 +463,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> bo
         device_initially_available,
     )
 
+    therapy_store = await _async_setup_therapy_storage(hass, entry, instance)
+    entry.async_on_unload(entry.add_update_listener(_async_options_updated))
+
     coordinator = BeurerDataUpdateCoordinator(
         hass, instance, device_name, config_entry=entry
     )
-    entry.runtime_data = BeurerRuntimeData(instance=instance, coordinator=coordinator)
+    entry.runtime_data = BeurerRuntimeData(
+        instance=instance, coordinator=coordinator, therapy_store=therapy_store
+    )
     await coordinator.async_config_entry_first_refresh()
 
     _register_bluetooth_callbacks(hass, entry, instance, mac_address)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    await _async_setup_services(hass)
 
     # Ensure the virtual Therapy Hub device exists (singleton per hass instance).
     # ensure_device returns None when the entry is not yet registered (e.g. in
@@ -908,6 +968,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> b
         # Then disconnect the BLE instance for good (no auto-reconnect: an
         # orphaned reconnect kept a proxy slot until HA restarted)
         await entry.runtime_data.instance.shutdown()
+        # Save the therapy history now (a running session counts up to now)
+        if (store := entry.runtime_data.therapy_store) is not None:
+            await store.async_save(
+                entry.runtime_data.instance.therapy_tracker.as_storage_dict()
+            )
 
         # Remove the virtual Therapy Hub device only when the last entry is gone
         remaining = [
@@ -926,6 +991,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> b
             domain_data.pop(f"{HUB_DATA_KEY}_sensors_added", None)
 
     return unload_ok
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> None:
+    """Delete the stored therapy history when the lamp is removed."""
+    await _therapy_store(hass, entry.entry_id).async_remove()
 
 
 async def async_remove_config_entry_device(

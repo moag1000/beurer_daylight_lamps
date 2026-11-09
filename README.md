@@ -1,4 +1,13 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/moag1000/beurer_daylight_lamps/main/docs/images/sunrise-lamp-dark.png">
+    <img src="https://raw.githubusercontent.com/moag1000/beurer_daylight_lamps/main/docs/images/sunrise-lamp.png" alt="Daylight lamp showing a sunrise" width="160">
+  </picture>
+</p>
+
 # Beurer Daylight Therapy Lamps
+
+🇩🇪 [Deutsche Version](README.de.md)
 
 [![HACS Default](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://github.com/hacs/integration)
 [![GitHub Release](https://img.shields.io/github/v/release/moag1000/beurer_daylight_lamps)](https://github.com/moag1000/beurer_daylight_lamps/releases)
@@ -34,6 +43,7 @@ I heavily used claude as I did in other projects but focused on keeping it tight
 - ⚪ `white:` in `light.turn_on` switches to native white at the given intensity
 - ✨ Light effects (Rainbow, Pulse, Forest, Wave, etc.)
 - 🔆 Separate white/color brightness sliders
+- 🌗 Smooth transitions: `transition` in `light.turn_on`/`turn_off` fades the brightness
 
 ### Connectivity
 - 📡 Bluetooth auto-discovery
@@ -70,6 +80,7 @@ I heavily used claude as I did in other projects but focused on keeping it tight
 | **Binary Sensor** | Connected | BLE connection status |
 | **Binary Sensor** | Bluetooth reachable | Device seen by any adapter |
 | **Binary Sensor** | Daily goal reached | True when daily exposure goal is met |
+| **Event** | Lamp event | Timer finished/cancelled, sleep timer finished, sunrise/sunset finished |
 | **Switch** | Feedback sound | Enable/disable device beep on button press |
 | **Switch** | Fade | Enable/disable smooth brightness transitions |
 | **Switch** | Adaptive Lighting | Allow/block Adaptive Lighting (HACS) control |
@@ -86,6 +97,7 @@ I heavily used claude as I did in other projects but focused on keeping it tight
 | **Number** | Radio volume | Radio volume slider 0-10 (WL75, WL90) |
 | **Number** | Speaker volume | Speaker volume slider 0-10 (WL90 only) |
 | **Switch** | Alarm 1-3 | Enable/disable an alarm slot (WL75: 2 slots, WL90: 3 slots) |
+| **Time** | Alarm 1-3 time | Wake-up time of an alarm slot, written to the lamp on change |
 | **Sensor** | Last time sync | When the lamp clock was last synced (all models, diagnostic) |
 
 #### Entity Notes
@@ -113,7 +125,7 @@ Apply predefined lighting presets:
 
 Example usage:
 ```yaml
-service: beurer_daylight_lamps.apply_preset
+action: beurer_daylight_lamps.apply_preset
 target:
   entity_id: light.beurer_tl100
 data:
@@ -125,7 +137,7 @@ data:
 Set an auto-off timer (1-120 minutes). The lamp will turn off automatically after the specified time. Works in both White and RGB mode.
 
 ```yaml
-service: beurer_daylight_lamps.set_timer
+action: beurer_daylight_lamps.set_timer
 target:
   entity_id: light.beurer_tl100
 data:
@@ -139,7 +151,7 @@ Start a sunrise simulation with gradual brightness and color temperature increas
 > **Lifestyle Feature**: This is a personal wellness feature, not a medical device.
 
 ```yaml
-service: beurer_daylight_lamps.start_sunrise
+action: beurer_daylight_lamps.start_sunrise
 target:
   entity_id: light.beurer_tl100
 data:
@@ -160,7 +172,7 @@ data:
 Start a sunset simulation with gradual brightness decrease and warm color shift.
 
 ```yaml
-service: beurer_daylight_lamps.start_sunset
+action: beurer_daylight_lamps.start_sunset
 target:
   entity_id: light.beurer_tl100
 data:
@@ -173,7 +185,7 @@ data:
 Stop any running sunrise or sunset simulation.
 
 ```yaml
-service: beurer_daylight_lamps.stop_simulation
+action: beurer_daylight_lamps.stop_simulation
 target:
   entity_id: light.beurer_tl100
 ```
@@ -183,7 +195,7 @@ target:
 Configure an alarm slot with sunrise simulation (WL90: slots 0-2, WL75: slots 0-1).
 
 ```yaml
-service: beurer_daylight_lamps.set_alarm
+action: beurer_daylight_lamps.set_alarm
 target:
   entity_id: light.beurer_wl90
 data:
@@ -205,7 +217,7 @@ data:
 Sync the lamp clock to Home Assistant's local time. This also happens on every connect and automatically once a day.
 
 ```yaml
-service: beurer_daylight_lamps.sync_time
+action: beurer_daylight_lamps.sync_time
 target:
   entity_id: light.beurer_wl75
 ```
@@ -214,11 +226,11 @@ target:
 
 | Component | Minimum version | Notes |
 |---|---|---|
-| Home Assistant Core | **2025.12.0** | Required for modern Bluetooth + coordinator APIs and Python 3.13.2. Users on older HA should stay on v1.33.0. |
-| Python | **3.13** | HA Core 2025.2+ requires Python 3.13. |
+| Home Assistant Core | **2026.9.0** | Uses probatio (HA's validation library since 2026.9). Users on older HA should stay on v1.37.0. |
+| Python | **3.14** | HA Core 2026.3+ requires Python 3.14. |
 | Bluetooth | HA Bluetooth integration | Built-in BLE adapter, ESPHome BT proxy, or Shelly BT proxy. |
 
-> **Upgrading from < 1.34.0?** Make sure your Home Assistant Core is on **2025.12.0 or newer** before installing this version. HACS will hide the update on older HA installs. Users still on HA ≤ 2025.11 can continue to use v1.33.0.
+> **Upgrading from < 1.38.0?** Make sure your Home Assistant Core is on **2026.9.0 or newer** before installing this version. HACS will hide the update on older HA installs. Users on HA 2025.12 – 2026.8 can continue to use v1.37.0, users on HA ≤ 2025.11 v1.33.0.
 
 ## Installation
 
@@ -263,6 +275,20 @@ cp -r custom_components/beurer_daylight_lamps ~/.homeassistant/custom_components
 2. Search for "Beurer Daylight Lamps"
 3. Select your lamp from the list or enter MAC address manually
 4. The lamp will blink to confirm - click "Yes" if it blinked
+
+### Options
+
+**Settings** → **Devices & Services** → **Beurer Daylight Lamps** → **Configure**:
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| Daily light therapy goal | 30 min | Goal for the *Daily goal progress* / *Daily goal reached* entities (5-120 min). Same value as the *Daily light goal* number entity; changing either one updates the lamp. |
+| Enable Adaptive Lighting by default | on | Initial state of the *Adaptive Lighting* switch for a newly added lamp. |
+| Default therapy user | – | Person that therapy sessions are attributed to when none is selected on the lamp. |
+
+Polling is adaptive (30 s while the light is on, 5 min while off, 15 min while unavailable), so there is no polling option. The lamp also pushes its state changes via Bluetooth notifications.
+
+Therapy minutes (last 7 days) and the daily goal are stored per lamp and survive restarts and updates.
 
 ## Bluetooth Proxy Support
 
@@ -458,6 +484,47 @@ Alternatively, copy the blueprint files manually:
 2. Copy to `config/blueprints/automation/beurer_daylight_lamps/` in your Home Assistant
 3. Restart Home Assistant or reload automations
 
+## Automation Triggers & Conditions
+
+Besides the device triggers, the integration adds its own triggers and conditions to the automation editor (search for "Beurer"):
+
+| Type | Name | Fires / tests when |
+|------|------|--------------------|
+| Trigger | Lamp timer finished | the auto-off timer ran out |
+| Trigger | Lamp timer cancelled | a running timer was cancelled on the lamp |
+| Trigger | Lamp sleep timer finished | the radio/music sleep timer of a WL75/WL90 ran out |
+| Trigger | Sunrise / Sunset simulation finished | a simulation started by `start_sunrise` / `start_sunset` completed |
+| Trigger | Daily light therapy goal reached | the *Daily goal reached* sensor turns on |
+| Condition | Daily light therapy goal reached | the daily goal is reached |
+| Condition | Lamp is connected | the lamp is connected via Bluetooth |
+
+```yaml
+triggers:
+  - trigger: beurer_daylight_lamps.sunrise_finished
+    target:
+      entity_id: event.bedroom_lamp_lamp_event
+conditions:
+  - condition: beurer_daylight_lamps.is_therapy_goal_reached
+    target:
+      entity_id: binary_sensor.bedroom_lamp_daily_goal_reached
+actions:
+  - action: notify.mobile_app_phone
+    data:
+      message: "Good morning, the sunrise is done."
+```
+
+The event triggers use the **Lamp event** entity; you can also trigger on it directly with a state trigger and its `event_type` attribute.
+
+## Assist (Voice) Tools
+
+Conversation agents using the Assist API (e.g. an LLM agent) get these tools for lamps whose light entity is exposed to Assist:
+
+- **start sunrise** / **start sunset** with duration and profile / end brightness
+- **stop simulation**
+- **get therapy status**: minutes today and this week, daily goal, progress and whether a simulation is running
+
+So you can say "Start a 20 minute sunrise on the bedroom lamp" or "Did I reach my light goal today?".
+
 ## Example Automations
 
 ### Wake-up Light with Preset
@@ -465,14 +532,14 @@ Alternatively, copy the blueprint files manually:
 ```yaml
 automation:
   - alias: "Wake-up light"
-    trigger:
-      - platform: time
+    triggers:
+      - trigger: time
         at: "06:30:00"
-    condition:
+    conditions:
       - condition: workday
         country: DE
-    action:
-      - service: beurer_daylight_lamps.apply_preset
+    actions:
+      - action: beurer_daylight_lamps.apply_preset
         target:
           entity_id: light.beurer_tl100
         data:
@@ -484,25 +551,25 @@ automation:
 ```yaml
 automation:
   - alias: "Gradual wake-up light"
-    trigger:
-      - platform: time
+    triggers:
+      - trigger: time
         at: "06:30:00"
-    action:
-      - service: light.turn_on
+    actions:
+      - action: light.turn_on
         target:
           entity_id: light.beurer_tl100
         data:
           color_temp_kelvin: 2700
           brightness: 25
       - delay: "00:05:00"
-      - service: light.turn_on
+      - action: light.turn_on
         target:
           entity_id: light.beurer_tl100
         data:
           color_temp_kelvin: 4000
           brightness: 128
       - delay: "00:05:00"
-      - service: light.turn_on
+      - action: light.turn_on
         target:
           entity_id: light.beurer_tl100
         data:
@@ -515,11 +582,11 @@ automation:
 ```yaml
 automation:
   - alias: "Evening mood light"
-    trigger:
-      - platform: sun
+    triggers:
+      - trigger: sun
         event: sunset
-    action:
-      - service: beurer_daylight_lamps.apply_preset
+    actions:
+      - action: beurer_daylight_lamps.apply_preset
         target:
           entity_id: light.beurer_tl100
         data:
@@ -531,17 +598,17 @@ automation:
 ```yaml
 automation:
   - alias: "Morning light therapy"
-    trigger:
-      - platform: time
+    triggers:
+      - trigger: time
         at: "07:00:00"
-    action:
-      - service: beurer_daylight_lamps.apply_preset
+    actions:
+      - action: beurer_daylight_lamps.apply_preset
         target:
           entity_id: light.beurer_tl100
         data:
           preset: daylight_therapy
       - delay: "00:30:00"
-      - service: light.turn_off
+      - action: light.turn_off
         target:
           entity_id: light.beurer_tl100
 ```
@@ -584,7 +651,7 @@ This integration uses **Bluetooth Low Energy (BLE)** for communication:
 
 4. **Connection after reboot**: Connection may fail a few times after Home Assistant reboots while the Bluetooth stack initializes. The integration will auto-reconnect.
 
-5. **Light exposure tracking resets daily**: The therapy/exposure tracking resets at midnight. Historical data beyond the current week is not retained.
+5. **Light exposure tracking resets daily**: The therapy/exposure tracking resets at local midnight. Sessions of the last 7 days are kept (also across restarts); older history is not retained.
 
 6. **Simulation requires connection**: Sunrise/sunset simulations require an active BLE connection. If the connection drops, the simulation will pause and resume when reconnected.
 

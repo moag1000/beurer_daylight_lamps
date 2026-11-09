@@ -33,7 +33,6 @@ WL90_NUMBER_DESCRIPTIONS: tuple[NumberEntityDescription, ...] = (
     NumberEntityDescription(
         key="radio_volume",
         translation_key="radio_volume",
-        icon="mdi:volume-medium",
         native_min_value=0,
         native_max_value=10,
         native_step=1,
@@ -41,7 +40,6 @@ WL90_NUMBER_DESCRIPTIONS: tuple[NumberEntityDescription, ...] = (
     NumberEntityDescription(
         key="music_volume",
         translation_key="music_volume",
-        icon="mdi:speaker",
         native_min_value=0,
         native_max_value=10,
         native_step=1,
@@ -52,7 +50,6 @@ NUMBER_DESCRIPTIONS: tuple[NumberEntityDescription, ...] = (
     NumberEntityDescription(
         key="white_brightness",
         translation_key="white_brightness",
-        icon="mdi:brightness-6",
         native_min_value=1,
         native_max_value=100,
         native_step=1,
@@ -61,13 +58,16 @@ NUMBER_DESCRIPTIONS: tuple[NumberEntityDescription, ...] = (
     NumberEntityDescription(
         key="color_brightness",
         translation_key="color_brightness",
-        icon="mdi:brightness-7",
         native_min_value=1,
         native_max_value=100,
         native_step=1,
         native_unit_of_measurement=PERCENTAGE,
     ),
 )
+
+
+# BLE commands are sent one at a time
+PARALLEL_UPDATES = 1
 
 
 async def async_setup_entry(
@@ -179,7 +179,6 @@ class BeurerTimerNumber(CoordinatorEntity[BeurerDataUpdateCoordinator], NumberEn
     _attr_native_max_value = 120
     _attr_native_step = 1
     _attr_native_unit_of_measurement = UnitOfTime.MINUTES
-    _attr_icon = "mdi:timer-outline"
     _attr_translation_key = "timer"
     _attr_entity_category = EntityCategory.CONFIG
 
@@ -274,7 +273,6 @@ class BeurerTherapyGoalNumber(
     _attr_native_max_value = 120
     _attr_native_step = 5
     _attr_native_unit_of_measurement = UnitOfTime.MINUTES
-    _attr_icon = "mdi:target"
     _attr_translation_key = "therapy_goal"
     _attr_entity_category = EntityCategory.CONFIG
 

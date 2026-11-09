@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="512" height="512">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#ff6a3d"/>
+      <stop offset="0.4" stop-color="#ffbe45"/>
+      <stop offset="1" stop-color="#f2f9ff"/>
+    </linearGradient>
+    <radialGradient id="sun" cx="0.5" cy="0.65" r="0.6">
+      <stop offset="0" stop-color="#fffdf0"/>
+      <stop offset="0.5" stop-color="#ffe680"/>
+      <stop offset="1" stop-color="#ffab2e"/>
+    </radialGradient>
+    <clipPath id="panel"><rect x="62" y="38" width="132" height="160" rx="30"/></clipPath>
+  </defs>
+  <!-- light radiating from the lamp -->
+  <g stroke="#ffb627" stroke-width="12" stroke-linecap="round">
+    <line x1="128" y1="20" x2="128" y2="6"/>
+    <line x1="68" y1="30" x2="58" y2="18"/>
+    <line x1="188" y1="30" x2="198" y2="18"/>
+    <line x1="42" y1="78" x2="24" y2="70"/>
+    <line x1="214" y1="78" x2="232" y2="70"/>
+    <line x1="40" y1="130" x2="20" y2="130"/>
+    <line x1="216" y1="130" x2="236" y2="130"/>
+  </g>
+  <!-- lamp panel: a window onto a sunrise -->
+  <rect x="62" y="38" width="132" height="160" rx="30" fill="url(#sky)"/>
+  <g clip-path="url(#panel)">
+    <circle cx="128" cy="150" r="46" fill="url(#sun)"/>
+    <path d="M50 150 Q90 138 128 150 T206 150 V210 H50 Z" fill="#41557a"/>
+    <path d="M50 172 Q92 160 134 172 T206 168 V210 H50 Z" fill="#2c3a57"/>
+  </g>
+  <rect x="62" y="38" width="132" height="160" rx="30" fill="none" stroke="#2f3b52" stroke-width="9"/>
+  <!-- slim easel foot -->
+  <path d="M112 198 L98 240 M144 198 L158 240" stroke="#2f3b52" stroke-width="10" stroke-linecap="round"/>
+</svg>

@@ -15,14 +15,17 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any
 
 from bleak.exc import BleakError
+from homeassistant.util import dt as dt_util
 from homeassistant.util.color import color_temperature_to_rgb
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from homeassistant.core import HomeAssistant
 
     from .beurer_daylight_lamps import BeurerInstance
 
-from .const import LOGGER
+from .const import EVENT_TYPE_SUNRISE_FINISHED, EVENT_TYPE_SUNSET_FINISHED, LOGGER
 
 
 class SunriseProfile(Enum):
@@ -107,6 +110,69 @@ class TherapyTracker:
     sessions: list[TherapySession] = field(default_factory=list)
     daily_goal_minutes: int = 30
     _current_session: TherapySession | None = None
+    on_change: Callable[[], None] | None = field(default=None, repr=False)
+    """Called when stored data changed (session finished, goal changed)."""
+
+    def notify_changed(self) -> None:
+        """Tell the owner that the data should be saved."""
+        if self.on_change is not None:
+            self.on_change()
+
+    def as_storage_dict(self) -> dict[str, Any]:
+        """Return the data to persist across restarts.
+
+        A session that is still running is stored as ended now, so a restart
+        during a session keeps the minutes so far.
+        """
+        sessions = list(self.sessions)
+        current = self._current_session
+        if current is not None and current.is_therapy_light:
+            sessions.append(
+                TherapySession(
+                    start_time=current.start_time,
+                    end_time=datetime.now(tz=UTC),
+                    color_temp_kelvin=current.color_temp_kelvin,
+                    brightness_pct=current.brightness_pct,
+                    person_id=current.person_id,
+                )
+            )
+        cutoff = datetime.now(tz=UTC) - timedelta(days=7)
+        return {
+            "daily_goal_minutes": self.daily_goal_minutes,
+            "sessions": [
+                {
+                    "start": s.start_time.isoformat(),
+                    "end": (s.end_time or datetime.now(tz=UTC)).isoformat(),
+                    "kelvin": s.color_temp_kelvin,
+                    "brightness": s.brightness_pct,
+                    "person": s.person_id,
+                }
+                for s in sessions
+                if s.start_time > cutoff
+            ],
+        }
+
+    def load_storage_dict(self, data: dict[str, Any]) -> None:
+        """Restore data saved by as_storage_dict; bad entries are skipped."""
+        goal = data.get("daily_goal_minutes")
+        if isinstance(goal, int) and 1 <= goal <= 120:
+            self.daily_goal_minutes = goal
+        restored: list[TherapySession] = []
+        for item in data.get("sessions", []):
+            try:
+                restored.append(
+                    TherapySession(
+                        start_time=datetime.fromisoformat(item["start"]),
+                        end_time=datetime.fromisoformat(item["end"]),
+                        color_temp_kelvin=int(item.get("kelvin", 5300)),
+                        brightness_pct=int(item.get("brightness", 100)),
+                        person_id=item.get("person"),
+                    )
+                )
+            except KeyError, TypeError, ValueError:
+                LOGGER.debug("Skipping invalid stored therapy session: %s", item)
+        self.sessions = restored
+        self.cleanup_old_sessions()
 
     @property
     def has_active_session(self) -> bool:
@@ -171,6 +237,7 @@ class TherapyTracker:
                 "Ended therapy session: %.1f minutes",
                 session.duration_minutes,
             )
+            self.notify_changed()
 
         self._current_session = None
         return session
@@ -183,17 +250,18 @@ class TherapyTracker:
     @property
     def today_minutes(self) -> float:
         """Calculate total therapy minutes today."""
-        today = datetime.now(tz=UTC).date()
+        # "Today" is the local calendar day, not the UTC one
+        day_start = dt_util.start_of_local_day()
         total = 0.0
 
         for session in self.sessions:
-            if session.start_time.date() == today and session.is_therapy_light:
+            if session.start_time >= day_start and session.is_therapy_light:
                 total += session.duration_minutes
 
         # Add current session if active and qualifies
         if (
             self._current_session
-            and self._current_session.start_time.date() == today
+            and self._current_session.start_time >= day_start
             and self._current_session.is_therapy_light
         ):
             total += self._current_session.duration_minutes
@@ -203,9 +271,9 @@ class TherapyTracker:
     @property
     def week_minutes(self) -> float:
         """Calculate total therapy minutes this week."""
-        now = datetime.now(tz=UTC)
-        week_start = now - timedelta(days=now.weekday())
-        week_start = week_start.replace(hour=0, minute=0, second=0, microsecond=0)
+        # The week starts on Monday, local time
+        today_start = dt_util.start_of_local_day()
+        week_start = today_start - timedelta(days=today_start.weekday())
 
         total = 0.0
         for session in self.sessions:
@@ -486,10 +554,11 @@ class SunriseSimulation:
             if self._running:
                 try:
                     await self._instance._request_status()
-                except (BleakError, TimeoutError, OSError):
+                except BleakError, TimeoutError, OSError:
                     LOGGER.debug("Non-critical: failed to request status after sunrise")
 
             LOGGER.info("Sunrise simulation completed")
+            self._instance.emit_lamp_event(EVENT_TYPE_SUNRISE_FINISHED)
 
         except asyncio.CancelledError:
             LOGGER.debug("Sunrise simulation cancelled")
@@ -599,10 +668,11 @@ class SunriseSimulation:
             if self._running:
                 try:
                     await self._instance._request_status()
-                except (BleakError, TimeoutError, OSError):
+                except BleakError, TimeoutError, OSError:
                     LOGGER.debug("Non-critical: failed to request status after sunset")
 
             LOGGER.info("Sunset simulation completed")
+            self._instance.emit_lamp_event(EVENT_TYPE_SUNSET_FINISHED)
 
         except asyncio.CancelledError:
             LOGGER.debug("Sunset simulation cancelled")

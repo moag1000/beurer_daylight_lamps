@@ -39,10 +39,13 @@ import asyncio
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from bleak import BleakClient, BleakScanner
-from bleak.backends.characteristic import BleakGATTCharacteristic
 from bleak.exc import BleakError
+
+if TYPE_CHECKING:
+    from bleak.backends.characteristic import BleakGATTCharacteristic
 
 # BLE UUIDs
 WRITE_UUID = "8b00ace7-eb0b-49b0-bbe9-9aee0a26e1a3"

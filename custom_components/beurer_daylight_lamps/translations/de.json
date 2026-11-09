@@ -92,13 +92,11 @@
                 "description": "Passen Sie die Einstellungen für die Beurer Lampe an.",
                 "data": {
                     "therapy_goal": "Tägliches Lichttherapie-Ziel (Minuten)",
-                    "update_interval": "Aktualisierungsintervall (Sekunden)",
                     "adaptive_lighting_default": "Adaptive Beleuchtung standardmäßig aktivieren",
                     "default_therapy_user": "Standard-Therapie-Person"
                 },
                 "data_description": {
                     "therapy_goal": "Das tägliche Therapieziel in Minuten (5-120). Wird für die Fortschrittsverfolgung verwendet.",
-                    "update_interval": "Wie oft das Gerät nach Updates abgefragt wird (10-300 Sekunden).",
                     "adaptive_lighting_default": "Wenn aktiviert, kann Adaptive Beleuchtung die Farbtemperatur dieser Lampe steuern.",
                     "default_therapy_user": "Die HA-Personen-Entität, der Therapiesitzungen standardmäßig zugeordnet werden, wenn keine Person an der Lampe ausgewählt ist."
                 }
@@ -231,6 +229,34 @@
             "alarm_3": {
                 "name": "Alarm 3"
             }
+        },
+        "event": {
+            "lamp_event": {
+                "name": "Lampen-Ereignis",
+                "state_attributes": {
+                    "event_type": {
+                        "name": "Ereignistyp",
+                        "state": {
+                            "timer_finished": "Timer abgelaufen",
+                            "timer_cancelled": "Timer abgebrochen",
+                            "sleep_timer_finished": "Einschlaf-Timer abgelaufen",
+                            "sunrise_finished": "Sonnenaufgang beendet",
+                            "sunset_finished": "Sonnenuntergang beendet"
+                        }
+                    }
+                }
+            }
+        },
+        "time": {
+            "alarm_1_time": {
+                "name": "Wecker 1 Uhrzeit"
+            },
+            "alarm_2_time": {
+                "name": "Wecker 2 Uhrzeit"
+            },
+            "alarm_3_time": {
+                "name": "Wecker 3 Uhrzeit"
+            }
         }
     },
     "device_automation": {
@@ -320,6 +346,66 @@
                 "person": {
                     "name": "Person",
                     "description": "HA-Person, der Sitzungen zugeordnet werden."
+                }
+            }
+        }
+    },
+    "triggers": {
+        "timer_finished": {
+            "name": "Lampen-Timer abgelaufen",
+            "description": "Löst aus, wenn der Licht-Timer einer Lampe abgelaufen ist und die Lampe ausgeschaltet hat."
+        },
+        "timer_cancelled": {
+            "name": "Lampen-Timer abgebrochen",
+            "description": "Löst aus, wenn ein laufender Timer am Gerät abgebrochen wurde."
+        },
+        "sleep_timer_finished": {
+            "name": "Einschlaf-Timer abgelaufen",
+            "description": "Löst aus, wenn der Einschlaf-Timer eines Wake-up-Lights (Radio/Musik) abgelaufen ist."
+        },
+        "sunrise_finished": {
+            "name": "Sonnenaufgang beendet",
+            "description": "Löst aus, wenn eine Sonnenaufgangs-Simulation die volle Helligkeit erreicht hat."
+        },
+        "sunset_finished": {
+            "name": "Sonnenuntergang beendet",
+            "description": "Löst aus, wenn eine Sonnenuntergangs-Simulation die Lampe ausgedimmt hat."
+        },
+        "therapy_goal_reached": {
+            "name": "Tagesziel Lichttherapie erreicht",
+            "description": "Löst aus, wenn das tägliche Lichttherapie-Ziel erreicht wird.",
+            "fields": {
+                "behavior": {
+                    "name": "Verhalten"
+                },
+                "for": {
+                    "name": "Mindestens für"
+                }
+            }
+        }
+    },
+    "conditions": {
+        "is_therapy_goal_reached": {
+            "name": "Tagesziel Lichttherapie erreicht",
+            "description": "Prüft, ob das tägliche Lichttherapie-Ziel erreicht ist.",
+            "fields": {
+                "behavior": {
+                    "name": "Verhalten"
+                },
+                "for": {
+                    "name": "Mindestens für"
+                }
+            }
+        },
+        "is_connected": {
+            "name": "Lampe ist verbunden",
+            "description": "Prüft, ob die Lampe per Bluetooth verbunden ist.",
+            "fields": {
+                "behavior": {
+                    "name": "Verhalten"
+                },
+                "for": {
+                    "name": "Mindestens für"
                 }
             }
         }

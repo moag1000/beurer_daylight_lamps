@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from homeassistant.components.binary_sensor import (
-    BinarySensorDeviceClass,
+from homeassistant.components.binary_sensor import (  # type: ignore[attr-defined]
+    BinarySensorDeviceClass,  # re-exported; lives in .const from HA 2026.10
     BinarySensorEntity,
     BinarySensorEntityDescription,
 )
@@ -46,9 +46,12 @@ THERAPY_BINARY_SENSOR_DESCRIPTIONS: tuple[BinarySensorEntityDescription, ...] = 
     BinarySensorEntityDescription(
         key="therapy_goal_reached",
         translation_key="therapy_goal_reached",
-        icon="mdi:check-circle",
     ),
 )
+
+
+# Read-only, updated by the coordinator
+PARALLEL_UPDATES = 0
 
 
 async def async_setup_entry(

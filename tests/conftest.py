@@ -46,7 +46,7 @@ def auto_enable_custom_integrations(enable_custom_integrations):
 
 
 @pytest.fixture
-def mock_setup_entry() -> Generator[AsyncMock, None, None]:
+def mock_setup_entry() -> Generator[AsyncMock]:
     """Mock setting up a config entry."""
     with patch(
         "custom_components.beurer_daylight_lamps.async_setup_entry",
@@ -74,7 +74,7 @@ def mock_ble_device() -> MagicMock:
 
 
 @pytest.fixture
-def mock_beurer_instance() -> Generator[MagicMock, None, None]:
+def mock_beurer_instance() -> Generator[MagicMock]:
     """Create a mock BeurerInstance."""
     with patch("custom_components.beurer_daylight_lamps.BeurerInstance") as mock_class:
         instance = MagicMock()
@@ -120,7 +120,7 @@ def mock_beurer_instance() -> Generator[MagicMock, None, None]:
 
 
 @pytest.fixture
-def mock_discover() -> Generator[AsyncMock, None, None]:
+def mock_discover() -> Generator[AsyncMock]:
     """Mock BLE discovery."""
     with patch(
         "custom_components.beurer_daylight_lamps.beurer_daylight_lamps.discover"
@@ -130,7 +130,7 @@ def mock_discover() -> Generator[AsyncMock, None, None]:
 
 
 @pytest.fixture
-def mock_get_device() -> Generator[AsyncMock, None, None]:
+def mock_get_device() -> Generator[AsyncMock]:
     """Mock get_device function."""
     with patch("custom_components.beurer_daylight_lamps.get_device") as mock:
         device = MagicMock()

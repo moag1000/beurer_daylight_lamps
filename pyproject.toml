@@ -2,10 +2,10 @@
 name = "beurer-daylight-lamps"
 version = "1.35.4"
 description = "Home Assistant integration for Beurer Daylight Therapy Lamps"
-requires-python = ">=3.13"
+requires-python = ">=3.14"
 
 [tool.mypy]
-python_version = "3.13"
+python_version = "3.14"
 plugins = ["pydantic.mypy"]
 follow_imports = "normal"
 ignore_missing_imports = true

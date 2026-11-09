@@ -14,6 +14,7 @@ blueprint:
     - Support for multiple lights (sync additional lamps)
     - Flexible scheduling (workdays, weekends, or daily)
     - Automatic abort if lights are turned off manually
+    - Optional: end the session early once the daily light goal is reached
 
     ### Recommended Settings
     - **Sunrise**: 15-20 minutes for a natural wake-up
@@ -24,7 +25,7 @@ blueprint:
   source_url: https://github.com/moag1000/beurer_daylight_lamps/blob/main/blueprints/automation/beurer_daylight_lamps/morning_light_therapy.yaml
   author: moag1000
   homeassistant:
-    min_version: "2023.9.0"
+    min_version: "2026.9.0"
 
   input:
     beurer_light:
@@ -111,6 +112,19 @@ blueprint:
             - label: "Switch to comfortable reading light (4000K, 80%)"
               value: "reading"
 
+    goal_sensor:
+      name: "End at Daily Goal (Optional)"
+      description: |
+        Select the lamp's "Daily goal reached" sensor to end the session
+        as soon as today's light therapy goal is reached, instead of
+        waiting for the full therapy duration.
+      default: []
+      selector:
+        entity:
+          filter:
+            - integration: beurer_daylight_lamps
+              domain: binary_sensor
+
     reconnect_button:
       name: "Reconnect Button (Optional)"
       description: |
@@ -132,6 +146,7 @@ variables:
   schedule: !input schedule_days
   end_behavior: !input end_action
   reconnect_btn: !input reconnect_button
+  goal_sensor: !input goal_sensor
 
   # Calculate steps: one update every 30 seconds
   total_steps: "{{ (sunrise_mins * 2) | int if sunrise_mins > 0 else 0 }}"
@@ -142,11 +157,11 @@ variables:
   # Check if we have extras
   has_extras: "{{ extras is list and extras | length > 0 }}"
 
-trigger:
-  - platform: time
+triggers:
+  - trigger: time
     at: !input wake_time
 
-condition:
+conditions:
   - condition: template
     value_template: >
       {% set day = now().weekday() %}
@@ -154,7 +169,7 @@ condition:
          (schedule == 'workdays' and day < 5) or
          (schedule == 'weekends' and day >= 5) }}
 
-action:
+actions:
   # =========================================================================
   # STEP 0: CONNECTION CHECK & RECONNECT
   # =========================================================================
@@ -166,7 +181,7 @@ action:
         entity_id: !input beurer_light
         state: "unavailable"
     then:
-      - service: button.press
+      - action: button.press
         target:
           entity_id: "{{ reconnect_btn }}"
       # Wait for BLE connection to establish
@@ -188,7 +203,7 @@ action:
         value_template: "{{ sunrise_mins > 0 }}"
     then:
       # Start very dim with deep orange (like early sunrise)
-      - service: light.turn_on
+      - action: light.turn_on
         target:
           entity_id: "{{ beurer }}"
         data:
@@ -201,7 +216,7 @@ action:
           - condition: template
             value_template: "{{ has_extras }}"
         then:
-          - service: light.turn_on
+          - action: light.turn_on
             target:
               entity_id: "{{ extras }}"
             data:
@@ -242,7 +257,7 @@ action:
                 target_temp: "{{ (2000 + (3000 * progress)) | round(0) | int }}"
 
             # Update Beurer lamp with RGB color
-            - service: light.turn_on
+            - action: light.turn_on
               target:
                 entity_id: "{{ beurer }}"
               data:
@@ -258,7 +273,7 @@ action:
                 - condition: template
                   value_template: "{{ has_extras }}"
               then:
-                - service: light.turn_on
+                - action: light.turn_on
                   target:
                     entity_id: "{{ extras }}"
                   data:
@@ -282,7 +297,7 @@ action:
 
   # Smooth transition: use color_temp_kelvin to explicitly trigger white mode
   # instead of near-white RGB which could cause race conditions on BLE devices
-  - service: light.turn_on
+  - action: light.turn_on
     target:
       entity_id: "{{ beurer }}"
     data:
@@ -293,7 +308,7 @@ action:
       - condition: template
         value_template: "{{ has_extras }}"
     then:
-      - service: light.turn_on
+      - action: light.turn_on
         target:
           entity_id: "{{ extras }}"
         data:
@@ -316,7 +331,7 @@ action:
 
   # Switch Beurer to native white mode (>= 5000K triggers native white)
   # Start at 80% to avoid harsh jump
-  - service: light.turn_on
+  - action: light.turn_on
     target:
       entity_id: "{{ beurer }}"
     data:
@@ -327,7 +342,7 @@ action:
       - condition: template
         value_template: "{{ has_extras }}"
     then:
-      - service: light.turn_on
+      - action: light.turn_on
         target:
           entity_id: "{{ extras }}"
         data:
@@ -339,7 +354,7 @@ action:
   - delay:
       seconds: 10
 
-  - service: light.turn_on
+  - action: light.turn_on
     target:
       entity_id: "{{ beurer }}"
     data:
@@ -347,9 +362,21 @@ action:
       color_temp_kelvin: 5300
       transition: 30
 
-  # Wait for therapy duration
-  - delay:
-      minutes: "{{ therapy_mins }}"
+  # Wait for therapy duration, or until the daily goal is reached
+  - if:
+      - condition: template
+        value_template: "{{ goal_sensor is string and goal_sensor != '' }}"
+    then:
+      - wait_for_trigger:
+          - trigger: beurer_daylight_lamps.therapy_goal_reached
+            target:
+              entity_id: !input goal_sensor
+        timeout:
+          minutes: "{{ therapy_mins }}"
+        continue_on_timeout: true
+    else:
+      - delay:
+          minutes: "{{ therapy_mins }}"
 
   # =========================================================================
   # PHASE 4: END ACTION
@@ -365,7 +392,7 @@ action:
       # Turn off all lights
       - conditions: "{{ end_behavior == 'off' }}"
         sequence:
-          - service: light.turn_off
+          - action: light.turn_off
             target:
               entity_id: "{{ all_lights }}"
             data:
@@ -374,7 +401,7 @@ action:
       # Switch to reading light
       - conditions: "{{ end_behavior == 'reading' }}"
         sequence:
-          - service: light.turn_on
+          - action: light.turn_on
             target:
               entity_id: "{{ all_lights }}"
             data:

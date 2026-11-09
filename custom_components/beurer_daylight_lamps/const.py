@@ -6,7 +6,7 @@ import logging
 from typing import Final
 
 DOMAIN: Final = "beurer_daylight_lamps"
-VERSION: Final = "1.37.0"
+VERSION: Final = "1.38.0"
 
 # Color temperature at or above which light.turn_on and presets use the native
 # white LEDs (TL100 daylight is 5300 K) instead of emulating it with RGB.
@@ -214,6 +214,10 @@ ADAPTER_FAILURE_COOLDOWN: Final = 300.0  # Cooldown for failed adapters (seconds
 
 # Adaptive polling intervals
 # Poll more frequently when light is on for responsive updates
+# Software transitions (light.turn_on/turn_off with transition)
+FADE_STEP_SECONDS: Final = 0.5  # one brightness step every 0.5 s
+FADE_MAX_STEPS: Final = 120  # long fades use bigger steps instead
+
 POLL_INTERVAL_LIGHT_ON: Final = 30  # 30 seconds when light is on
 POLL_INTERVAL_LIGHT_OFF: Final = 300  # 5 minutes when light is off
 POLL_INTERVAL_UNAVAILABLE: Final = 900  # 15 minutes when device unavailable
@@ -350,6 +354,21 @@ def is_wl90_model(name: str | None) -> bool:
         return False
     name_upper = name.upper()
     return any(name_upper.startswith(prefix) for prefix in WL90_MODELS)
+
+
+# Lamp events (event entity, integration triggers)
+EVENT_TYPE_TIMER_FINISHED: Final = "timer_finished"
+EVENT_TYPE_TIMER_CANCELLED: Final = "timer_cancelled"
+EVENT_TYPE_SLEEP_TIMER_FINISHED: Final = "sleep_timer_finished"
+EVENT_TYPE_SUNRISE_FINISHED: Final = "sunrise_finished"
+EVENT_TYPE_SUNSET_FINISHED: Final = "sunset_finished"
+LAMP_EVENT_TYPES: Final[list[str]] = [
+    EVENT_TYPE_TIMER_FINISHED,
+    EVENT_TYPE_TIMER_CANCELLED,
+    EVENT_TYPE_SLEEP_TIMER_FINISHED,
+    EVENT_TYPE_SUNRISE_FINISHED,
+    EVENT_TYPE_SUNSET_FINISHED,
+]
 
 
 # Per-person therapy attribution

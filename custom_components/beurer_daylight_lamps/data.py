@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
+    from homeassistant.helpers.storage import Store
 
     from .beurer_daylight_lamps import BeurerInstance
     from .coordinator import BeurerDataUpdateCoordinator
@@ -25,3 +26,4 @@ class BeurerRuntimeData:
 
     instance: BeurerInstance
     coordinator: BeurerDataUpdateCoordinator
+    therapy_store: Store[dict[str, Any]] | None = None

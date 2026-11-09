@@ -32,6 +32,7 @@ from .const import (
     CMD_RADIO_TUNE,
     CMD_RADIO_VOLUME,
     COMMAND_DELAY,
+    EVENT_TYPE_SLEEP_TIMER_FINISHED,
     LOGGER,
     RESP_ALARM,
     RESP_MUSIC_INFO,
@@ -348,6 +349,9 @@ class WL90Controller:
             self.radio.sleep_timer_on = False
         else:
             self.music.sleep_timer_on = False
+        self._instance.emit_lamp_event(
+            EVENT_TYPE_SLEEP_TIMER_FINISHED, {"timer": timer_type}
+        )
 
     def _handle_radio_confirmation(self, resp_cmd: int) -> None:
         """Handle radio confirmation responses."""

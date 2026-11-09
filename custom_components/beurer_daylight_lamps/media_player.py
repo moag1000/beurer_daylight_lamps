@@ -35,6 +35,10 @@ if TYPE_CHECKING:
     from .data import BeurerConfigEntry
 
 
+# BLE commands are sent one at a time
+PARALLEL_UPDATES = 1
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: BeurerConfigEntry,

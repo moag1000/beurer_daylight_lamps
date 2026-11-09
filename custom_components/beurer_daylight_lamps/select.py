@@ -35,9 +35,12 @@ SELECT_DESCRIPTIONS: tuple[SelectEntityDescription, ...] = (
     SelectEntityDescription(
         key="effect",
         translation_key="effect",
-        icon="mdi:palette",
     ),
 )
+
+
+# BLE commands are sent one at a time
+PARALLEL_UPDATES = 1
 
 
 async def async_setup_entry(
@@ -110,7 +113,6 @@ class BeurerTherapyUserSelect(
     """Selects which HA person is currently doing therapy on this lamp."""
 
     _attr_has_entity_name = True
-    _attr_icon = "mdi:account"
     _attr_translation_key = "therapy_user"
 
     def __init__(

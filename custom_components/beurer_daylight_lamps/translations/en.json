@@ -113,13 +113,11 @@
                 "description": "Adjust settings for the Beurer lamp.",
                 "data": {
                     "therapy_goal": "Daily light therapy goal (minutes)",
-                    "update_interval": "Update interval (seconds)",
                     "adaptive_lighting_default": "Enable Adaptive Lighting by default",
                     "default_therapy_user": "Default therapy user"
                 },
                 "data_description": {
                     "therapy_goal": "The daily therapy goal in minutes (5-120). Used for tracking progress.",
-                    "update_interval": "How often to poll the device for updates (10-300 seconds).",
                     "adaptive_lighting_default": "If enabled, Adaptive Lighting can control this lamp's color temperature.",
                     "default_therapy_user": "The HA person entity to attribute therapy sessions to by default when no person is selected on the lamp."
                 }
@@ -210,6 +208,34 @@
             "alarm_3": {
                 "name": "Alarm 3"
             }
+        },
+        "event": {
+            "lamp_event": {
+                "name": "Lamp event",
+                "state_attributes": {
+                    "event_type": {
+                        "name": "Event type",
+                        "state": {
+                            "timer_finished": "Timer finished",
+                            "timer_cancelled": "Timer cancelled",
+                            "sleep_timer_finished": "Sleep timer finished",
+                            "sunrise_finished": "Sunrise finished",
+                            "sunset_finished": "Sunset finished"
+                        }
+                    }
+                }
+            }
+        },
+        "time": {
+            "alarm_1_time": {
+                "name": "Alarm 1 time"
+            },
+            "alarm_2_time": {
+                "name": "Alarm 2 time"
+            },
+            "alarm_3_time": {
+                "name": "Alarm 3 time"
+            }
         }
     },
     "device_automation": {
@@ -233,6 +259,66 @@
                 "person": {
                     "name": "Person",
                     "description": "HA person to attribute sessions to."
+                }
+            }
+        }
+    },
+    "triggers": {
+        "timer_finished": {
+            "name": "Lamp timer finished",
+            "description": "Triggers when a lamp's light timer has run out and the lamp turned off."
+        },
+        "timer_cancelled": {
+            "name": "Lamp timer cancelled",
+            "description": "Triggers when a running lamp timer was cancelled on the device."
+        },
+        "sleep_timer_finished": {
+            "name": "Lamp sleep timer finished",
+            "description": "Triggers when the sleep timer of a wake-up light (radio/music) has run out."
+        },
+        "sunrise_finished": {
+            "name": "Sunrise simulation finished",
+            "description": "Triggers when a sunrise simulation reached full brightness."
+        },
+        "sunset_finished": {
+            "name": "Sunset simulation finished",
+            "description": "Triggers when a sunset simulation has dimmed the lamp off."
+        },
+        "therapy_goal_reached": {
+            "name": "Daily light therapy goal reached",
+            "description": "Triggers when the daily light therapy goal is reached.",
+            "fields": {
+                "behavior": {
+                    "name": "Behavior"
+                },
+                "for": {
+                    "name": "For at least"
+                }
+            }
+        }
+    },
+    "conditions": {
+        "is_therapy_goal_reached": {
+            "name": "Daily light therapy goal reached",
+            "description": "Tests if the daily light therapy goal has been reached.",
+            "fields": {
+                "behavior": {
+                    "name": "Behavior"
+                },
+                "for": {
+                    "name": "For at least"
+                }
+            }
+        },
+        "is_connected": {
+            "name": "Lamp is connected",
+            "description": "Tests if the lamp is connected via Bluetooth.",
+            "fields": {
+                "behavior": {
+                    "name": "Behavior"
+                },
+                "for": {
+                    "name": "For at least"
                 }
             }
         }

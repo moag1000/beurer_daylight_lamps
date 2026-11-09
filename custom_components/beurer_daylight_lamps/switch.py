@@ -14,6 +14,7 @@ from homeassistant.helpers.device_registry import (
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from .config_flow import CONF_ADAPTIVE_LIGHTING_DEFAULT, DEFAULT_ADAPTIVE_LIGHTING
 from .const import DOMAIN, LOGGER, VERSION, detect_model
 from .coordinator import BeurerDataUpdateCoordinator
 
@@ -27,7 +28,6 @@ SWITCH_DESCRIPTIONS = [
     SwitchEntityDescription(
         key="adaptive_lighting",
         translation_key="adaptive_lighting",
-        icon="mdi:brightness-auto",
     ),
 ]
 
@@ -36,16 +36,18 @@ DEVICE_SWITCH_DESCRIPTIONS = [
     SwitchEntityDescription(
         key="feedback_sound",
         translation_key="feedback_sound",
-        icon="mdi:volume-high",
         entity_category=EntityCategory.CONFIG,
     ),
     SwitchEntityDescription(
         key="fade",
         translation_key="fade",
-        icon="mdi:transition-masked",
         entity_category=EntityCategory.CONFIG,
     ),
 ]
+
+
+# BLE commands are sent one at a time
+PARALLEL_UPDATES = 1
 
 
 async def async_setup_entry(
@@ -123,6 +125,13 @@ class BeurerAdaptiveLightingSwitch(
             LOGGER.debug(
                 "Restored Adaptive Lighting state: %s",
                 "enabled" if self._is_on else "disabled",
+            )
+        elif entry := self.hass.config_entries.async_get_entry(self._entry_id):
+            # New lamp: start with the default chosen in the options
+            self._is_on = bool(
+                entry.options.get(
+                    CONF_ADAPTIVE_LIGHTING_DEFAULT, DEFAULT_ADAPTIVE_LIGHTING
+                )
             )
 
         # Store the switch reference in instance for light entity access
@@ -290,11 +299,6 @@ class BeurerAlarmSwitch(CoordinatorEntity[BeurerDataUpdateCoordinator], SwitchEn
         self._slot = slot
         self._attr_translation_key = f"alarm_{slot + 1}"
         self._attr_unique_id = f"{format_mac(self._instance.mac)}_alarm_{slot + 1}"
-
-    @property
-    def icon(self) -> str:
-        """Return alarm icon based on state."""
-        return "mdi:alarm" if self.is_on else "mdi:alarm-off"
 
     @property
     def _alarm(self) -> Any:

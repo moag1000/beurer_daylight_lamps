@@ -49,7 +49,7 @@ class TestBinarySensorDescriptions:
             for d in THERAPY_BINARY_SENSOR_DESCRIPTIONS
             if d.key == "therapy_goal_reached"
         )
-        assert therapy_desc.icon == "mdi:check-circle"
+        assert therapy_desc.icon is None  # icon comes from icons.json
         assert therapy_desc.translation_key == "therapy_goal_reached"
 
 

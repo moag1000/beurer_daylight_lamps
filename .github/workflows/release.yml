@@ -4,6 +4,13 @@ on:
   push:
     tags:
       - "v*.*.*"
+  # Re-run for an existing tag, e.g. to attach the ZIP to a release that
+  # was tagged from a commit without this workflow (v1.37.0).
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag, e.g. v1.37.0"
+        required: true
 
 permissions:
   contents: write
@@ -16,10 +23,13 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          ref: ${{ inputs.tag || github.ref }}
 
       - name: Get version from tag
         id: version
-        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: echo "version=${TAG#v}" >> $GITHUB_OUTPUT
 
       - name: Verify manifest version
         run: |
@@ -40,9 +50,20 @@ jobs:
           echo "$CHANGELOG" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
+      - name: Build ZIP for HACS
+        # hacs.json "zip_release": HACS / the Marketplace downloads this ZIP
+        # (only the integration) instead of the whole repository.
+        run: |
+          cd custom_components/beurer_daylight_lamps
+          zip -r "$GITHUB_WORKSPACE/beurer_daylight_lamps.zip" . -x "__pycache__/*" "*.pyc"
+          cd "$GITHUB_WORKSPACE"
+          unzip -l beurer_daylight_lamps.zip | grep -q " manifest.json$"
+
       - name: Create Release
         uses: softprops/action-gh-release@v3
         with:
+          files: beurer_daylight_lamps.zip
+          tag_name: v${{ steps.version.outputs.version }}
           name: v${{ steps.version.outputs.version }}
           body: |
             ## Changes in v${{ steps.version.outputs.version }}
@@ -57,6 +78,6 @@ jobs:
             3. Install and restart Home Assistant
 
             ### Manual
-            Download the `beurer_daylight_lamps` folder and place it in your `custom_components` directory.
+            Download `beurer_daylight_lamps.zip` below and unpack it into `custom_components/beurer_daylight_lamps/`.
           draft: false
           prerelease: false
