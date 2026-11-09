@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Sunrise / sunset at the push of a button**: buttons *Start sunrise*, *Start sunset* and *Stop sunrise/sunset*, with the settings *Sunrise profile*, *Sunrise duration* and *Sunset duration* (kept across restarts). No service call or YAML needed.
 - **Start light therapy**: one button switches to full daylight (native white) and turns the lamp off once today's goal is reached; if the goal is already reached, the session lasts one full goal. Changing the light (off, color, effect, dimming below 80 %) ends the session without turning the lamp off. A new lamp event and trigger *Light therapy session finished* fire at the end.
+- **Sunrise/sunset progress sensor**: shows how far a running simulation is (0–100 %) and whether a sunrise or sunset is running, e.g. for a dashboard bar.
+- **Repair notice for a weak or unstable Bluetooth link**: Home Assistant shows a warning under *Settings → System → Repairs* when the lamp's signal stays at -85 dBm or weaker for 10 minutes, or when it reconnects 6 times within an hour, with tips (move it closer, add a Bluetooth proxy, close the LightUp app). The notice disappears on its own once the link is stable again.
 - **Lamp event entity**: reports *timer finished*, *timer cancelled*, *sleep timer finished* (WL75/WL90 radio/music) and *sunrise/sunset finished*.
 - **Alarm time entities** (WL75/WL90): set the wake-up time of each alarm slot directly from the dashboard.
 - **Integration triggers and conditions** (HA 2026.9 automation editor): lamp timer/sleep timer finished, timer cancelled, sunrise/sunset finished, daily therapy goal reached; conditions *goal reached* and *lamp is connected*.

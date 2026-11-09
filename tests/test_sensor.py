@@ -15,6 +15,7 @@ from custom_components.beurer_daylight_lamps.sensor import (
     SENSOR_DESCRIPTIONS,
     THERAPY_SENSOR_DESCRIPTIONS,
     BeurerSensor,
+    BeurerSimulationProgressSensor,
     BeurerTherapySensor,
 )
 from tests.conftest import create_mock_coordinator
@@ -262,11 +263,17 @@ class TestAsyncSetupEntry:
 
         await async_setup_entry(mock_hass, mock_entry, capture_entities)
 
-        # Should create 9 entities: 3 diagnostic + 3 therapy + 3 connection health
-        assert len(added_entities) == 9
+        # 10 entities: 3 diagnostic + 3 therapy + 3 connection health
+        # + 1 simulation progress
+        assert len(added_entities) == 10
 
         # Verify types
-        diagnostic_sensors = [e for e in added_entities if isinstance(e, BeurerSensor)]
+        diagnostic_sensors = [
+            e
+            for e in added_entities
+            if isinstance(e, BeurerSensor)
+            and not isinstance(e, BeurerSimulationProgressSensor)
+        ]
         therapy_sensors = [
             e for e in added_entities if isinstance(e, BeurerTherapySensor)
         ]

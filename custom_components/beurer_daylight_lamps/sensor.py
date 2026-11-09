@@ -73,6 +73,12 @@ SENSOR_DESCRIPTIONS: tuple[SensorEntityDescription, ...] = (
     ),
 )
 
+SIMULATION_PROGRESS_DESCRIPTION = SensorEntityDescription(
+    key="simulation_progress",
+    translation_key="simulation_progress",
+    native_unit_of_measurement=PERCENTAGE,
+)
+
 # Therapy tracking sensors (lifestyle/wellness feature, NOT medical)
 THERAPY_SENSOR_DESCRIPTIONS: tuple[SensorEntityDescription, ...] = (
     SensorEntityDescription(
@@ -183,6 +189,11 @@ async def async_setup_entry(
             for description in CONNECTION_HEALTH_SENSOR_DESCRIPTIONS
         ]
     )
+    entities.append(
+        BeurerSimulationProgressSensor(
+            coordinator, name, SIMULATION_PROGRESS_DESCRIPTION
+        )
+    )
     async_add_entities(entities)
 
     # --- Per-person aggregation sensors on Therapy Hub (once per HA instance) ---
@@ -278,6 +289,20 @@ class BeurerSensor(CoordinatorEntity[BeurerDataUpdateCoordinator], SensorEntity)
             sw_version=VERSION,
             connections={(CONNECTION_BLUETOOTH, mac)},
         )
+
+
+class BeurerSimulationProgressSensor(BeurerSensor):
+    """Progress of a running sunrise or sunset simulation (0 when idle)."""
+
+    @property
+    def native_value(self) -> int:
+        """Return the progress in percent."""
+        return self._instance.sunrise_simulation.progress_pct
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return which simulation runs: sunrise, sunset or none."""
+        return {"simulation": self._instance.sunrise_simulation.kind or "none"}
 
 
 class BeurerTherapySensor(CoordinatorEntity[BeurerDataUpdateCoordinator], SensorEntity):

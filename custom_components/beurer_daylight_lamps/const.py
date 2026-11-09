@@ -209,6 +209,13 @@ CONNECTION_STALE_TIMEOUT: Final = (
     300.0  # Consider connection stale after N seconds without data
 )
 
+# Weak / unstable connection repair issue
+WEAK_SIGNAL_RSSI: Final = -85  # Readings at or below this count as weak (dBm)
+WEAK_SIGNAL_RECOVERED_RSSI: Final = -78  # A reading at or above clears it (dBm)
+WEAK_SIGNAL_DURATION: Final = 600.0  # Weak for this long raises the issue (s)
+FREQUENT_RECONNECT_THRESHOLD: Final = 6  # Reconnects within the window ...
+FREQUENT_RECONNECT_WINDOW: Final = 3600.0  # ... of this many seconds
+
 # Adapter failure tracking
 ADAPTER_FAILURE_COOLDOWN: Final = 300.0  # Cooldown for failed adapters (seconds)
 

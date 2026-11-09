@@ -143,6 +143,14 @@
                     }
                 }
             }
+        },
+        "weak_signal": {
+            "title": "Schwaches Bluetooth-Signal zu {name}",
+            "description": "Das Bluetooth-Signal von **{name}** ist seit mindestens 10 Minuten sehr schwach (zuletzt {rssi} dBm). Befehle, Sonnenaufgänge und Lichttherapie-Sitzungen können fehlschlagen oder verzögert ankommen.\n\nDas hilft:\n- Lampe näher an den Bluetooth-Adapter stellen, oder\n- einen ESPHome- oder Shelly-Bluetooth-Proxy in die Nähe der Lampe stellen.\n\nDieser Hinweis verschwindet von selbst, sobald das Signal besser als -78 dBm ist."
+        },
+        "frequent_reconnects": {
+            "title": "{name} verliert ständig die Bluetooth-Verbindung",
+            "description": "**{name}** hat sich in der letzten Stunde {reconnects}-mal neu verbunden (zuletzt {rssi} dBm). Befehle, Sonnenaufgänge und Lichttherapie-Sitzungen können unterbrochen werden.\n\nDas hilft:\n- Lampe näher an den Bluetooth-Adapter stellen, oder\n- einen ESPHome- oder Shelly-Bluetooth-Proxy in die Nähe der Lampe stellen, oder\n- sicherstellen, dass die Beurer-App „LightUp“ nicht gleichzeitig verbunden ist.\n\nDieser Hinweis verschwindet von selbst, sobald die Verbindung wieder stabil ist."
         }
     },
     "entity": {
@@ -224,6 +232,19 @@
             },
             "last_time_sync": {
                 "name": "Letzte Zeitsynchronisierung"
+            },
+            "simulation_progress": {
+                "name": "Fortschritt Sonnenauf-/-untergang",
+                "state_attributes": {
+                    "simulation": {
+                        "name": "Simulation",
+                        "state": {
+                            "none": "Keine",
+                            "sunrise": "Sonnenaufgang",
+                            "sunset": "Sonnenuntergang"
+                        }
+                    }
+                }
             }
         },
         "binary_sensor": {

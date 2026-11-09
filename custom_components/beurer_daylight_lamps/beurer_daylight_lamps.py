@@ -42,11 +42,13 @@ from bleak_retry_connector import (
 from homeassistant.components import bluetooth
 from homeassistant.components.light import ColorMode  # type: ignore[attr-defined]
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.device_registry import format_mac
 from homeassistant.util import dt as dt_util
 
+from .signal_health import PROBLEM_WEAK_SIGNAL, SignalHealthMonitor
 from .therapy import (
     SimulationSettings,
     SunriseSimulation,
@@ -328,6 +330,8 @@ class BeurerInstance:
         self._command_failure_count: int = 0
         self._connection_start_time: float | None = None
         self._reconnect_loop_active: bool = False
+        self._signal_health = SignalHealthMonitor()
+        self._signal_issue_problem: str | None = None
 
     def update_ble_device(self, device: BLEDevice) -> None:
         """Update the BLE device reference.
@@ -905,6 +909,11 @@ class BeurerInstance:
 
         return _remove
 
+    def notify_state_changed(self) -> None:
+        """Push the current state to entities (e.g. simulation progress)."""
+        for callback in list(self._update_callbacks):
+            callback()
+
     def emit_lamp_event(
         self, event_type: str, data: dict[str, Any] | None = None
     ) -> None:
@@ -994,9 +1003,13 @@ class BeurerInstance:
 
     def update_rssi(self, rssi: int | None) -> None:
         """Update the RSSI value."""
-        if rssi is not None and rssi != self._rssi:
+        if rssi is None:
+            return
+        if rssi != self._rssi:
             self._rssi = rssi
             LOGGER.debug("Updated RSSI for %s: %d dBm", self._mac, rssi)
+        self._signal_health.record_rssi(rssi, time.time())
+        self._update_signal_issue()
 
     @property
     def available(self) -> bool:
@@ -3021,6 +3034,8 @@ class BeurerInstance:
             self._ever_connected = True
             if self._connection_start_time is not None:
                 self._reconnect_count += 1
+                self._signal_health.record_reconnect(time.time())
+                self._update_signal_issue()
             self._connection_start_time = time.time()
             # Reset stale-data timer: a fresh connection means the previous
             # _last_seen (possibly hours old) must not trigger the watchdog.
@@ -3087,6 +3102,55 @@ class BeurerInstance:
 
         await self.disconnect()
         return False
+
+    def _weak_connection_issue_id(self) -> str:
+        """Return repair issue id for a weak or unstable connection."""
+        return f"weak_connection_{self._mac.replace(':', '').lower()}"
+
+    def _device_display_name(self) -> str:
+        """Return the lamp's name from the device registry, else its MAC."""
+        if self._hass is not None:
+            device = dr.async_get(self._hass).async_get_device(
+                connections={(dr.CONNECTION_BLUETOOTH, format_mac(self._mac))}
+            )
+            if device is not None and (device.name_by_user or device.name):
+                return str(device.name_by_user or device.name)
+        return self._mac
+
+    def _update_signal_issue(self) -> None:
+        """Raise, update or clear the weak-connection repair issue."""
+        if self._hass is None:
+            return
+        now = time.time()
+        problem = self._signal_health.problem(now)
+        if problem == self._signal_issue_problem:
+            return
+        self._signal_issue_problem = problem
+        issue_id = self._weak_connection_issue_id()
+        if problem is None:
+            LOGGER.info("Bluetooth link to %s is stable again", self._mac)
+            ir.async_delete_issue(self._hass, DOMAIN, issue_id)
+            return
+        LOGGER.warning("Bluetooth link to %s is unstable: %s", self._mac, problem)
+        rssi = self._signal_health.last_rssi
+        ir.async_create_issue(
+            self._hass,
+            DOMAIN,
+            issue_id,
+            is_fixable=False,
+            is_persistent=False,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key=(
+                "weak_signal"
+                if problem == PROBLEM_WEAK_SIGNAL
+                else "frequent_reconnects"
+            ),
+            translation_placeholders={
+                "name": self._device_display_name(),
+                "rssi": str(rssi) if rssi is not None else "?",
+                "reconnects": str(self._signal_health.reconnects_in_window(now)),
+            },
+        )
 
     def _adapter_full_issue_id(self) -> str:
         """Return repair issue id for adapter-full state for this device."""
@@ -3191,6 +3255,9 @@ class BeurerInstance:
         """Disconnect for good (config entry unload): no reconnect afterwards."""
         self.stop_therapy_session()
         self._closing = True
+        if self._hass is not None and self._signal_issue_problem is not None:
+            ir.async_delete_issue(self._hass, DOMAIN, self._weak_connection_issue_id())
+            self._signal_issue_problem = None
         await self.disconnect()
 
     async def disconnect(self) -> None:
