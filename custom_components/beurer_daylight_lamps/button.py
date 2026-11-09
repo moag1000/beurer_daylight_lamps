@@ -42,6 +42,10 @@ BUTTON_DESCRIPTIONS: tuple[ButtonEntityDescription, ...] = (
 )
 
 
+# BLE commands are sent one at a time
+PARALLEL_UPDATES = 1
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: BeurerConfigEntry,

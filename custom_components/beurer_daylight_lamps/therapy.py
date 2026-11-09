@@ -15,6 +15,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any
 
 from bleak.exc import BleakError
+from homeassistant.util import dt as dt_util
 from homeassistant.util.color import color_temperature_to_rgb
 
 if TYPE_CHECKING:
@@ -249,17 +250,18 @@ class TherapyTracker:
     @property
     def today_minutes(self) -> float:
         """Calculate total therapy minutes today."""
-        today = datetime.now(tz=UTC).date()
+        # "Today" is the local calendar day, not the UTC one
+        day_start = dt_util.start_of_local_day()
         total = 0.0
 
         for session in self.sessions:
-            if session.start_time.date() == today and session.is_therapy_light:
+            if session.start_time >= day_start and session.is_therapy_light:
                 total += session.duration_minutes
 
         # Add current session if active and qualifies
         if (
             self._current_session
-            and self._current_session.start_time.date() == today
+            and self._current_session.start_time >= day_start
             and self._current_session.is_therapy_light
         ):
             total += self._current_session.duration_minutes
@@ -269,9 +271,9 @@ class TherapyTracker:
     @property
     def week_minutes(self) -> float:
         """Calculate total therapy minutes this week."""
-        now = datetime.now(tz=UTC)
-        week_start = now - timedelta(days=now.weekday())
-        week_start = week_start.replace(hour=0, minute=0, second=0, microsecond=0)
+        # The week starts on Monday, local time
+        today_start = dt_util.start_of_local_day()
+        week_start = today_start - timedelta(days=today_start.weekday())
 
         total = 0.0
         for session in self.sessions:

@@ -14,6 +14,7 @@ from homeassistant.helpers.device_registry import (
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from .config_flow import CONF_ADAPTIVE_LIGHTING_DEFAULT, DEFAULT_ADAPTIVE_LIGHTING
 from .const import DOMAIN, LOGGER, VERSION, detect_model
 from .coordinator import BeurerDataUpdateCoordinator
 
@@ -43,6 +44,10 @@ DEVICE_SWITCH_DESCRIPTIONS = [
         entity_category=EntityCategory.CONFIG,
     ),
 ]
+
+
+# BLE commands are sent one at a time
+PARALLEL_UPDATES = 1
 
 
 async def async_setup_entry(
@@ -120,6 +125,13 @@ class BeurerAdaptiveLightingSwitch(
             LOGGER.debug(
                 "Restored Adaptive Lighting state: %s",
                 "enabled" if self._is_on else "disabled",
+            )
+        elif entry := self.hass.config_entries.async_get_entry(self._entry_id):
+            # New lamp: start with the default chosen in the options
+            self._is_on = bool(
+                entry.options.get(
+                    CONF_ADAPTIVE_LIGHTING_DEFAULT, DEFAULT_ADAPTIVE_LIGHTING
+                )
             )
 
         # Store the switch reference in instance for light entity access

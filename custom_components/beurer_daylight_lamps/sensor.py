@@ -152,6 +152,10 @@ def _make_person_listener(
     return _handle_new_person
 
 
+# Read-only, updated by the coordinator
+PARALLEL_UPDATES = 0
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: BeurerConfigEntry,

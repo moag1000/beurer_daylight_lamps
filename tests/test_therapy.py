@@ -628,7 +628,7 @@ class TestTherapyTrackerCurrentSession:
 
         assert tracker.today_minutes == 0
 
-    def test_week_minutes_includes_current_session(self) -> None:
+    def test_week_minutes_includes_current_session(self, freezer) -> None:
         """Test week_minutes includes active current session.
 
         Pin "now" to a midweek Wednesday so the historical session 1 day
@@ -654,14 +654,10 @@ class TestTherapyTrackerCurrentSession:
             brightness_pct=100,
         )
 
-        with patch(
-            "custom_components.beurer_daylight_lamps.therapy.datetime"
-        ) as mock_dt:
-            mock_dt.now.return_value = fixed_now
-            mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)  # noqa: DTZ001
-            assert 24 < tracker.week_minutes < 26
+        freezer.move_to(fixed_now)
+        assert 24 < tracker.week_minutes < 26
 
-    def test_week_minutes_excludes_non_therapy_current_session(self) -> None:
+    def test_week_minutes_excludes_non_therapy_current_session(self, freezer) -> None:
         """Test week_minutes excludes non-therapy current session.
 
         See note in ``test_week_minutes_includes_current_session`` about
@@ -685,12 +681,8 @@ class TestTherapyTrackerCurrentSession:
             brightness_pct=50,
         )
 
-        with patch(
-            "custom_components.beurer_daylight_lamps.therapy.datetime"
-        ) as mock_dt:
-            mock_dt.now.return_value = fixed_now
-            mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)  # noqa: DTZ001
-            assert 9 < tracker.week_minutes < 11
+        freezer.move_to(fixed_now)
+        assert 9 < tracker.week_minutes < 11
 
     def test_end_session_returns_none_when_no_session(self) -> None:
         """Test end_session returns None when no active session."""

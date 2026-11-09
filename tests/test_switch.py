@@ -204,11 +204,30 @@ class TestBeurerAdaptiveLightingSwitch:
             mock_coordinator, "Test Lamp", "entry_123", description
         )
 
+        switch.hass = MagicMock()
+        switch.hass.config_entries.async_get_entry.return_value = None
         with patch.object(switch, "async_get_last_state", return_value=None):
             await switch.async_added_to_hass()
 
         assert switch._is_on is True  # Stays default
         assert mock_coordinator.instance.adaptive_lighting_switch == switch
+
+    @pytest.mark.asyncio
+    async def test_async_added_to_hass_default_from_options(
+        self, mock_coordinator: MagicMock, description: SwitchEntityDescription
+    ) -> None:
+        """A new lamp starts with the Adaptive Lighting default from the options."""
+        switch = BeurerAdaptiveLightingSwitch(
+            mock_coordinator, "Test Lamp", "entry_123", description
+        )
+        switch.hass = MagicMock()
+        switch.hass.config_entries.async_get_entry.return_value = MagicMock(
+            options={"adaptive_lighting_default": False}
+        )
+        with patch.object(switch, "async_get_last_state", return_value=None):
+            await switch.async_added_to_hass()
+
+        assert switch._is_on is False
 
     @pytest.mark.asyncio
     async def test_async_added_to_hass_restore_on(

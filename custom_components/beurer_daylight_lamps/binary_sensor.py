@@ -50,6 +50,10 @@ THERAPY_BINARY_SENSOR_DESCRIPTIONS: tuple[BinarySensorEntityDescription, ...] = 
 )
 
 
+# Read-only, updated by the coordinator
+PARALLEL_UPDATES = 0
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: BeurerConfigEntry,

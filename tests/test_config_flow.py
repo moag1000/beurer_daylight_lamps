@@ -1404,7 +1404,6 @@ class TestOptionsFlowDefaultTherapyUser:
         from custom_components.beurer_daylight_lamps.config_flow import (
             CONF_ADAPTIVE_LIGHTING_DEFAULT,
             CONF_THERAPY_GOAL,
-            CONF_UPDATE_INTERVAL,
             BeurerOptionsFlowHandler,
         )
         from custom_components.beurer_daylight_lamps.const import (
@@ -1435,12 +1434,13 @@ class TestOptionsFlowDefaultTherapyUser:
         assert CONF_DEFAULT_THERAPY_USER in schema_keys, (
             f"CONF_DEFAULT_THERAPY_USER not found in schema keys: {schema_keys}"
         )
+        # Polling is adaptive; the old, unused update interval is gone
+        assert "update_interval" not in schema_keys
 
         # --- Second call: submit a person entity ---
         result2 = await flow.async_step_init(
             user_input={
                 CONF_THERAPY_GOAL: 30,
-                CONF_UPDATE_INTERVAL: 60,
                 CONF_ADAPTIVE_LIGHTING_DEFAULT: True,
                 CONF_DEFAULT_THERAPY_USER: "person.michael",
             }

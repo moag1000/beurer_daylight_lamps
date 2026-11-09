@@ -41,11 +41,9 @@ if TYPE_CHECKING:
 
 # Option constants
 CONF_THERAPY_GOAL = "therapy_goal"
-CONF_UPDATE_INTERVAL = "update_interval"
 CONF_ADAPTIVE_LIGHTING_DEFAULT = "adaptive_lighting_default"
 
 DEFAULT_THERAPY_GOAL = 30
-DEFAULT_UPDATE_INTERVAL = 60
 DEFAULT_ADAPTIVE_LIGHTING = True
 
 MANUAL_MAC = "manual"
@@ -588,9 +586,11 @@ class BeurerOptionsFlowHandler(OptionsFlow):
         # Get current options with defaults
         current_options = self.config_entry.options
         therapy_goal = current_options.get(CONF_THERAPY_GOAL, DEFAULT_THERAPY_GOAL)
-        update_interval = current_options.get(
-            CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL
-        )
+        # The goal can also be changed with the lamp's number entity: show
+        # the value that is in effect.
+        runtime_data = getattr(self.config_entry, "runtime_data", None)
+        if runtime_data is not None:
+            therapy_goal = runtime_data.instance.therapy_daily_goal
         adaptive_lighting = current_options.get(
             CONF_ADAPTIVE_LIGHTING_DEFAULT, DEFAULT_ADAPTIVE_LIGHTING
         )
@@ -605,14 +605,6 @@ class BeurerOptionsFlowHandler(OptionsFlow):
                     ): NumberSelector(
                         NumberSelectorConfig(
                             min=5, max=120, step=5, mode=NumberSelectorMode.SLIDER
-                        )
-                    ),
-                    vol.Optional(
-                        CONF_UPDATE_INTERVAL,
-                        default=update_interval,
-                    ): NumberSelector(
-                        NumberSelectorConfig(
-                            min=10, max=300, step=10, mode=NumberSelectorMode.SLIDER
                         )
                     ),
                     vol.Optional(

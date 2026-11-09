@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
 
 from custom_components.beurer_daylight_lamps import (
+    _async_options_updated,
     _async_setup_therapy_storage,
     _therapy_store,
     async_remove_entry,
@@ -115,3 +116,52 @@ async def test_setup_restores_and_saves(hass, hass_storage) -> None:
 
     await async_remove_entry(hass, entry)
     assert _therapy_store(hass, entry_id).key not in hass_storage
+
+
+async def test_options_goal_used_on_first_start(hass) -> None:
+    """Without stored data the goal from the options is used."""
+    instance = MagicMock()
+    instance.therapy_tracker = TherapyTracker()
+    entry = MagicMock(entry_id="fresh", title="Desk", options={"therapy_goal": 45})
+
+    await _async_setup_therapy_storage(hass, entry, instance)
+
+    assert instance.therapy_tracker.daily_goal_minutes == 45
+
+
+async def test_options_update_applies_goal(hass) -> None:
+    """Changing the goal in the options updates the lamp."""
+    instance = MagicMock()
+    instance.therapy_daily_goal = 30
+    entry = MagicMock(
+        options={"therapy_goal": 40},
+        runtime_data=MagicMock(instance=instance),
+    )
+
+    await _async_options_updated(hass, entry)
+    instance.set_therapy_daily_goal.assert_called_once_with(40)
+
+    instance.set_therapy_daily_goal.reset_mock()
+    instance.therapy_daily_goal = 40
+    await _async_options_updated(hass, entry)
+    instance.set_therapy_daily_goal.assert_not_called()
+
+
+async def test_today_uses_local_day(hass, freezer) -> None:
+    """A session at 00:30 local time counts for the new local day."""
+    await hass.config.async_set_time_zone("Europe/Berlin")
+    # 2026-11-10 00:30 in Berlin is 2026-11-09 23:30 UTC
+    freezer.move_to("2026-11-09 23:45:00+00:00")
+    tracker = TherapyTracker()
+    tracker.sessions = [
+        TherapySession(
+            start_time=datetime(2026, 11, 9, 23, 30, tzinfo=UTC),
+            end_time=datetime(2026, 11, 9, 23, 40, tzinfo=UTC),
+        ),
+        # 22:00 UTC on the 9th is 23:00 in Berlin: yesterday
+        TherapySession(
+            start_time=datetime(2026, 11, 9, 22, 0, tzinfo=UTC),
+            end_time=datetime(2026, 11, 9, 22, 20, tzinfo=UTC),
+        ),
+    ]
+    assert round(tracker.today_minutes) == 10

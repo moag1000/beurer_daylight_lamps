@@ -16,16 +16,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Integration triggers and conditions** (HA 2026.9 automation editor): lamp timer/sleep timer finished, timer cancelled, sunrise/sunset finished, daily therapy goal reached; conditions *goal reached* and *lamp is connected*.
 - **Brand images in the integration** (`brand/`, HA 2026.3+, now required by HACS/Marketplace): the Beurer icon and logo from the home-assistant/brands repository ship with the integration.
 - **Therapy minutes survive restarts**: the therapy history (last 7 days) and the daily goal are saved per lamp and restored after a Home Assistant restart or update; a session running at shutdown keeps its minutes. The data is deleted when the lamp is removed.
+- **German README** (`README.de.md`).
 - **Blueprint *Morning Light Therapy***: optional *End at Daily Goal* input ends the session as soon as the daily light goal is reached.
 - **Assist/LLM tools**: start sunrise or sunset, stop a simulation and read the therapy status by voice, for lamps exposed to Assist.
 
 ### Changed
 
+- **Options now take effect**: the daily goal from the options is applied to the lamp (it was only used by the per-person sensors), and *Enable Adaptive Lighting by default* sets the switch for a newly added lamp. The *Update interval* option was removed: it was never used, polling is adaptive (30 s on / 5 min off / 15 min unavailable).
+- **Services are registered at integration setup** (`async_setup`), so they exist even when no lamp is loaded yet.
+- **`PARALLEL_UPDATES`** is set on every platform.
+- **Quality scale file** uses Home Assistant's official rule names and reflects the current state (e.g. test coverage 72 %, not 86 %).
 - **Blueprints use the current automation syntax** (`triggers:`/`conditions:`/`actions:`, `action:` instead of `service:`), and a test now validates every blueprint against Home Assistant. *Morning Light Therapy* needs HA 2026.9, the others 2024.10.
 - **Minimum Home Assistant 2026.9.0 / Python 3.14**: validation uses `probatio` (HA's voluptuous replacement since 2026.9) instead of `voluptuous`, repair flows return `RepairsFlowResult`. Users on HA 2025.12 – 2026.8 can stay on v1.37.0.
-
 - **Icons moved to `icons.json`**: entity icons are no longer set in code (HA icon translations). The *Daily goal reached* binary sensor now shows its on/off icons, alarm switches show `alarm`/`alarm-off` from `icons.json`, and every service has an icon.
 - **CI on Python 3.14**: tests run against current HA and against the minimum HA 2026.9.0; mypy checks against current HA.
+
+### Fixed
+
+- **"Today" started at UTC midnight**: therapy minutes for *today* and *this week* now use the local day (Home Assistant's time zone), so in Germany the counter no longer resets at 01:00/02:00 and sessions after midnight count for the new day.
 
 ## [1.37.0] - 2026-11-09
 

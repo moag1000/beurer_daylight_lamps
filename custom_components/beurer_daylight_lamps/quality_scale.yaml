@@ -1,244 +1,142 @@
-# Quality Scale for Beurer Daylight Lamps Integration
-# This integration targets Gold/Platinum tier compliance for HACS custom integrations
-# https://developers.home-assistant.io/docs/core/integration-quality-scale/
-#
-# Last updated: 2025-12-27
-# Improvements: CoordinatorEntity, target-based services, options flow,
-#               device triggers, German translation, 86%+ test coverage
-
+# Integration quality scale self-assessment (custom integration)
+# Rules: https://developers.home-assistant.io/docs/core/integration-quality-scale/rules
+# Rule names follow Home Assistant's official list (hassfest, HA 2026.10).
+# Last reviewed: 2026-11-09 (v1.38.0)
 rules:
-  # === BRONZE TIER (Foundation) ===
-
-  # Config flow - UI configuration via config_flow.py
-  config-flow:
+  # === Bronze ===
+  action-setup:
     status: done
-    comment: Full config flow with manual entry, discovery, reauth, and reconfigure support
-
-  # Unique IDs - All entities have unique IDs based on MAC address
-  unique-config-entry:
+    comment: Services are registered in async_setup.
+  appropriate-polling:
     status: done
-    comment: Config entries uniquely identified by MAC address
-
-  # Common modules - Reusable components
-  common-modules:
-    status: done
-    comment: therapy.py, coordinator.py, exceptions.py provide reusable components
-
-  # Brands - Logo and branding assets
+    comment: >-
+      Push via BLE notifications; adaptive polling 30 s (on), 5 min (off),
+      15 min (unavailable).
   brands:
     status: done
-    comment: Brand logo available in HACS brands repository
-
-  # === SILVER TIER ===
-
-  # Test coverage - minimum 95%
-  test-coverage:
-    status: partial
-    comment: "86% coverage (477 tests). All entity platforms at 100%, services at 100%"
-
-  # Config entry unloading
-  config-entry-unloading:
+    comment: brand/ folder (HA 2026.3+) plus home-assistant/brands entry.
+  common-modules:
     status: done
-    comment: async_unload_entry properly shuts down coordinator and disconnects BLE
-
-  # Reauthentication flow
-  reauthentication-flow:
+    comment: coordinator.py, data.py, therapy.py, exceptions.py.
+  config-flow:
     status: done
-    comment: Implemented in config_flow.py with async_step_reauth
-
-  # Reconfiguration flow
-  reconfiguration-flow:
+    comment: Bluetooth discovery, manual entry, data_description for every field.
+  config-flow-test-coverage:
     status: done
-    comment: Implemented in config_flow.py with async_step_reconfigure
-
-  # Options flow
-  options-flow:
+  dependency-transparency:
     status: done
-    comment: BeurerOptionsFlowHandler for therapy_goal, update_interval, adaptive_lighting_default
-
-  # Log issues once
-  log-when-unavailable:
+    comment: Only bleak-retry-connector from PyPI.
+  docs-actions:
     status: done
-    comment: Device unavailability logged once via Bluetooth tracker callbacks
-
-  # Parallel updates
-  parallel-updates:
+  docs-conditions:
     status: done
-    comment: PARALLEL_UPDATES=1 in light.py, BLE serialization in BeurerInstance
-
-  # Runtime data
+    comment: README "Automation Triggers & Conditions".
+  docs-high-level-description:
+    status: done
+  docs-installation-instructions:
+    status: done
+  docs-removal-instructions:
+    status: done
+  docs-triggers:
+    status: done
+    comment: README "Automation Triggers & Conditions".
+  entity-event-setup:
+    status: done
+    comment: Event entity subscribes in async_added_to_hass and unsubscribes on removal.
+  entity-unique-id:
+    status: done
+  has-entity-name:
+    status: done
   runtime-data:
     status: done
-    comment: BeurerRuntimeData dataclass with instance and coordinator
-
-  # === GOLD TIER ===
-
-  # Device discovery
-  discovery:
+  test-before-configure:
     status: done
-    comment: Bluetooth discovery via HA Bluetooth stack and ESPHome proxies
-
-  # Discovery updates device info
-  discovery-update-info:
+    comment: The config flow connects and lets the lamp blink before creating the entry.
+  test-before-setup:
     status: done
-    comment: RSSI and device info updated on each BLE advertisement
+    comment: ConfigEntryNotReady when the instance cannot be created.
+  unique-config-entry:
+    status: done
 
-  # Creates devices
+  # === Silver ===
+  action-exceptions:
+    status: done
+    comment: Services raise ServiceValidationError with translation keys.
+  config-entry-unloading:
+    status: done
+  docs-configuration-parameters:
+    status: done
+    comment: README "Options".
+  docs-installation-parameters:
+    status: done
+  entity-unavailable:
+    status: done
+  integration-owner:
+    status: done
+  log-when-unavailable:
+    status: done
+  parallel-updates:
+    status: done
+    comment: PARALLEL_UPDATES set on every platform (0 for read-only, 1 for BLE writes).
+  reauthentication-flow:
+    status: done
+  test-coverage:
+    status: todo
+    comment: 72 % line coverage (683 tests); rule requires 95 %.
+
+  # === Gold ===
   devices:
     status: done
-    comment: Device created in device registry with proper identifiers and connections
-
-  # Dynamic devices
-  dynamic-devices:
-    status: not-applicable
-    comment: Each config entry represents exactly one BLE lamp (TL50-TL100). No hub/gateway architecture - each lamp is discovered separately via Bluetooth and gets its own config entry. No sub-devices to dynamically add.
-
-  # Stale device removal
-  stale-devices:
-    status: done
-    comment: async_remove_config_entry_device implemented for manual device removal
-
-  # Diagnostics
   diagnostics:
     status: done
-    comment: diagnostics.py provides comprehensive troubleshooting data with redaction
-
-  # Repair issues
-  repair-issues:
+  discovery:
     status: done
-    comment: repairs.py with issue registry for device_not_found and initialization_failed
-
-  # Entity category
-  entity-category:
+  discovery-update-info:
     status: done
-    comment: Diagnostic entities properly categorized (RSSI, connected, buttons)
-
-  # Entity device class
-  entity-device-class:
-    status: done
-    comment: Light, sensor, binary_sensor use appropriate device classes
-
-  # Entity disabled by default
-  entity-disabled-by-default:
-    status: done
-    comment: RSSI sensor disabled by default (entity_registry_enabled_default=False)
-
-  # Entity translations
-  entity-translations:
-    status: done
-    comment: All entities have translation_key in strings.json
-
-  # Exception translations
-  exception-translations:
-    status: done
-    comment: exceptions.py with HomeAssistantError subclasses using translation keys
-
-  # Icon translations
-  icon-translations:
-    status: done
-    comment: icons.json provides entity and service icons with state-based variants
-
-  # Service descriptions
-  service-descriptions:
-    status: done
-    comment: services.yaml with full descriptions and target selectors for UI
-
-  # Device triggers
-  device-triggers:
-    status: done
-    comment: device_trigger.py with turned_on/off, therapy_goal_reached, connection events
-
-  # CoordinatorEntity usage
-  coordinator-entity:
-    status: done
-    comment: All entity classes inherit from CoordinatorEntity[BeurerDataUpdateCoordinator]
-
-  # Target selector services
-  target-services:
-    status: done
-    comment: Services use target selector instead of device_id for multi-device support
-
-  # === PLATINUM TIER (partial) ===
-
-  # DataUpdateCoordinator
-  coordinator:
-    status: done
-    comment: coordinator.py with BeurerDataUpdateCoordinator for centralized updates
-
-  # Async-only
-  async-only:
-    status: done
-    comment: All I/O operations are async, uses bleak-retry-connector
-
-  # Background tasks
-  background-tasks:
-    status: done
-    comment: Uses hass.async_create_background_task with named tasks
-
-  # Type annotations
-  type-annotations:
-    status: done
-    comment: py.typed marker, TYPE_CHECKING imports, dataclass for runtime_data
-
-  # Strict typing (Platinum)
-  strict-typing:
-    status: done
-    comment: mypy strict mode configured in pyproject.toml, all 17 files pass
-
-  # === DOCUMENTATION (Gold requirement) ===
-
-  # Documentation describes data updates
   docs-data-update:
     status: done
-    comment: README has "Data Updates & Communication" section with latency table
-
-  # Documentation provides automation examples
   docs-examples:
     status: done
-    comment: README has 4+ automation examples (wake-up, gradual, evening, therapy)
-
-  # Documentation describes known limitations
   docs-known-limitations:
     status: done
-    comment: README has "Known Limitations" section with 7 documented items
-
-  # Documentation lists supported devices
   docs-supported-devices:
     status: done
-    comment: README has supported devices table (TL50-TL100)
-
-  # Documentation describes supported functions
   docs-supported-functions:
     status: done
-    comment: README has full feature list with entities table and services
-
-  # Documentation provides troubleshooting info
   docs-troubleshooting:
     status: done
-    comment: README has "Troubleshooting" section with common issues and fixes
-
-  # Documentation describes use cases
   docs-use-cases:
     status: done
-    comment: README has blueprints section and example automations for real use cases
+  dynamic-devices:
+    status: exempt
+    comment: One config entry per lamp; no sub-devices.
+  entity-category:
+    status: done
+  entity-device-class:
+    status: done
+  entity-disabled-by-default:
+    status: done
+  entity-translations:
+    status: done
+  exception-translations:
+    status: done
+  icon-translations:
+    status: done
+    comment: All icons in icons.json (entities, services, triggers, conditions).
+  reconfiguration-flow:
+    status: done
+  repair-issues:
+    status: done
+  stale-devices:
+    status: done
 
-# === SUMMARY ===
-# Bronze: 4/4 (100%) - config-flow, unique-config-entry, common-modules, brands
-# Silver: 8/8 (100%) - test coverage 86%, options-flow, reauthentication, reconfiguration
-# Gold: 17/17 (100%) - all rules fulfilled including device-triggers, coordinator-entity
-# Platinum: 5/5 partial - coordinator, async-only, background-tasks, type-annotations, strict-typing
-# Documentation: 7/7 (100%)
-#
-# Overall: Gold tier fully achieved, Platinum tier partially achieved
-# Note: dynamic-devices marked as not-applicable (single-device per config entry)
-# Note: inject-websession not applicable (BLE integration, no HTTP)
-# Note: Tests use mocked BLE, no real hardware integration tests
-#
-# Recent improvements (2025-12-27):
-# - CoordinatorEntity pattern in all entity classes
-# - Target-based services instead of device_id
-# - Options flow for runtime configuration
-# - Device triggers for automations
-# - German translation (de.json)
-# - Test coverage increased from 53% to 86% (477 tests)
-# - Strict typing with mypy (all 17 source files pass)
+  # === Platinum ===
+  async-dependency:
+    status: done
+    comment: bleak / bleak-retry-connector are asyncio libraries.
+  inject-websession:
+    status: exempt
+    comment: Bluetooth only, no HTTP.
+  strict-typing:
+    status: done
+    comment: mypy strict, checked in CI against the current Home Assistant.

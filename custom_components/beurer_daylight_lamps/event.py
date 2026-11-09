@@ -27,6 +27,10 @@ if TYPE_CHECKING:
     from .data import BeurerConfigEntry
 
 
+# Read-only, updated by the coordinator
+PARALLEL_UPDATES = 0
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: BeurerConfigEntry,
