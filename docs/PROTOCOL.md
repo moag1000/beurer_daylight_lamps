@@ -468,16 +468,18 @@ If the response is not `2`, the device may be locked by another connection.
 
 ## Device Model Differences (from APK)
 
-| Feature | WL90 | TL100 |
-|---------|------|-------|
-| Light (white/RGB) | Yes | Yes |
-| Moonlight scenes | Yes (0-10) | Yes (0-10) |
-| Light timer max | 60 min | 120 min |
-| Alarm (3 slots) | Yes | Yes |
-| FM Radio | Yes | No |
-| BT Speaker (A2DP) | Yes | No |
-| Settings menu | Yes | No |
-| BLE name prefix | `WL_90` / `WL90` | `TL100` |
+| Feature | WL90 | WL75 | TL100 |
+|---------|------|------|-------|
+| Protocol family | TL/WL90 (this document) | WL75 (see below) | TL/WL90 (this document) |
+| Light (white/RGB) | Yes | Yes (white + mood light) | Yes |
+| Moonlight scenes | Yes (0-10) | Yes (mood light scenes) | Yes (0-10) |
+| Light timer max | 60 min | not documented | 120 min |
+| Alarm slots | 3 | 2 | 3 |
+| FM Radio | Yes | Yes | No |
+| BT Speaker (A2DP) | Yes | No | No |
+| Fade setting | Yes | No | Yes |
+| Settings menu | Yes | Yes | No |
+| BLE name prefix | `WL_90` / `WL90` / `WL 90` | `WL_75` / `WL75` / `WL 75` | `TL100` |
 
 ### Alarm Tones (12 options, index 0-11)
 
@@ -493,6 +495,18 @@ Command `0x0A` takes two parameters: `[TYPE] [DIRECTION]`
 - TYPE=0: Fine tune (step by step)
 - TYPE=1: Auto-seek (find next station)
 - DIRECTION=0: Down, DIRECTION=1: Up
+
+## WL75 Protocol (contributed by @BigDi)
+
+The WL75 uses a different protocol family than the TL100/WL90 (APK `WL75Wrapper`). Opcodes are defined as `CMD_WL75_*` / `RESP_WL75_*` in `const.py`; the controller lives in `wl75.py`.
+
+**Framing** (both directions): `FE EF <plen> <payload...> <checksum>` where `plen = len(payload) + 1` and `checksum = plen XOR every payload byte`. There is no outer length, `AB AA` magic or `55 0D 0A` trailer.
+
+**Light**: white light and mood light (RGB) are separate channels, each with its own switch, brightness and timer commands (`0x11`-`0x15` white, `0x16`-`0x1C` mood light incl. color and scene). Switching modes turns one channel off and the other on.
+
+**Status responses**: `0xE1` white status `[on, brightness %, timer on, timer min]`, `0xE6` mood light status `[on, brightness %, timer on, timer min, r, g, b, scene]`, `0xB0` timer end `[type]`.
+
+**Other**: permission `[0x00, 0x75]` (answer `0xF0 0x75`), settings read/write `0x01`/`0x02`, time sync `0x03 [sec, min, hour, day, month, year-2000]` (no weekday byte), alarms `0x04`/`0x05` with slot ids 1-2, FM radio `0x06`-`0x10`.
 
 ## Unknown Commands (To Reverse Engineer)
 

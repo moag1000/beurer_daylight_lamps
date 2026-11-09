@@ -30,7 +30,8 @@ I heavily used claude as I did in other projects but focused on keeping it tight
 ### Light Control
 - 💡 On/off and brightness control
 - 🎨 RGB color mode with color picker
-- 🌡️ Color temperature (2700K - 6500K)
+- 🌡️ Color temperature (2700K - 6500K): from 5000K the lamp's native white LEDs are used (reported as color temperature, e.g. 5300K), below that it is emulated with RGB
+- ⚪ `white:` in `light.turn_on` switches to native white at the given intensity
 - ✨ Light effects (Rainbow, Pulse, Forest, Wave, etc.)
 - 🔆 Separate white/color brightness sliders
 
@@ -551,7 +552,8 @@ automation:
 
 This integration uses **Bluetooth Low Energy (BLE)** for communication:
 
-- **State Updates**: The lamp sends BLE notifications when its state changes. These are processed in real-time.
+- **State Updates**: The lamp sends BLE notifications when its state changes. These are processed in real-time. After every command the new state is pushed to Home Assistant right away, without waiting for the next poll.
+- **Command Serialization**: Commands to one lamp run one after another (per-device lock), and only one connection attempt runs at a time, so automations, entities and polling cannot interleave packets.
 - **RSSI Updates**: Signal strength is updated whenever the lamp sends a Bluetooth advertisement (typically every few seconds).
 - **Adaptive Polling**: Periodic refresh ensures state consistency with intervals that adapt to device state:
   - 30 seconds when light is on (responsive updates)
@@ -586,9 +588,11 @@ This integration uses **Bluetooth Low Energy (BLE)** for communication:
 
 6. **Simulation requires connection**: Sunrise/sunset simulations require an active BLE connection. If the connection drops, the simulation will pause and resume when reconnected.
 
-7. **Color temperature approximation**: Color temperatures are approximated using RGB values since the lamp doesn't have a native CT mode. Results may vary slightly from true Kelvin values.
+7. **Color temperature approximation**: The lamp has no adjustable white. Color temperatures below 5000K are approximated with RGB and may vary slightly from true Kelvin values; 5000K and above use the fixed native white LEDs (about 5300K on the TL100).
 
-8. **White brightness capped at 99%**: Some device firmware versions switch to red/RGB mode when white brightness is set to exactly 100%. The integration caps white brightness at 99% to work around this firmware bug. The visual difference is imperceptible.
+8. **White brightness capped at 99%** (TL/WL90 protocol): Some device firmware versions switch to red/RGB mode when white brightness is set to exactly 100%. The integration caps white brightness at 99% to work around this firmware bug. The visual difference is imperceptible. The WL75 uses its own protocol and is not capped.
+
+9. **WL75 differences**: The WL75 has no Bluetooth speaker and no fade setting, so those entities are not created, and it has 2 alarm slots instead of 3.
 
 ## Diagnostics
 
