@@ -25,7 +25,7 @@ blueprint:
   source_url: https://github.com/moag1000/beurer_daylight_lamps/blob/main/blueprints/automation/beurer_daylight_lamps/evening_wind_down.yaml
   author: moag1000
   homeassistant:
-    min_version: "2023.9.0"
+    min_version: "2024.10.0"
 
   input:
     beurer_light:
@@ -180,16 +180,16 @@ variables:
   ct_modes: "{{ ['color_temp', 'rgbww', 'white'] }}"
   brightness_modes: "{{ ['brightness', 'color_temp', 'hs', 'rgb', 'rgbw', 'rgbww', 'white', 'xy'] }}"
 
-trigger:
-  - platform: sun
+triggers:
+  - trigger: sun
     event: sunset
     offset: !input sunset_offset
     id: sunset_trigger
-  - platform: time
+  - trigger: time
     at: !input fixed_time
     id: time_trigger
 
-condition:
+conditions:
   # Match trigger type
   - condition: or
     conditions:
@@ -215,7 +215,7 @@ condition:
         entity_id: !input beurer_light
         state: "on"
 
-action:
+actions:
   # =========================================================================
   # STEP 0: CONNECTION CHECK & RECONNECT
   # =========================================================================
@@ -227,7 +227,7 @@ action:
         entity_id: !input beurer_light
         state: "unavailable"
     then:
-      - service: button.press
+      - action: button.press
         target:
           entity_id: "{{ reconnect_btn }}"
       # Wait for BLE connection to establish
@@ -244,7 +244,7 @@ action:
   # =========================================================================
   # INITIAL STATE: Set warm light at starting brightness
   # =========================================================================
-  - service: light.turn_on
+  - action: light.turn_on
     target:
       entity_id: "{{ beurer }}"
     data:
@@ -269,7 +269,7 @@ action:
                 # Full sync with color temp support
                 - conditions: "{{ sync == 'full_sync' and supports_ct and supports_brightness }}"
                   sequence:
-                    - service: light.turn_on
+                    - action: light.turn_on
                       target:
                         entity_id: "{{ light_entity }}"
                       data:
@@ -279,7 +279,7 @@ action:
                 # Full sync but no CT - just brightness
                 - conditions: "{{ sync == 'full_sync' and supports_brightness }}"
                   sequence:
-                    - service: light.turn_on
+                    - action: light.turn_on
                       target:
                         entity_id: "{{ light_entity }}"
                       data:
@@ -288,7 +288,7 @@ action:
                 # Brightness only mode
                 - conditions: "{{ sync == 'brightness_only' and supports_brightness }}"
                   sequence:
-                    - service: light.turn_on
+                    - action: light.turn_on
                       target:
                         entity_id: "{{ light_entity }}"
                       data:
@@ -296,7 +296,7 @@ action:
                         transition: 3
               # Default: on/off only or no brightness support
               default:
-                - service: light.turn_on
+                - action: light.turn_on
                   target:
                     entity_id: "{{ light_entity }}"
 
@@ -324,7 +324,7 @@ action:
             current_brightness: "{{ (brightness_start - (brightness_per_step * step)) | round(0) | int | max(brightness_end) }}"
 
         # Update Beurer lamp with smooth transition
-        - service: light.turn_on
+        - action: light.turn_on
           target:
             entity_id: "{{ beurer }}"
           data:
@@ -349,7 +349,7 @@ action:
                       # Full sync with color temp support
                       - conditions: "{{ sync == 'full_sync' and supports_ct and supports_brightness }}"
                         sequence:
-                          - service: light.turn_on
+                          - action: light.turn_on
                             target:
                               entity_id: "{{ light_entity }}"
                             data:
@@ -359,7 +359,7 @@ action:
                       # Full sync but no CT - just brightness
                       - conditions: "{{ sync == 'full_sync' and supports_brightness }}"
                         sequence:
-                          - service: light.turn_on
+                          - action: light.turn_on
                             target:
                               entity_id: "{{ light_entity }}"
                             data:
@@ -368,7 +368,7 @@ action:
                       # Brightness only mode
                       - conditions: "{{ sync == 'brightness_only' and supports_brightness }}"
                         sequence:
-                          - service: light.turn_on
+                          - action: light.turn_on
                             target:
                               entity_id: "{{ light_entity }}"
                             data:
@@ -394,7 +394,7 @@ action:
       - condition: template
         value_template: "{{ brightness_end == 0 }}"
     then:
-      - service: light.turn_off
+      - action: light.turn_off
         target:
           entity_id: "{{ all_lights }}"
         data:

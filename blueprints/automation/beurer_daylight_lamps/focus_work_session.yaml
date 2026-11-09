@@ -26,7 +26,7 @@ blueprint:
   source_url: https://github.com/moag1000/beurer_daylight_lamps/blob/main/blueprints/automation/beurer_daylight_lamps/focus_work_session.yaml
   author: moag1000
   homeassistant:
-    min_version: "2023.9.0"
+    min_version: "2024.10.0"
 
   input:
     # ═══════════════════════════════════════════════════════════════════════════
@@ -241,19 +241,19 @@ variables:
 # ═══════════════════════════════════════════════════════════════════════════════
 # TRIGGERS
 # ═══════════════════════════════════════════════════════════════════════════════
-trigger:
-  - platform: state
+triggers:
+  - trigger: state
     entity_id: !input trigger_entity
     to: "on"
     id: entity_trigger
-  - platform: time
+  - trigger: time
     at: !input manual_trigger_time
     id: time_trigger
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CONDITIONS
 # ═══════════════════════════════════════════════════════════════════════════════
-condition:
+conditions:
   - condition: or
     conditions:
       - condition: and
@@ -272,7 +272,7 @@ condition:
 # ═══════════════════════════════════════════════════════════════════════════════
 # ACTIONS
 # ═══════════════════════════════════════════════════════════════════════════════
-action:
+actions:
   # ─────────────────────────────────────────────────────────────────────────────
   # STEP 0: CONNECTION CHECK & RECONNECT
   # ─────────────────────────────────────────────────────────────────────────────
@@ -284,7 +284,7 @@ action:
         entity_id: !input beurer_light
         state: "unavailable"
     then:
-      - service: button.press
+      - action: button.press
         target:
           entity_id: "{{ reconnect_btn }}"
       # Wait for BLE connection to establish
@@ -301,7 +301,7 @@ action:
   # ─────────────────────────────────────────────────────────────────────────────
   # START FOCUS LIGHT
   # ─────────────────────────────────────────────────────────────────────────────
-  - service: light.turn_on
+  - action: light.turn_on
     target:
       entity_id: "{{ beurer }}"
     data:
@@ -326,7 +326,7 @@ action:
                 # Full sync with color temp support
                 - conditions: "{{ sync == 'full_sync' and supports_ct and supports_brightness }}"
                   sequence:
-                    - service: light.turn_on
+                    - action: light.turn_on
                       target:
                         entity_id: "{{ light_entity }}"
                       data:
@@ -336,7 +336,7 @@ action:
                 # Full sync but no CT - just brightness
                 - conditions: "{{ sync == 'full_sync' and supports_brightness }}"
                   sequence:
-                    - service: light.turn_on
+                    - action: light.turn_on
                       target:
                         entity_id: "{{ light_entity }}"
                       data:
@@ -345,7 +345,7 @@ action:
                 # Brightness only mode
                 - conditions: "{{ sync == 'brightness_only' and supports_brightness }}"
                   sequence:
-                    - service: light.turn_on
+                    - action: light.turn_on
                       target:
                         entity_id: "{{ light_entity }}"
                       data:
@@ -353,7 +353,7 @@ action:
                         transition: 3
               # Default: on/off only or no brightness support
               default:
-                - service: light.turn_on
+                - action: light.turn_on
                   target:
                     entity_id: "{{ light_entity }}"
 
@@ -392,7 +392,7 @@ action:
                       state: "off"
 
                 # Break reminder: dim and warm briefly with smooth transition
-                - service: light.turn_on
+                - action: light.turn_on
                   target:
                     entity_id: "{{ beurer }}"
                   data:
@@ -417,7 +417,7 @@ action:
                               # Full sync with CT
                               - conditions: "{{ sync == 'full_sync' and supports_ct and supports_brightness }}"
                                 sequence:
-                                  - service: light.turn_on
+                                  - action: light.turn_on
                                     target:
                                       entity_id: "{{ light_entity }}"
                                     data:
@@ -427,7 +427,7 @@ action:
                               # Full sync or brightness only - just dim
                               - conditions: "{{ sync in ['full_sync', 'brightness_only'] and supports_brightness }}"
                                 sequence:
-                                  - service: light.turn_on
+                                  - action: light.turn_on
                                     target:
                                       entity_id: "{{ light_entity }}"
                                     data:
@@ -440,7 +440,7 @@ action:
                     seconds: 10
 
                 # Back to focus light with smooth transition
-                - service: light.turn_on
+                - action: light.turn_on
                   target:
                     entity_id: "{{ beurer }}"
                   data:
@@ -465,7 +465,7 @@ action:
                               # Full sync with CT
                               - conditions: "{{ sync == 'full_sync' and supports_ct and supports_brightness }}"
                                 sequence:
-                                  - service: light.turn_on
+                                  - action: light.turn_on
                                     target:
                                       entity_id: "{{ light_entity }}"
                                     data:
@@ -475,7 +475,7 @@ action:
                               # Full sync or brightness only
                               - conditions: "{{ sync in ['full_sync', 'brightness_only'] and supports_brightness }}"
                                 sequence:
-                                  - service: light.turn_on
+                                  - action: light.turn_on
                                     target:
                                       entity_id: "{{ light_entity }}"
                                     data:
@@ -517,7 +517,7 @@ action:
       # Turn off
       - conditions: "{{ end_behavior == 'off' }}"
         sequence:
-          - service: light.turn_off
+          - action: light.turn_off
             target:
               entity_id: "{{ all_lights }}"
             data:
@@ -526,7 +526,7 @@ action:
       # Switch to relaxing light
       - conditions: "{{ end_behavior == 'relax' }}"
         sequence:
-          - service: light.turn_on
+          - action: light.turn_on
             target:
               entity_id: "{{ beurer }}"
             data:
@@ -551,7 +551,7 @@ action:
                         # Full sync with CT
                         - conditions: "{{ sync == 'full_sync' and supports_ct and supports_brightness }}"
                           sequence:
-                            - service: light.turn_on
+                            - action: light.turn_on
                               target:
                                 entity_id: "{{ light_entity }}"
                               data:
@@ -561,7 +561,7 @@ action:
                         # Full sync or brightness only
                         - conditions: "{{ sync in ['full_sync', 'brightness_only'] and supports_brightness }}"
                           sequence:
-                            - service: light.turn_on
+                            - action: light.turn_on
                               target:
                                 entity_id: "{{ light_entity }}"
                               data:

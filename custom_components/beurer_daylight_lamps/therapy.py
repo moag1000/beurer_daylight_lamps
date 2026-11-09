@@ -18,6 +18,8 @@ from bleak.exc import BleakError
 from homeassistant.util.color import color_temperature_to_rgb
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from homeassistant.core import HomeAssistant
 
     from .beurer_daylight_lamps import BeurerInstance
@@ -107,6 +109,69 @@ class TherapyTracker:
     sessions: list[TherapySession] = field(default_factory=list)
     daily_goal_minutes: int = 30
     _current_session: TherapySession | None = None
+    on_change: Callable[[], None] | None = field(default=None, repr=False)
+    """Called when stored data changed (session finished, goal changed)."""
+
+    def notify_changed(self) -> None:
+        """Tell the owner that the data should be saved."""
+        if self.on_change is not None:
+            self.on_change()
+
+    def as_storage_dict(self) -> dict[str, Any]:
+        """Return the data to persist across restarts.
+
+        A session that is still running is stored as ended now, so a restart
+        during a session keeps the minutes so far.
+        """
+        sessions = list(self.sessions)
+        current = self._current_session
+        if current is not None and current.is_therapy_light:
+            sessions.append(
+                TherapySession(
+                    start_time=current.start_time,
+                    end_time=datetime.now(tz=UTC),
+                    color_temp_kelvin=current.color_temp_kelvin,
+                    brightness_pct=current.brightness_pct,
+                    person_id=current.person_id,
+                )
+            )
+        cutoff = datetime.now(tz=UTC) - timedelta(days=7)
+        return {
+            "daily_goal_minutes": self.daily_goal_minutes,
+            "sessions": [
+                {
+                    "start": s.start_time.isoformat(),
+                    "end": (s.end_time or datetime.now(tz=UTC)).isoformat(),
+                    "kelvin": s.color_temp_kelvin,
+                    "brightness": s.brightness_pct,
+                    "person": s.person_id,
+                }
+                for s in sessions
+                if s.start_time > cutoff
+            ],
+        }
+
+    def load_storage_dict(self, data: dict[str, Any]) -> None:
+        """Restore data saved by as_storage_dict; bad entries are skipped."""
+        goal = data.get("daily_goal_minutes")
+        if isinstance(goal, int) and 1 <= goal <= 120:
+            self.daily_goal_minutes = goal
+        restored: list[TherapySession] = []
+        for item in data.get("sessions", []):
+            try:
+                restored.append(
+                    TherapySession(
+                        start_time=datetime.fromisoformat(item["start"]),
+                        end_time=datetime.fromisoformat(item["end"]),
+                        color_temp_kelvin=int(item.get("kelvin", 5300)),
+                        brightness_pct=int(item.get("brightness", 100)),
+                        person_id=item.get("person"),
+                    )
+                )
+            except KeyError, TypeError, ValueError:
+                LOGGER.debug("Skipping invalid stored therapy session: %s", item)
+        self.sessions = restored
+        self.cleanup_old_sessions()
 
     @property
     def has_active_session(self) -> bool:
@@ -171,6 +236,7 @@ class TherapyTracker:
                 "Ended therapy session: %.1f minutes",
                 session.duration_minutes,
             )
+            self.notify_changed()
 
         self._current_session = None
         return session

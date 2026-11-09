@@ -670,6 +670,7 @@ class BeurerInstance:
                 clamped,
             )
         self._therapy_tracker.daily_goal_minutes = clamped
+        self._therapy_tracker.notify_changed()
         LOGGER.debug("Set therapy daily goal to %d minutes", clamped)
         self._safe_create_task(self._trigger_update(), "beurer_therapy_goal_update")
 

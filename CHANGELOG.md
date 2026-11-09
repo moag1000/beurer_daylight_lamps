@@ -15,10 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Alarm time entities** (WL75/WL90): set the wake-up time of each alarm slot directly from the dashboard.
 - **Integration triggers and conditions** (HA 2026.9 automation editor): lamp timer/sleep timer finished, timer cancelled, sunrise/sunset finished, daily therapy goal reached; conditions *goal reached* and *lamp is connected*.
 - **Brand images in the integration** (`brand/`, HA 2026.3+, now required by HACS/Marketplace): the Beurer icon and logo from the home-assistant/brands repository ship with the integration.
+- **Therapy minutes survive restarts**: the therapy history (last 7 days) and the daily goal are saved per lamp and restored after a Home Assistant restart or update; a session running at shutdown keeps its minutes. The data is deleted when the lamp is removed.
+- **Blueprint *Morning Light Therapy***: optional *End at Daily Goal* input ends the session as soon as the daily light goal is reached.
 - **Assist/LLM tools**: start sunrise or sunset, stop a simulation and read the therapy status by voice, for lamps exposed to Assist.
 
 ### Changed
 
+- **Blueprints use the current automation syntax** (`triggers:`/`conditions:`/`actions:`, `action:` instead of `service:`), and a test now validates every blueprint against Home Assistant. *Morning Light Therapy* needs HA 2026.9, the others 2024.10.
 - **Minimum Home Assistant 2026.9.0 / Python 3.14**: validation uses `probatio` (HA's voluptuous replacement since 2026.9) instead of `voluptuous`, repair flows return `RepairsFlowResult`. Users on HA 2025.12 – 2026.8 can stay on v1.37.0.
 
 - **Icons moved to `icons.json`**: entity icons are no longer set in code (HA icon translations). The *Daily goal reached* binary sensor now shows its on/off icons, alarm switches show `alarm`/`alarm-off` from `icons.json`, and every service has an icon.
