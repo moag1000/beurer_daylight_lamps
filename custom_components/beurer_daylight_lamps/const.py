@@ -87,8 +87,12 @@ RESP_MUSIC_INFO: Final = 0xE7  # Music info response
 # WL75-specific protocol commands (Protocol 2 - from APK reverse engineering)
 CMD_WL75_PERMISSION: Final = 0x00  # Request permission [0x00, 0x75]
 CMD_WL75_SETTINGS_READ: Final = 0x01  # Read device settings [0x01]
-CMD_WL75_SETTINGS_WRITE: Final = 0x02  # Write device settings [0x02, display, date, time, !feedback]
-CMD_WL75_TIME_SYNC: Final = 0x03  # Sync time [0x03, sec, min, hour, day, month, year-2000]
+CMD_WL75_SETTINGS_WRITE: Final = (
+    0x02  # Write device settings [0x02, display, date, time, !feedback]
+)
+CMD_WL75_TIME_SYNC: Final = (
+    0x03  # Sync time [0x03, sec, min, hour, day, month, year-2000]
+)
 CMD_WL75_ALARM_READ: Final = 0x04  # Read alarm [0x04, slot] (slot 1 or 2)
 CMD_WL75_ALARM_WRITE: Final = 0x05  # Write alarm [0x05, slot, min, hour, (en<<7)|days, tone, vol, snooze, wake, sun, light]
 CMD_WL75_RADIO_STATUS: Final = 0x06  # Read radio status [0x06]
@@ -146,7 +150,9 @@ RESP_WL75_RADIO_CHANNEL: Final = 0xFA  # Radio channel confirmation (-6)
 RESP_WL75_RADIO_SEARCH: Final = 0xFB  # Radio search response (-5)
 RESP_WL75_RADIO_FINE_TUNE: Final = 0xFC  # Radio fine-tuning response (-4)
 RESP_WL75_RADIO_VOLUME: Final = 0xFD  # Radio volume confirmation (-3)
-RESP_WL75_RADIO_SLEEP_TIMER_ENABLE: Final = 0xFE  # Radio sleep timer enable confirm (-2)
+RESP_WL75_RADIO_SLEEP_TIMER_ENABLE: Final = (
+    0xFE  # Radio sleep timer enable confirm (-2)
+)
 RESP_WL75_RADIO_SLEEP_TIMER_VALUE: Final = 0xFF  # Radio sleep timer value confirm (-1)
 RESP_WL75_TIMER_END: Final = 0xB0  # Timer end notification (-80)
 

@@ -7,7 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.37.0] - 2026-11-09
 
-Thanks to @mike-vention for these fixes (closes #6, #7, #8).
+Thanks to @mike-vention for the fixes (closes #6, #7, #8) and to @BigDi for WL75 support (#9).
+
+### Added
+
+- **WL75 Wake-up Light support**: the WL75 speaks its own BLE protocol (short `FE EF` framing, separate white light and mood light channels). Light, effects (scenes), timers, FM radio, settings and 2 alarm slots are supported; the Bluetooth speaker and the fade setting are hidden because the WL75 has neither. Also matches the `WL 75` / `WL 90` pairing names.
+- **Alarm switches** for WL75 (2 slots) and WL90 (3 slots), with the alarm details as attributes.
+- **`sync_time` service** and a **Last time sync** diagnostic sensor; the clock is now synced in Home Assistant's local time on connect and once a day.
+
+### Changed
+
+- **Native white is reported as color temperature**: in native white the light reports `COLOR_TEMP` (the requested Kelvin, or 5300 K) instead of `WHITE`, so the color temperature controls stay usable. `white:` keeps working.
+- **Lint**: `CPY001` is ignored and the code passes `ruff check .` / `ruff format --check .` with current ruff.
 
 ### Fixed
 

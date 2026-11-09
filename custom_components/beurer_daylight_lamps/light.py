@@ -254,8 +254,8 @@ class BeurerLight(
         # Color temperature emulated via RGB, as long as the lamp still shows it
         if self._emulated_color_temp_active():
             return ColorMode.COLOR_TEMP
-        # Otherwise report RGB
-        return ColorMode.RGB
+        # Otherwise report the instance's mode (RGB)
+        return self._instance.color_mode
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -317,7 +317,7 @@ class BeurerLight(
         r, g, b = rgb[0], rgb[1], rgb[2]
         min_val = min(r, g, b)
         max_val = max(r, g, b)
-        return min_val >= 245 and (max_val - min_val) <= 10
+        return min_val >= 200 and (max_val - min_val) <= 55
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on the light."""

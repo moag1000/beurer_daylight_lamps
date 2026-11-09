@@ -72,8 +72,10 @@ async def async_setup_entry(
 
     # Add alarm switches for WL models (WL75 has 2 slots, WL90 has 3 slots)
     if instance.is_wl and instance.wl90 is not None:
-        for slot in range(len(instance.wl90.alarms)):
-            entities.append(BeurerAlarmSwitch(coordinator, name, slot))
+        entities.extend(
+            BeurerAlarmSwitch(coordinator, name, slot)
+            for slot in range(len(instance.wl90.alarms))
+        )
 
     async_add_entities(entities)
 

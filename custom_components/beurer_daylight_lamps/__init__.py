@@ -779,7 +779,9 @@ def _register_alarm_service(hass: HomeAssistant) -> None:
 
         for instance in instances:
             if not instance.is_wl or instance.wl90 is None:
-                LOGGER.warning("Device %s is not a WL model, skipping alarm", instance.mac)
+                LOGGER.warning(
+                    "Device %s is not a WL model, skipping alarm", instance.mac
+                )
                 continue
 
             if instance.is_wl75 and slot > 1:

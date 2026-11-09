@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -50,6 +51,7 @@ class TestCoordinatorInitialization:
     def mock_instance(self) -> MagicMock:
         """Create a mock BeurerInstance."""
         instance = MagicMock()
+        instance.last_time_sync = None
         instance.mac = "AA:BB:CC:DD:EE:FF"
         instance.is_on = True
         instance.available = True
@@ -123,6 +125,7 @@ class TestGetCurrentData:
     def mock_instance(self) -> MagicMock:
         """Create a mock BeurerInstance with complete data."""
         instance = MagicMock()
+        instance.last_time_sync = None
         instance.mac = "AA:BB:CC:DD:EE:FF"
         instance.is_on = True
         instance.available = True
@@ -213,6 +216,7 @@ class TestPushUpdates:
     def mock_instance(self) -> MagicMock:
         """Create a mock BeurerInstance."""
         instance = MagicMock()
+        instance.last_time_sync = None
         instance.mac = "AA:BB:CC:DD:EE:FF"
         instance.is_on = True
         instance.available = True
@@ -279,6 +283,7 @@ class TestPeriodicUpdates:
     def mock_instance(self) -> MagicMock:
         """Create a mock BeurerInstance."""
         instance = MagicMock()
+        instance.last_time_sync = None
         instance.mac = "AA:BB:CC:DD:EE:FF"
         instance.is_on = False
         instance.available = True
@@ -309,6 +314,7 @@ class TestPeriodicUpdates:
         instance.set_update_callback = MagicMock()
         instance.remove_update_callback = MagicMock()
         instance.update = AsyncMock()
+        instance.sync_time = AsyncMock(return_value=True)
         return instance
 
     @pytest.fixture
@@ -347,6 +353,26 @@ class TestPeriodicUpdates:
 
         mock_instance.update.assert_called_once()
         assert coordinator._first_refresh is False
+
+    @pytest.mark.asyncio
+    async def test_periodic_time_sync(
+        self, mock_hass: MagicMock, mock_instance: MagicMock
+    ) -> None:
+        """The clock is synced when never synced or older than a day."""
+        mock_instance.is_connected = True
+        coordinator = BeurerDataUpdateCoordinator(mock_hass, mock_instance, "Test Lamp")
+
+        await coordinator._async_update_data()
+        mock_instance.sync_time.assert_awaited_once()
+
+        mock_instance.sync_time.reset_mock()
+        mock_instance.last_time_sync = time.time() - 60
+        await coordinator._async_update_data()
+        mock_instance.sync_time.assert_not_awaited()
+
+        mock_instance.last_time_sync = time.time() - 90000
+        await coordinator._async_update_data()
+        mock_instance.sync_time.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_second_refresh_connects_normally(
@@ -422,6 +448,7 @@ class TestShutdown:
     def mock_instance(self) -> MagicMock:
         """Create a mock BeurerInstance."""
         instance = MagicMock()
+        instance.last_time_sync = None
         instance.mac = "AA:BB:CC:DD:EE:FF"
         instance.is_on = True
         instance.available = True
@@ -489,6 +516,7 @@ class TestConvenienceProperties:
     def mock_instance(self) -> MagicMock:
         """Create a mock BeurerInstance."""
         instance = MagicMock()
+        instance.last_time_sync = None
         instance.mac = "AA:BB:CC:DD:EE:FF"
         instance.ble_available = True
         instance.is_on = True

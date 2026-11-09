@@ -259,11 +259,26 @@ def test_effect_in_white_mode(mock_coordinator: MagicMock) -> None:
 
 
 def test_color_mode_white(mock_coordinator: MagicMock) -> None:
-    """Test color_mode returns WHITE when in native white mode."""
+    """Native white is reported as COLOR_TEMP so the HA color controls stay usable."""
     mock_coordinator.instance.color_mode = ColorMode.WHITE
 
     light = BeurerLight(mock_coordinator, "Test", "entry_id")
-    assert light.color_mode == ColorMode.WHITE
+    assert light.color_mode == ColorMode.COLOR_TEMP
+    assert light.color_temp_kelvin == 5300
+    assert ColorMode.WHITE in light.supported_color_modes
+
+
+def test_color_temp_kelvin_native_white_keeps_requested(
+    mock_coordinator: MagicMock,
+) -> None:
+    """A requested daylight temperature is reported back in native white."""
+    mock_coordinator.instance.color_mode = ColorMode.WHITE
+
+    light = BeurerLight(mock_coordinator, "Test", "entry_id")
+    light._color_temp_kelvin = 6000
+    assert light.color_temp_kelvin == 6000
+    light._color_temp_kelvin = 3000  # stale emulated value, not shown in white
+    assert light.color_temp_kelvin == 5300
 
 
 def test_color_mode_color_temp(mock_coordinator: MagicMock) -> None:

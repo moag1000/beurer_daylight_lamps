@@ -24,6 +24,7 @@ from homeassistant.helpers.device_registry import (
 from homeassistant.helpers.entity import EntityCategory  # type: ignore[attr-defined]
 from homeassistant.helpers.event import async_track_state_added_domain
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import dt as dt_util
 
 from .config_flow import CONF_THERAPY_GOAL, DEFAULT_THERAPY_GOAL
 from .const import DOMAIN, THERAPY_HUB_IDENTIFIER, VERSION, detect_model
@@ -38,6 +39,7 @@ from .therapy_hub import (
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from datetime import datetime
     from typing import Any
 
     from homeassistant.core import Event, HomeAssistant
@@ -248,7 +250,7 @@ class BeurerSensor(CoordinatorEntity[BeurerDataUpdateCoordinator], SensorEntity)
         self._attr_unique_id = f"{format_mac(self._instance.mac)}_{description.key}"
 
     @property
-    def native_value(self) -> int | str | None:
+    def native_value(self) -> int | str | datetime | None:
         """Return the sensor value."""
         if self.entity_description.key == "rssi":
             return self._instance.rssi
@@ -256,10 +258,7 @@ class BeurerSensor(CoordinatorEntity[BeurerDataUpdateCoordinator], SensorEntity)
             return self._instance.last_raw_notification
         if self.entity_description.key == "last_time_sync":
             if self._instance.last_time_sync:
-                import datetime
-                return datetime.datetime.fromtimestamp(
-                    self._instance.last_time_sync, tz=datetime.timezone.utc
-                )
+                return dt_util.utc_from_timestamp(self._instance.last_time_sync)
             return None
         return None
 

@@ -85,7 +85,9 @@ class WL75Controller(WL90Controller):
     async def set_radio_volume(self, volume: int) -> bool:
         """Set radio volume (0-10)."""
         volume = max(0, min(10, volume))
-        LOGGER.debug("Setting radio volume to %d on WL75 %s", volume, self._instance.mac)
+        LOGGER.debug(
+            "Setting radio volume to %d on WL75 %s", volume, self._instance.mac
+        )
         result = await self._instance._send_packet([CMD_WL75_RADIO_VOLUME, volume])
         if result:
             self.radio.volume = volume
@@ -94,7 +96,9 @@ class WL75Controller(WL90Controller):
     async def select_radio_preset(self, channel: int) -> bool:
         """Select a radio preset channel (1-indexed, 1-10)."""
         channel = max(1, min(10, channel))
-        LOGGER.debug("Selecting radio preset %d on WL75 %s", channel, self._instance.mac)
+        LOGGER.debug(
+            "Selecting radio preset %d on WL75 %s", channel, self._instance.mac
+        )
         result = await self._instance._send_packet([CMD_WL75_RADIO_CHANNEL, channel])
         if result:
             self.radio.channel = channel - 1
@@ -135,7 +139,9 @@ class WL75Controller(WL90Controller):
         result = await self._instance._send_packet([CMD_WL75_RADIO_TIMER_TOGGLE, 1])
         if result:
             await asyncio.sleep(COMMAND_DELAY)
-            result = await self._instance._send_packet([CMD_WL75_RADIO_TIMER_VALUE, minutes])
+            result = await self._instance._send_packet(
+                [CMD_WL75_RADIO_TIMER_VALUE, minutes]
+            )
             if result:
                 self.radio.sleep_timer_on = True
                 self.radio.sleep_timer_minutes = minutes
@@ -233,7 +239,9 @@ class WL75Controller(WL90Controller):
 
     # --- Notification Handling ---
 
-    def handle_notification(self, resp_cmd: int, payload: bytearray) -> bool:
+    def handle_notification(  # noqa: PLR0911
+        self, resp_cmd: int, payload: bytearray
+    ) -> bool:
         """Handle WL75 radio and alarm response payloads.
 
         Args:
@@ -258,7 +266,9 @@ class WL75Controller(WL90Controller):
         if resp_cmd in (RESP_WL75_RADIO_SEARCH, RESP_WL75_RADIO_FINE_TUNE):
             if len(payload) >= 4:
                 self.radio.frequency = (payload[2] << 8) | payload[3]
-                LOGGER.debug("WL75 Radio frequency tuned to: %.1f MHz", self.radio.frequency_mhz)
+                LOGGER.debug(
+                    "WL75 Radio frequency tuned to: %.1f MHz", self.radio.frequency_mhz
+                )
             return True
 
         if resp_cmd == RESP_WL75_ALARM:
@@ -274,7 +284,9 @@ class WL75Controller(WL90Controller):
             RESP_WL75_SAVE_RADIO_FREQ,
             RESP_WL75_UPDATE_ALARM,
         ):
-            LOGGER.debug("WL75 ACK response 0x%02X from %s", resp_cmd, self._instance.mac)
+            LOGGER.debug(
+                "WL75 ACK response 0x%02X from %s", resp_cmd, self._instance.mac
+            )
             return True
 
         return False
@@ -322,7 +334,7 @@ class WL75Controller(WL90Controller):
         if len(payload) < 11:
             return
 
-        slot_raw = (payload[1] & 0x7F)
+        slot_raw = payload[1] & 0x7F
         slot = slot_raw - 1
         if slot not in (0, 1):
             return

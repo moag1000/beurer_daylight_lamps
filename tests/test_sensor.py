@@ -22,8 +22,8 @@ from tests.conftest import create_mock_coordinator
 
 def test_sensor_descriptions() -> None:
     """Test diagnostic sensor descriptions are correctly defined."""
-    # RSSI and last_notification sensors in SENSOR_DESCRIPTIONS
-    assert len(SENSOR_DESCRIPTIONS) == 2
+    # RSSI, last_notification and last_time_sync sensors
+    assert len(SENSOR_DESCRIPTIONS) == 3
 
     # RSSI sensor
     rssi_desc = SENSOR_DESCRIPTIONS[0]
@@ -262,8 +262,8 @@ class TestAsyncSetupEntry:
 
         await async_setup_entry(mock_hass, mock_entry, capture_entities)
 
-        # Should create 8 entities: 2 diagnostic + 3 therapy + 3 connection health
-        assert len(added_entities) == 8
+        # Should create 9 entities: 3 diagnostic + 3 therapy + 3 connection health
+        assert len(added_entities) == 9
 
         # Verify types
         diagnostic_sensors = [e for e in added_entities if isinstance(e, BeurerSensor)]
@@ -271,7 +271,7 @@ class TestAsyncSetupEntry:
             e for e in added_entities if isinstance(e, BeurerTherapySensor)
         ]
 
-        assert len(diagnostic_sensors) == 2
+        assert len(diagnostic_sensors) == 3
         assert len(therapy_sensors) == 3
         # 3 connection health sensors are the remaining entities
 

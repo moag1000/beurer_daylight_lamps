@@ -25,7 +25,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import datetime
 import functools
 import time
 from typing import TYPE_CHECKING, Any
@@ -46,6 +45,7 @@ from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.device_registry import format_mac
+from homeassistant.util import dt as dt_util
 
 from .therapy import SunriseSimulation, TherapySession, TherapyTracker
 from .wl75 import WL75Controller
@@ -74,6 +74,11 @@ from .const import (
     CMD_SETTINGS_READ,
     CMD_SETTINGS_WRITE,
     CMD_STATUS,
+    # APK-discovered commands
+    CMD_TIME_SYNC,
+    CMD_TIMER_CANCEL,
+    CMD_TIMER_TOGGLE,
+    CMD_TIMER_VALUE,
     # WL75 protocol commands
     CMD_WL75_ALARM_READ,
     CMD_WL75_LIGHT_BRIGHTNESS,
@@ -92,11 +97,6 @@ from .const import (
     CMD_WL75_SETTINGS_READ,
     CMD_WL75_SETTINGS_WRITE,
     CMD_WL75_TIME_SYNC,
-    # APK-discovered commands
-    CMD_TIME_SYNC,
-    CMD_TIMER_CANCEL,
-    CMD_TIMER_TOGGLE,
-    CMD_TIMER_VALUE,
     # Timing constants
     COMMAND_DELAY,
     COMMAND_TIMEOUT,
@@ -144,9 +144,9 @@ from .const import (
     THERAPY_USER_UNKNOWN,
     TURN_OFF_DELAY,
     WRITE_CHARACTERISTIC_UUID,
-    is_wl_model,
     is_wl75_model,
     is_wl90_model,
+    is_wl_model,
 )
 
 
@@ -214,7 +214,7 @@ def ha_brightness_to_percent(brightness: int) -> int:
 class BeurerInstance:
     """Representation of a Beurer daylight lamp BLE device."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0915
         self,
         device: BLEDevice,
         rssi: int | None = None,
@@ -1098,10 +1098,9 @@ class BeurerInstance:
 
         length = len(message)
         if self._is_wl75:
-            # WL75 packet framing from APK (WL75Wrapper):
-            # [0xFE, 0xEF, plen, *message, checksum]
-            # where plen = len(message) + 1
-            # checksum = plen ^ message[0] ^ message[1] ^ ...
+            # WL75 packet framing from APK (WL75Wrapper): header FE EF, then
+            # plen (message length + 1), the message bytes and a checksum
+            # (plen XOR every message byte). No outer length, magic or trailer.
             plen = length + 1
             checksum = plen
             for byte in message:
@@ -1289,8 +1288,10 @@ class BeurerInstance:
                     else (self._color_brightness or self._brightness or 255)
                 )
                 self._color_brightness = target_brightness
-                brightness_percent = max(1, min(100, int(target_brightness / 255 * 100)))
-                await self._send_packet([CMD_WL75_MOODLIGHT_BRIGHTNESS, brightness_percent])
+                brightness_percent = ha_brightness_to_percent(target_brightness)
+                await self._send_packet(
+                    [CMD_WL75_MOODLIGHT_BRIGHTNESS, brightness_percent]
+                )
                 await asyncio.sleep(COMMAND_DELAY)
 
                 await self._request_status()
@@ -1333,7 +1334,7 @@ class BeurerInstance:
             self._mode_switch_target = None
 
     @_serialized
-    async def set_color_with_brightness_fast(
+    async def set_color_with_brightness_fast(  # noqa: PLR0915
         self,
         rgb: tuple[int, int, int],
         brightness: int | None = None,
@@ -1375,8 +1376,10 @@ class BeurerInstance:
             if brightness is not None:
                 brightness = int(brightness)
                 self._color_brightness = brightness
-                brightness_percent = max(0, min(100, int(brightness / 255 * 100)))
-                await self._send_packet([CMD_WL75_MOODLIGHT_BRIGHTNESS, brightness_percent])
+                brightness_percent = ha_brightness_to_percent(brightness)
+                await self._send_packet(
+                    [CMD_WL75_MOODLIGHT_BRIGHTNESS, brightness_percent]
+                )
                 await asyncio.sleep(COMMAND_DELAY)
             return
 
@@ -1446,8 +1449,10 @@ class BeurerInstance:
                     self._light_on = False
                     self._available = True
 
-                brightness_percent = max(0, min(100, int(brightness / 255 * 100)))
-                await self._send_packet([CMD_WL75_MOODLIGHT_BRIGHTNESS, brightness_percent])
+                brightness_percent = ha_brightness_to_percent(brightness)
+                await self._send_packet(
+                    [CMD_WL75_MOODLIGHT_BRIGHTNESS, brightness_percent]
+                )
                 await asyncio.sleep(COMMAND_DELAY)
                 await self._request_status()
                 return
@@ -1480,11 +1485,7 @@ class BeurerInstance:
         Returns:
             True if time sync command was sent successfully.
         """
-        if self._hass:
-            from homeassistant.util import dt as dt_util
-            now = dt_util.now()
-        else:
-            now = datetime.datetime.now().astimezone()
+        now = dt_util.now()
 
         LOGGER.info(
             "Syncing time to %s: %s (tz=%s)",
@@ -1510,14 +1511,13 @@ class BeurerInstance:
                 await asyncio.sleep(COMMAND_DELAY)
             return result
 
-        weekday = (now.weekday() + 1) % 7  # 0=Sunday, 1=Monday, ..., 6=Saturday (matches Java Calendar.DAY_OF_WEEK - 1)
         result = await self._send_packet(
             [
                 CMD_TIME_SYNC,
                 now.second,
                 now.minute,
                 now.hour,
-                weekday,
+                now.isoweekday(),  # 1=Monday, 7=Sunday
                 now.day,
                 now.month,
                 now.year - 2000,
@@ -1649,7 +1649,7 @@ class BeurerInstance:
                     self._color_on = False
                     self._available = True
 
-                intensity_percent = max(0, min(100, int(intensity / 255 * 100)))
+                intensity_percent = ha_brightness_to_percent(intensity)
                 await self._send_packet([CMD_WL75_LIGHT_BRIGHTNESS, intensity_percent])
                 await asyncio.sleep(COMMAND_DELAY)
                 await self._request_status()
@@ -1766,7 +1766,9 @@ class BeurerInstance:
                 if not result:
                     return False
                 await asyncio.sleep(COMMAND_DELAY)
-                result = await self._send_packet([CMD_WL75_MOODLIGHT_TIMER_VALUE, minutes])
+                result = await self._send_packet(
+                    [CMD_WL75_MOODLIGHT_TIMER_VALUE, minutes]
+                )
             else:
                 result = await self._send_packet([CMD_WL75_LIGHT_TIMER_SWITCH, 1])
                 if not result:
@@ -1892,7 +1894,6 @@ class BeurerInstance:
                         await self.set_color_brightness(
                             self._color_brightness, _from_turn_on=True
                         )
-            self._is_on = True
             self._available = True
             await asyncio.sleep(MODE_CHANGE_DELAY)
             await self._request_status()
@@ -1938,7 +1939,6 @@ class BeurerInstance:
             await self._send_packet([CMD_WL75_MOODLIGHT_SWITCH, 0])
             self._light_on = False
             self._color_on = False
-            self._is_on = False
             await asyncio.sleep(TURN_OFF_DELAY)
             await self._request_status()
             return
@@ -2258,7 +2258,9 @@ class BeurerInstance:
             return True
         return False
 
-    async def _handle_wl75_notification(self, data: bytearray) -> None:
+    async def _handle_wl75_notification(  # noqa: C901, PLR0911, PLR0912, PLR0915
+        self, data: bytearray
+    ) -> None:
         """Handle BLE notification for WL75 (Protocol 2).
 
         Packet format: [0xFE, 0xEF, plen, *payload, checksum]
@@ -2308,7 +2310,9 @@ class BeurerInstance:
                 timer_enabled = payload[3] == 1
                 timer_min = payload[4]
 
-                self._white_brightness = int(max(0, min(100, brightness_pct)) / 100 * 255)
+                self._white_brightness = int(
+                    max(0, min(100, brightness_pct)) / 100 * 255
+                )
                 self._timer_active = timer_enabled
                 self._timer_minutes = timer_min if timer_enabled else 0
 
@@ -2316,12 +2320,9 @@ class BeurerInstance:
                     self._light_on = True
                     self._color_on = False
                     self._mode = ColorMode.WHITE
-                    self._is_on = True
                     self._brightness = self._white_brightness
                 else:
                     self._light_on = False
-                    if not self._color_on:
-                        self._is_on = False
                 if not self._available:
                     self._available = True
                 await self._trigger_update()
@@ -2339,7 +2340,9 @@ class BeurerInstance:
                 b = payload[7]
                 scene = payload[8]
 
-                self._color_brightness = int(max(0, min(100, brightness_pct)) / 100 * 255)
+                self._color_brightness = int(
+                    max(0, min(100, brightness_pct)) / 100 * 255
+                )
                 self._rgb_color = (r, g, b)
                 if 0 <= scene < len(SUPPORTED_EFFECTS):
                     self._effect = SUPPORTED_EFFECTS[scene]
@@ -2353,12 +2356,9 @@ class BeurerInstance:
                     self._color_on = True
                     self._light_on = False
                     self._mode = ColorMode.RGB
-                    self._is_on = True
                     self._brightness = self._color_brightness
                 else:
                     self._color_on = False
-                    if not self._light_on:
-                        self._is_on = False
                 if not self._available:
                     self._available = True
                 await self._trigger_update()
@@ -2372,7 +2372,6 @@ class BeurerInstance:
                 if timer_type in (2, 3):
                     self._light_on = False
                     self._color_on = False
-                    self._is_on = False
                     self._timer_active = False
                     self._timer_minutes = 0
                 elif timer_type == 1 and self._wl90:
@@ -2768,7 +2767,7 @@ class BeurerInstance:
                 self._mac,
             )
 
-    async def _setup_after_connect(self) -> bool:
+    async def _setup_after_connect(self) -> bool:  # noqa: PLR0912, PLR0915
         """Set up characteristics, notifications, and initial state after GATT connect.
 
         Returns:
