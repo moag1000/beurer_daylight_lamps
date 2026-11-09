@@ -13,13 +13,11 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      # Type check with Python 3.13 (installs HA 2026.2.x).
-      # Newer HA swaps voluptuous for probatio and adds RepairsFlowResult; the
-      # code runs fine there (tests on 3.14), only the stubs differ.
-      - name: Set up Python 3.13
+      # Type check against the newest HA (its stubs use probatio).
+      - name: Set up Python 3.14
         uses: actions/setup-python@v6
         with:
-          python-version: "3.13"
+          python-version: "3.14"
 
       - name: Install dependencies
         run: |
@@ -35,9 +33,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # 3.13 installs the newest HA that still supports it (2026.2.x),
-        # 3.14 installs current HA (2026.3+ requires Python 3.14).
-        python-version: ["3.13", "3.14"]
+        # HA 2026.9+ (minimum supported) requires Python 3.14.
+        python-version: ["3.14"]
 
     steps:
       - uses: actions/checkout@v6
@@ -55,6 +52,12 @@ jobs:
       - name: Run tests
         run: |
           pytest tests/ -v --cov=custom_components/beurer_daylight_lamps --cov-report=xml
+
+      # Oldest supported HA (hacs.json "homeassistant")
+      - name: Run tests against HA 2026.9.0
+        run: |
+          pip install "pytest-homeassistant-custom-component==0.13.363"
+          pytest tests/ -q
 
       - name: Upload coverage
         uses: codecov/codecov-action@v6

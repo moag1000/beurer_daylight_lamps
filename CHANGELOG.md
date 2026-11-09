@@ -9,8 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Minimum Home Assistant 2026.9.0 / Python 3.14**: validation uses `probatio` (HA's voluptuous replacement since 2026.9) instead of `voluptuous`, repair flows return `RepairsFlowResult`. Users on HA 2025.12 – 2026.8 can stay on v1.37.0.
+
 - **Icons moved to `icons.json`**: entity icons are no longer set in code (HA icon translations). The *Daily goal reached* binary sensor now shows its on/off icons, alarm switches show `alarm`/`alarm-off` from `icons.json`, and every service has an icon.
-- **CI tests on Python 3.13 and 3.14**: Home Assistant 2026.3+ requires Python 3.14, so the test matrix now also runs against current HA.
+- **CI on Python 3.14**: tests run against current HA and against the minimum HA 2026.9.0; mypy checks against current HA.
 
 ## [1.37.0] - 2026-11-09
 

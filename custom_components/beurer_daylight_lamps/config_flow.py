@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any
 
-import voluptuous as vol
+import probatio as vol
 from bleak.exc import BleakError
 from homeassistant.components import bluetooth
 from homeassistant.components.bluetooth import (

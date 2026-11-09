@@ -65,7 +65,7 @@ class BeurerLightExtraStoredData(ExtraStoredData):
         """Initialize extra stored data from a dict."""
         try:
             return cls(color_temp_kelvin=restored.get("color_temp_kelvin"))
-        except (KeyError, TypeError):
+        except KeyError, TypeError:
             return None
 
 

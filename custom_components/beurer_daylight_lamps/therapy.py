@@ -486,7 +486,7 @@ class SunriseSimulation:
             if self._running:
                 try:
                     await self._instance._request_status()
-                except (BleakError, TimeoutError, OSError):
+                except BleakError, TimeoutError, OSError:
                     LOGGER.debug("Non-critical: failed to request status after sunrise")
 
             LOGGER.info("Sunrise simulation completed")
@@ -599,7 +599,7 @@ class SunriseSimulation:
             if self._running:
                 try:
                     await self._instance._request_status()
-                except (BleakError, TimeoutError, OSError):
+                except BleakError, TimeoutError, OSError:
                     LOGGER.debug("Non-critical: failed to request status after sunset")
 
             LOGGER.info("Sunset simulation completed")

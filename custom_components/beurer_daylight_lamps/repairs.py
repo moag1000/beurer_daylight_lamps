@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-import voluptuous as vol
+import probatio as vol
 from homeassistant.components import bluetooth
 from homeassistant.components.repairs import RepairsFlow
 from homeassistant.const import CONF_MAC, CONF_NAME
@@ -17,7 +17,7 @@ from homeassistant.helpers import issue_registry as ir
 from .const import DOMAIN, LOGGER
 
 if TYPE_CHECKING:
-    from homeassistant import data_entry_flow
+    from homeassistant.components.repairs import RepairsFlowResult
     from homeassistant.core import HomeAssistant
 
 
@@ -33,7 +33,7 @@ class DeviceNotFoundRepairFlow(RepairsFlow):
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
-    ) -> data_entry_flow.FlowResult:
+    ) -> RepairsFlowResult:
         """Handle the first step of the repair flow."""
         # Extract entry_id from issue_id (format: device_not_found_{entry_id})
         self._entry_id = self._issue_id.replace("device_not_found_", "")
@@ -42,7 +42,7 @@ class DeviceNotFoundRepairFlow(RepairsFlow):
 
     async def async_step_confirm(
         self, user_input: dict[str, Any] | None = None
-    ) -> data_entry_flow.FlowResult:
+    ) -> RepairsFlowResult:
         """Handle the confirm step."""
         if self._entry_id is None:
             return self.async_abort(reason="entry_not_found")
@@ -109,7 +109,7 @@ class InitializationFailedRepairFlow(RepairsFlow):
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
-    ) -> data_entry_flow.FlowResult:
+    ) -> RepairsFlowResult:
         """Handle the first step of the repair flow."""
         # Extract entry_id from issue_id (format: initialization_failed_{entry_id})
         self._entry_id = self._issue_id.replace("initialization_failed_", "")
@@ -118,7 +118,7 @@ class InitializationFailedRepairFlow(RepairsFlow):
 
     async def async_step_confirm(
         self, user_input: dict[str, Any] | None = None
-    ) -> data_entry_flow.FlowResult:
+    ) -> RepairsFlowResult:
         """Handle the confirm step."""
         if self._entry_id is None:
             return self.async_abort(reason="entry_not_found")
@@ -168,13 +168,13 @@ class AdapterFullRepairFlow(RepairsFlow):
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
-    ) -> data_entry_flow.FlowResult:
+    ) -> RepairsFlowResult:
         """Handle the first step of the repair flow."""
         return await self.async_step_confirm()
 
     async def async_step_confirm(
         self, user_input: dict[str, Any] | None = None
-    ) -> data_entry_flow.FlowResult:
+    ) -> RepairsFlowResult:
         """Handle the confirm step."""
         if user_input is not None:
             ir.async_delete_issue(self.hass, DOMAIN, self._issue_id)
