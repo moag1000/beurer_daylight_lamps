@@ -46,7 +46,6 @@ THERAPY_BINARY_SENSOR_DESCRIPTIONS: tuple[BinarySensorEntityDescription, ...] = 
     BinarySensorEntityDescription(
         key="therapy_goal_reached",
         translation_key="therapy_goal_reached",
-        icon="mdi:check-circle",
     ),
 )
 

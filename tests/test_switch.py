@@ -29,7 +29,7 @@ class TestSwitchDescriptions:
             d for d in SWITCH_DESCRIPTIONS if d.key == "adaptive_lighting"
         )
         assert adaptive_desc.translation_key == "adaptive_lighting"
-        assert adaptive_desc.icon == "mdi:brightness-auto"
+        assert adaptive_desc.icon is None  # icon comes from icons.json
 
     def test_number_of_descriptions(self) -> None:
         """Test correct number of switch descriptions."""

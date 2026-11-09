@@ -61,14 +61,12 @@ SENSOR_DESCRIPTIONS: tuple[SensorEntityDescription, ...] = (
     SensorEntityDescription(
         key="last_notification",
         translation_key="last_notification",
-        icon="mdi:bluetooth-transfer",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=True,
     ),
     SensorEntityDescription(
         key="last_time_sync",
         translation_key="last_time_sync",
-        icon="mdi:clock-check-outline",
         device_class=SensorDeviceClass.TIMESTAMP,
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=True,
@@ -80,21 +78,18 @@ THERAPY_SENSOR_DESCRIPTIONS: tuple[SensorEntityDescription, ...] = (
     SensorEntityDescription(
         key="therapy_today",
         translation_key="therapy_today",
-        icon="mdi:sun-clock",
         state_class=SensorStateClass.TOTAL_INCREASING,
         native_unit_of_measurement=UnitOfTime.MINUTES,
     ),
     SensorEntityDescription(
         key="therapy_week",
         translation_key="therapy_week",
-        icon="mdi:calendar-week",
         state_class=SensorStateClass.TOTAL,
         native_unit_of_measurement=UnitOfTime.MINUTES,
     ),
     SensorEntityDescription(
         key="therapy_progress",
         translation_key="therapy_progress",
-        icon="mdi:progress-check",
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=PERCENTAGE,
     ),
@@ -105,7 +100,6 @@ CONNECTION_HEALTH_SENSOR_DESCRIPTIONS: tuple[SensorEntityDescription, ...] = (
     SensorEntityDescription(
         key="reconnect_count",
         translation_key="reconnect_count",
-        icon="mdi:connection",
         state_class=SensorStateClass.TOTAL_INCREASING,
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
@@ -113,7 +107,6 @@ CONNECTION_HEALTH_SENSOR_DESCRIPTIONS: tuple[SensorEntityDescription, ...] = (
     SensorEntityDescription(
         key="command_success_rate",
         translation_key="command_success_rate",
-        icon="mdi:check-network",
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=PERCENTAGE,
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -122,7 +115,6 @@ CONNECTION_HEALTH_SENSOR_DESCRIPTIONS: tuple[SensorEntityDescription, ...] = (
     SensorEntityDescription(
         key="connection_uptime",
         translation_key="connection_uptime",
-        icon="mdi:timer-outline",
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfTime.SECONDS,
         entity_category=EntityCategory.DIAGNOSTIC,

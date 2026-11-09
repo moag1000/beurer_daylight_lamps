@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **Icons moved to `icons.json`**: entity icons are no longer set in code (HA icon translations). The *Daily goal reached* binary sensor now shows its on/off icons, alarm switches show `alarm`/`alarm-off` from `icons.json`, and every service has an icon.
+- **CI tests on Python 3.13 and 3.14**: Home Assistant 2026.3+ requires Python 3.14, so the test matrix now also runs against current HA.
+
 ## [1.37.0] - 2026-11-09
 
 Thanks to @mike-vention for the fixes (closes #6, #7, #8) and to @BigDi for WL75 support (#9).

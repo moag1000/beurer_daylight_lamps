@@ -35,7 +35,6 @@ SELECT_DESCRIPTIONS: tuple[SelectEntityDescription, ...] = (
     SelectEntityDescription(
         key="effect",
         translation_key="effect",
-        icon="mdi:palette",
     ),
 )
 
@@ -110,7 +109,6 @@ class BeurerTherapyUserSelect(
     """Selects which HA person is currently doing therapy on this lamp."""
 
     _attr_has_entity_name = True
-    _attr_icon = "mdi:account"
     _attr_translation_key = "therapy_user"
 
     def __init__(

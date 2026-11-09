@@ -37,7 +37,6 @@ BUTTON_DESCRIPTIONS: tuple[ButtonEntityDescription, ...] = (
     ButtonEntityDescription(
         key="sync_time",
         translation_key="sync_time",
-        icon="mdi:clock-sync",
         entity_category=EntityCategory.CONFIG,
     ),
 )
