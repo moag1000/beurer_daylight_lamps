@@ -5,7 +5,9 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.38.0] - 2026-11-09
+
+> **⚠️ Requires Home Assistant 2026.9.0 or newer (Python 3.14).** HACS hides this update on older installs. On HA 2025.12 – 2026.8, stay on **v1.37.0**: it has the same fixes and WL75 support.
 
 ### Added
 
