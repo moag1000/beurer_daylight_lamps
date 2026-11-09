@@ -88,19 +88,19 @@ class TestBeurerTherapyUserSelectCreation:
         assert len(therapy_selects) == 1
 
     @pytest.mark.asyncio
-    async def test_setup_entry_creates_two_entities(
+    async def test_setup_entry_creates_select_entities(
         self,
         mock_coordinator: MagicMock,
         mock_hass_no_persons: MagicMock,
         mock_entry: MagicMock,
     ) -> None:
-        """async_setup_entry creates exactly two select entities (effect + therapy_user)."""
+        """async_setup_entry creates effect, therapy_user and sunrise_profile selects."""
         from custom_components.beurer_daylight_lamps.select import async_setup_entry
 
         added_entities = []
         await async_setup_entry(mock_hass_no_persons, mock_entry, added_entities.extend)
 
-        assert len(added_entities) == 2
+        assert len(added_entities) == 3
 
 
 class TestBeurerTherapyUserSelectUniqueId:

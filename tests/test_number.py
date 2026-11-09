@@ -346,9 +346,10 @@ class TestAsyncSetupEntry:
 
         await async_setup_entry(mock_hass, mock_entry, capture_entities)
 
-        # Should create 4 entities for TL models: white_brightness, color_brightness, timer, therapy_goal
+        # TL models: white_brightness, color_brightness, timer, therapy_goal,
+        # sunrise_duration, sunset_duration
         # (WL90 models would add 2 more: radio_volume, music_volume)
-        assert len(added_entities) == 4
+        assert len(added_entities) == 6
 
         # Verify types
         brightness_numbers = [

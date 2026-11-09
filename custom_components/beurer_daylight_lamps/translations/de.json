@@ -155,6 +155,18 @@
             },
             "sync_time": {
                 "name": "Zeit synchronisieren"
+            },
+            "start_sunrise": {
+                "name": "Sonnenaufgang starten"
+            },
+            "start_sunset": {
+                "name": "Sonnenuntergang starten"
+            },
+            "stop_simulation": {
+                "name": "Sonnenauf-/-untergang stoppen"
+            },
+            "start_therapy": {
+                "name": "Lichttherapie starten"
             }
         },
         "select": {
@@ -163,6 +175,15 @@
             },
             "therapy_user": {
                 "name": "Therapie-Person"
+            },
+            "sunrise_profile": {
+                "name": "Sonnenaufgang-Profil",
+                "state": {
+                    "gentle": "Sanft",
+                    "natural": "Natürlich",
+                    "energize": "Energie",
+                    "therapy": "Therapie"
+                }
             }
         },
         "number": {
@@ -177,6 +198,12 @@
             },
             "therapy_goal": {
                 "name": "Taegliches Lichtziel"
+            },
+            "sunrise_duration": {
+                "name": "Dauer Sonnenaufgang"
+            },
+            "sunset_duration": {
+                "name": "Dauer Sonnenuntergang"
             }
         },
         "sensor": {
@@ -241,7 +268,8 @@
                             "timer_cancelled": "Timer abgebrochen",
                             "sleep_timer_finished": "Einschlaf-Timer abgelaufen",
                             "sunrise_finished": "Sonnenaufgang beendet",
-                            "sunset_finished": "Sonnenuntergang beendet"
+                            "sunset_finished": "Sonnenuntergang beendet",
+                            "therapy_session_finished": "Lichttherapie beendet"
                         }
                     }
                 }
@@ -382,6 +410,10 @@
                     "name": "Mindestens für"
                 }
             }
+        },
+        "therapy_session_finished": {
+            "name": "Lichttherapie-Sitzung beendet",
+            "description": "Löst aus, wenn eine mit „Lichttherapie starten“ begonnene Sitzung beendet ist und die Lampe ausgeschaltet hat."
         }
     },
     "conditions": {

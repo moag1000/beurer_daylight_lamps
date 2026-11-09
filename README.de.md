@@ -77,11 +77,15 @@ Alternativ: **Einstellungen** → **Geräte & Dienste** → **Integration hinzuf
 |-----|------|--------------|
 | Licht | Lampe | Hauptentität mit allen Lichtfunktionen |
 | Taste | Identifizieren / Neu verbinden / Uhrzeit synchronisieren | Blinken, Bluetooth neu verbinden, Uhr der Lampe stellen |
+| Taste | Sonnenaufgang starten / Sonnenuntergang starten / stoppen | Simulation mit einem Klick, mit den Einstellungen unten |
+| Taste | Lichttherapie starten | Volles Tageslicht, bis das Tagesziel erreicht ist, dann aus |
+| Auswahl | Sonnenaufgang-Profil | Profil für „Sonnenaufgang starten“ (sanft, natürlich, Energie, Therapie) |
+| Zahl | Dauer Sonnenaufgang / Sonnenuntergang | Dauer für die Tasten (1–60 min) |
 | Auswahl | Effekt | Lichteffekte |
 | Zahl | Helligkeit Weiß / Farbe, Timer, Tägliches Lichtziel | |
 | Sensor | Lichttherapie heute / diese Woche, Tagesziel Fortschritt | Lichttherapie-Tracking |
 | Binärsensor | Verbunden, Bluetooth erreichbar, Tagesziel erreicht | |
-| Ereignis | Lampen-Ereignis | Timer abgelaufen/abgebrochen, Einschlaf-Timer abgelaufen, Sonnenauf-/-untergang beendet |
+| Ereignis | Lampen-Ereignis | Timer abgelaufen/abgebrochen, Einschlaf-Timer abgelaufen, Sonnenauf-/-untergang beendet, Lichttherapie beendet |
 | Schalter | Signalton, Überblenden, Adaptive Lighting | |
 
 **Zusätzlich bei WL75/WL90:** Mediaplayer UKW-Radio (WL90 auch Bluetooth-Lautsprecher), Lautstärke-Regler, Schalter „Wecker 1–3“ und Uhrzeit-Entitäten „Wecker 1–3 Uhrzeit“ (WL75: 2 Wecker, WL90: 3 Wecker).
@@ -108,6 +112,7 @@ Im Automations-Editor findest du unter „Beurer“ eigene Bausteine:
 | Trigger | Lampen-Timer abgebrochen | ein Timer an der Lampe abgebrochen wurde |
 | Trigger | Einschlaf-Timer abgelaufen | der Radio-/Musik-Einschlaf-Timer (WL75/WL90) abgelaufen ist |
 | Trigger | Sonnenaufgang / Sonnenuntergang beendet | eine Simulation fertig ist |
+| Trigger | Lichttherapie-Sitzung beendet | eine mit „Lichttherapie starten“ begonnene Sitzung vorbei ist |
 | Trigger | Tagesziel Lichttherapie erreicht | das Tagesziel erreicht wird |
 | Bedingung | Tagesziel Lichttherapie erreicht | das Tagesziel erreicht ist |
 | Bedingung | Lampe ist verbunden | die Lampe per Bluetooth verbunden ist |

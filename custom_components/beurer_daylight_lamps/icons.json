@@ -9,6 +9,18 @@
       },
       "sync_time": {
         "default": "mdi:clock-sync"
+      },
+      "start_sunrise": {
+        "default": "mdi:weather-sunset-up"
+      },
+      "start_sunset": {
+        "default": "mdi:weather-sunset-down"
+      },
+      "stop_simulation": {
+        "default": "mdi:stop-circle-outline"
+      },
+      "start_therapy": {
+        "default": "mdi:white-balance-sunny"
       }
     },
     "sensor": {
@@ -69,6 +81,9 @@
       },
       "therapy_user": {
         "default": "mdi:account"
+      },
+      "sunrise_profile": {
+        "default": "mdi:theme-light-dark"
       }
     },
     "number": {
@@ -89,6 +104,12 @@
       },
       "music_volume": {
         "default": "mdi:speaker"
+      },
+      "sunrise_duration": {
+        "default": "mdi:timer-sand"
+      },
+      "sunset_duration": {
+        "default": "mdi:timer-sand"
       }
     },
     "switch": {
@@ -137,7 +158,8 @@
               "timer_cancelled": "mdi:timer-cancel-outline",
               "sleep_timer_finished": "mdi:sleep",
               "sunrise_finished": "mdi:weather-sunset-up",
-              "sunset_finished": "mdi:weather-sunset-down"
+              "sunset_finished": "mdi:weather-sunset-down",
+              "therapy_session_finished": "mdi:white-balance-sunny"
             }
           }
         }
@@ -184,6 +206,9 @@
     },
     "therapy_goal_reached": {
       "trigger": "mdi:trophy-outline"
+    },
+    "therapy_session_finished": {
+      "trigger": "mdi:white-balance-sunny"
     }
   },
   "conditions": {

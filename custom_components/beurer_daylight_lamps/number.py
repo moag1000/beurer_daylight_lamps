@@ -9,6 +9,7 @@ from homeassistant.components.number import (
     NumberEntity,
     NumberEntityDescription,
     NumberMode,
+    RestoreNumber,
 )
 from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfTime
 from homeassistant.exceptions import HomeAssistantError
@@ -87,6 +88,11 @@ async def async_setup_entry(
     entities.append(BeurerTimerNumber(coordinator, name))
     # Add therapy daily goal entity
     entities.append(BeurerTherapyGoalNumber(coordinator, name))
+    # Durations used by the sunrise / sunset buttons
+    entities.extend(
+        BeurerSimulationDurationNumber(coordinator, name, key)
+        for key in ("sunrise_duration", "sunset_duration")
+    )
     # Add WL volume controls (radio volume for WL75 and WL90, music volume for WL90 only)
     instance = entry.runtime_data.instance
     if instance.is_wl:
@@ -380,3 +386,74 @@ class BeurerWL90Number(CoordinatorEntity[BeurerDataUpdateCoordinator], NumberEnt
             await wl90.set_radio_volume(vol)
         elif self.entity_description.key == "music_volume":
             await wl90.set_music_volume(vol)
+
+
+class BeurerSimulationDurationNumber(
+    CoordinatorEntity[BeurerDataUpdateCoordinator], RestoreNumber
+):
+    """Duration used by the "Start sunrise" / "Start sunset" buttons."""
+
+    _attr_has_entity_name = True
+    _attr_mode = NumberMode.BOX
+    _attr_native_min_value = 1
+    _attr_native_max_value = 60
+    _attr_native_step = 1
+    _attr_native_unit_of_measurement = UnitOfTime.MINUTES
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(
+        self, coordinator: BeurerDataUpdateCoordinator, device_name: str, key: str
+    ) -> None:
+        """Initialize the duration number."""
+        super().__init__(coordinator)
+        self._instance = coordinator.instance
+        self._device_name = device_name
+        self._key = key
+        self._attr_translation_key = key
+        self._attr_unique_id = f"{format_mac(self._instance.mac)}_{key}"
+
+    @property
+    def _setting(self) -> str:
+        return (
+            "sunrise_minutes" if self._key == "sunrise_duration" else "sunset_minutes"
+        )
+
+    async def async_added_to_hass(self) -> None:
+        """Restore the last duration."""
+        await super().async_added_to_hass()
+        if (last := await self.async_get_last_number_data()) is not None and (
+            last.native_value is not None
+        ):
+            setattr(
+                self._instance.simulation_settings,
+                self._setting,
+                int(last.native_value),
+            )
+
+    @property
+    def available(self) -> bool:
+        """A setting is always available."""
+        return True
+
+    @property
+    def native_value(self) -> float:
+        """Return the duration in minutes."""
+        return float(getattr(self._instance.simulation_settings, self._setting))
+
+    async def async_set_native_value(self, value: float) -> None:
+        """Set the duration."""
+        setattr(self._instance.simulation_settings, self._setting, int(value))
+        self.async_write_ha_state()
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device info."""
+        mac = format_mac(self._instance.mac)
+        return DeviceInfo(
+            identifiers={(DOMAIN, mac)},
+            name=self._device_name,
+            manufacturer="Beurer",
+            model=detect_model(self._device_name),
+            sw_version=VERSION,
+            connections={(CONNECTION_BLUETOOTH, mac)},
+        )
