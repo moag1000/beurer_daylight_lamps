@@ -146,8 +146,8 @@ class TestAsyncSetupEntry:
 
         await async_setup_entry(mock_hass, mock_entry, capture_entities)
 
-        # Should create 2 entities: effect select + therapy_user select
-        assert len(added_entities) == 2
+        # effect, therapy_user and sunrise_profile selects
+        assert len(added_entities) == 3
         effect_selects = [
             e for e in added_entities if isinstance(e, BeurerEffectSelect)
         ]

@@ -47,7 +47,12 @@ from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.device_registry import format_mac
 from homeassistant.util import dt as dt_util
 
-from .therapy import SunriseSimulation, TherapySession, TherapyTracker
+from .therapy import (
+    SimulationSettings,
+    SunriseSimulation,
+    TherapySession,
+    TherapyTracker,
+)
 from .wl75 import WL75Controller
 from .wl90 import WL90Controller
 
@@ -107,6 +112,7 @@ from .const import (
     EFFECT_DELAY,
     EVENT_THERAPY_SESSION,
     EVENT_TYPE_SLEEP_TIMER_FINISHED,
+    EVENT_TYPE_THERAPY_SESSION_FINISHED,
     EVENT_TYPE_TIMER_CANCELLED,
     EVENT_TYPE_TIMER_FINISHED,
     LOGGER,
@@ -144,6 +150,8 @@ from .const import (
     RESP_WL75_UPDATE_TIME,
     STATUS_DELAY,
     SUPPORTED_EFFECTS,
+    THERAPY_MIN_BRIGHTNESS,
+    THERAPY_SESSION_CHECK_SECONDS,
     THERAPY_USER_UNKNOWN,
     TURN_OFF_DELAY,
     WRITE_CHARACTERISTIC_UUID,
@@ -288,6 +296,8 @@ class BeurerInstance:
         # Therapy tracking and WL90 / WL75
         self._sunrise_simulation: SunriseSimulation | None = None
         self._therapy_tracker: TherapyTracker = TherapyTracker()
+        self.simulation_settings = SimulationSettings()
+        self._therapy_session_task: asyncio.Task[None] | None = None
         self.adaptive_lighting_switch: Any = None
         dev_name = getattr(device, "name", None)
         self._is_wl: bool = is_wl_model(dev_name)
@@ -3128,8 +3138,58 @@ class BeurerInstance:
             LOGGER.error("OS error during update for %s: %s", self._mac, err)
             await self.disconnect()
 
+    @property
+    def therapy_session_running(self) -> bool:
+        """Return True while a one-click therapy session runs."""
+        return (
+            self._therapy_session_task is not None
+            and not self._therapy_session_task.done()
+        )
+
+    def stop_therapy_session(self) -> None:
+        """Stop watching a one-click therapy session (the light stays as is)."""
+        if self.therapy_session_running and self._therapy_session_task:
+            self._therapy_session_task.cancel()
+        self._therapy_session_task = None
+
+    async def start_therapy_session(self) -> None:
+        """Full daylight until today's goal is reached, then turn off.
+
+        If the goal is already reached, the session lasts one full goal.
+        Changing the light (off, color, effect, dimming below therapy level)
+        ends the session without turning the lamp off.
+        """
+        self.stop_therapy_session()
+        tracker = self._therapy_tracker
+        remaining = tracker.daily_goal_minutes - tracker.today_minutes
+        minutes = remaining if remaining >= 1 else tracker.daily_goal_minutes
+        await self.set_white(255)
+        LOGGER.info("Therapy session on %s for %.0f min", self._mac, minutes)
+        self._therapy_session_task = self._safe_create_task(
+            self._run_therapy_session(minutes * 60),
+            f"beurer_therapy_session_{self._mac}",
+        )
+
+    async def _run_therapy_session(self, seconds: float) -> None:
+        """Turn the lamp off when the session time is over."""
+        loop = asyncio.get_running_loop()
+        end = loop.time() + seconds
+        while (left := end - loop.time()) > 0:
+            await asyncio.sleep(min(THERAPY_SESSION_CHECK_SECONDS, left))
+            if (
+                not self.is_on
+                or self.color_mode != ColorMode.WHITE
+                or (self.white_brightness or 0) < THERAPY_MIN_BRIGHTNESS
+            ):
+                LOGGER.debug("Therapy session on %s ended by a change", self._mac)
+                return
+        LOGGER.info("Therapy session on %s finished, turning off", self._mac)
+        await self.turn_off()
+        self.emit_lamp_event(EVENT_TYPE_THERAPY_SESSION_FINISHED)
+
     async def shutdown(self) -> None:
         """Disconnect for good (config entry unload): no reconnect afterwards."""
+        self.stop_therapy_session()
         self._closing = True
         await self.disconnect()
 

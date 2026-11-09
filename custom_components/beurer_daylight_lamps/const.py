@@ -361,6 +361,7 @@ EVENT_TYPE_TIMER_FINISHED: Final = "timer_finished"
 EVENT_TYPE_TIMER_CANCELLED: Final = "timer_cancelled"
 EVENT_TYPE_SLEEP_TIMER_FINISHED: Final = "sleep_timer_finished"
 EVENT_TYPE_SUNRISE_FINISHED: Final = "sunrise_finished"
+EVENT_TYPE_THERAPY_SESSION_FINISHED: Final = "therapy_session_finished"
 EVENT_TYPE_SUNSET_FINISHED: Final = "sunset_finished"
 LAMP_EVENT_TYPES: Final[list[str]] = [
     EVENT_TYPE_TIMER_FINISHED,
@@ -368,7 +369,12 @@ LAMP_EVENT_TYPES: Final[list[str]] = [
     EVENT_TYPE_SLEEP_TIMER_FINISHED,
     EVENT_TYPE_SUNRISE_FINISHED,
     EVENT_TYPE_SUNSET_FINISHED,
+    EVENT_TYPE_THERAPY_SESSION_FINISHED,
 ]
+
+# One-click therapy session (button "Start light therapy")
+THERAPY_SESSION_CHECK_SECONDS: Final = 30
+THERAPY_MIN_BRIGHTNESS: Final = 204  # 80 %: below this it is no therapy light
 
 
 # Per-person therapy attribution

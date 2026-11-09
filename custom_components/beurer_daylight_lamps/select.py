@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from homeassistant.components.select import SelectEntity, SelectEntityDescription
+from homeassistant.const import EntityCategory
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.device_registry import (
     CONNECTION_BLUETOOTH,
@@ -24,6 +25,7 @@ from .const import (
     detect_model,
 )
 from .coordinator import BeurerDataUpdateCoordinator
+from .therapy import SunriseProfile
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -55,6 +57,7 @@ async def async_setup_entry(
     entities: list[SelectEntity] = [
         BeurerEffectSelect(coordinator, name, SELECT_DESCRIPTIONS[0]),
         BeurerTherapyUserSelect(hass, coordinator, name, entry),
+        BeurerSunriseProfileSelect(coordinator, name),
     ]
     async_add_entities(entities)
 
@@ -177,3 +180,57 @@ class BeurerTherapyUserSelect(
             raise HomeAssistantError(f"Invalid therapy user: {option}")
         self._current = option
         self.async_write_ha_state()
+
+
+class BeurerSunriseProfileSelect(
+    CoordinatorEntity[BeurerDataUpdateCoordinator], SelectEntity, RestoreEntity
+):
+    """Profile used by the "Start sunrise" button."""
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "sunrise_profile"
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_options = [profile.value for profile in SunriseProfile]
+
+    def __init__(
+        self, coordinator: BeurerDataUpdateCoordinator, device_name: str
+    ) -> None:
+        """Initialize the sunrise profile select."""
+        super().__init__(coordinator)
+        self._instance = coordinator.instance
+        self._device_name = device_name
+        self._attr_unique_id = f"{format_mac(self._instance.mac)}_sunrise_profile"
+
+    async def async_added_to_hass(self) -> None:
+        """Restore the last chosen profile."""
+        await super().async_added_to_hass()
+        if (last := await self.async_get_last_state()) and last.state in self.options:
+            self._instance.simulation_settings.sunrise_profile = last.state
+
+    @property
+    def available(self) -> bool:
+        """A setting is always available."""
+        return True
+
+    @property
+    def current_option(self) -> str:
+        """Return the chosen profile."""
+        return self._instance.simulation_settings.sunrise_profile
+
+    async def async_select_option(self, option: str) -> None:
+        """Choose a profile."""
+        self._instance.simulation_settings.sunrise_profile = option
+        self.async_write_ha_state()
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device info."""
+        mac = format_mac(self._instance.mac)
+        return DeviceInfo(
+            identifiers={(DOMAIN, mac)},
+            name=self._device_name,
+            manufacturer="Beurer",
+            model=detect_model(self._device_name),
+            sw_version=VERSION,
+            connections={(CONNECTION_BLUETOOTH, mac)},
+        )

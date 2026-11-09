@@ -28,6 +28,15 @@ if TYPE_CHECKING:
 from .const import EVENT_TYPE_SUNRISE_FINISHED, EVENT_TYPE_SUNSET_FINISHED, LOGGER
 
 
+@dataclass
+class SimulationSettings:
+    """Settings used by the sunrise/sunset buttons (set via select/number)."""
+
+    sunrise_profile: str = "natural"
+    sunrise_minutes: int = 15
+    sunset_minutes: int = 30
+
+
 class SunriseProfile(Enum):
     """Predefined sunrise profiles."""
 

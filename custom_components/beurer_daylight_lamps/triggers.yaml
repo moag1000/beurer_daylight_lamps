@@ -7,6 +7,7 @@ timer_cancelled: *lamp_event_trigger
 sleep_timer_finished: *lamp_event_trigger
 sunrise_finished: *lamp_event_trigger
 sunset_finished: *lamp_event_trigger
+therapy_session_finished: *lamp_event_trigger
 
 therapy_goal_reached:
   target:

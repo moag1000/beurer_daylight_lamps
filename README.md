@@ -68,6 +68,10 @@ I heavily used claude as I did in other projects but focused on keeping it tight
 | **Button** | Identify | Blinks lamp 3x to find it |
 | **Button** | Reconnect | Forces BLE reconnection |
 | **Button** | Sync time | Syncs HA clock to device |
+| **Button** | Start sunrise / Start sunset / Stop sunrise/sunset | One-click simulations with the settings below |
+| **Button** | Start light therapy | Full daylight until today's goal is reached, then off |
+| **Select** | Sunrise profile | Profile for *Start sunrise* (gentle, natural, energize, therapy) |
+| **Number** | Sunrise duration / Sunset duration | Durations for the buttons (1-60 min) |
 | **Select** | Effect | Dropdown for light effects |
 | **Number** | White brightness | Slider 0-100% |
 | **Number** | Color brightness | Slider 0-100% |
@@ -494,6 +498,7 @@ Besides the device triggers, the integration adds its own triggers and condition
 | Trigger | Lamp timer cancelled | a running timer was cancelled on the lamp |
 | Trigger | Lamp sleep timer finished | the radio/music sleep timer of a WL75/WL90 ran out |
 | Trigger | Sunrise / Sunset simulation finished | a simulation started by `start_sunrise` / `start_sunset` completed |
+| Trigger | Light therapy session finished | a session started with *Start light therapy* ended and turned the lamp off |
 | Trigger | Daily light therapy goal reached | the *Daily goal reached* sensor turns on |
 | Condition | Daily light therapy goal reached | the daily goal is reached |
 | Condition | Lamp is connected | the lamp is connected via Bluetooth |

@@ -16,6 +16,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN, LOGGER, VERSION, detect_model
 from .coordinator import BeurerDataUpdateCoordinator
+from .therapy import SunriseProfile
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -39,6 +40,10 @@ BUTTON_DESCRIPTIONS: tuple[ButtonEntityDescription, ...] = (
         translation_key="sync_time",
         entity_category=EntityCategory.CONFIG,
     ),
+    ButtonEntityDescription(key="start_sunrise", translation_key="start_sunrise"),
+    ButtonEntityDescription(key="start_sunset", translation_key="start_sunset"),
+    ButtonEntityDescription(key="stop_simulation", translation_key="stop_simulation"),
+    ButtonEntityDescription(key="start_therapy", translation_key="start_therapy"),
 )
 
 
@@ -109,6 +114,20 @@ class BeurerButton(CoordinatorEntity[BeurerDataUpdateCoordinator], ButtonEntity)
             await self._reconnect()
         elif self.entity_description.key == "sync_time":
             await self._sync_time()
+        elif self.entity_description.key == "start_sunrise":
+            settings = self._instance.simulation_settings
+            await self._instance.sunrise_simulation.start_sunrise(
+                settings.sunrise_minutes, SunriseProfile(settings.sunrise_profile)
+            )
+        elif self.entity_description.key == "start_sunset":
+            await self._instance.sunrise_simulation.start_sunset(
+                self._instance.simulation_settings.sunset_minutes, 0
+            )
+        elif self.entity_description.key == "stop_simulation":
+            self._instance.stop_therapy_session()
+            await self._instance.sunrise_simulation.stop()
+        elif self.entity_description.key == "start_therapy":
+            await self._instance.start_therapy_session()
 
     async def _identify(self) -> None:
         """Flash the lamp to identify it."""

@@ -134,6 +134,18 @@
             },
             "sync_time": {
                 "name": "Sync time"
+            },
+            "start_sunrise": {
+                "name": "Start sunrise"
+            },
+            "start_sunset": {
+                "name": "Start sunset"
+            },
+            "stop_simulation": {
+                "name": "Stop sunrise/sunset"
+            },
+            "start_therapy": {
+                "name": "Start light therapy"
             }
         },
         "select": {
@@ -142,6 +154,15 @@
             },
             "therapy_user": {
                 "name": "Therapy user"
+            },
+            "sunrise_profile": {
+                "name": "Sunrise profile",
+                "state": {
+                    "gentle": "Gentle",
+                    "natural": "Natural",
+                    "energize": "Energize",
+                    "therapy": "Therapy"
+                }
             }
         },
         "number": {
@@ -156,6 +177,12 @@
             },
             "therapy_goal": {
                 "name": "Daily light goal"
+            },
+            "sunrise_duration": {
+                "name": "Sunrise duration"
+            },
+            "sunset_duration": {
+                "name": "Sunset duration"
             }
         },
         "sensor": {
@@ -220,7 +247,8 @@
                             "timer_cancelled": "Timer cancelled",
                             "sleep_timer_finished": "Sleep timer finished",
                             "sunrise_finished": "Sunrise finished",
-                            "sunset_finished": "Sunset finished"
+                            "sunset_finished": "Sunset finished",
+                            "therapy_session_finished": "Light therapy finished"
                         }
                     }
                 }
@@ -295,6 +323,10 @@
                     "name": "For at least"
                 }
             }
+        },
+        "therapy_session_finished": {
+            "name": "Light therapy session finished",
+            "description": "Triggers when a session started with \"Start light therapy\" has ended and the lamp turned off."
         }
     },
     "conditions": {

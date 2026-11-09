@@ -21,6 +21,7 @@ from .const import (
     EVENT_TYPE_SLEEP_TIMER_FINISHED,
     EVENT_TYPE_SUNRISE_FINISHED,
     EVENT_TYPE_SUNSET_FINISHED,
+    EVENT_TYPE_THERAPY_SESSION_FINISHED,
     EVENT_TYPE_TIMER_CANCELLED,
     EVENT_TYPE_TIMER_FINISHED,
 )
@@ -65,6 +66,9 @@ TRIGGERS: dict[str, type[Trigger]] = {
     ),
     EVENT_TYPE_SUNRISE_FINISHED: _lamp_event_trigger(EVENT_TYPE_SUNRISE_FINISHED),
     EVENT_TYPE_SUNSET_FINISHED: _lamp_event_trigger(EVENT_TYPE_SUNSET_FINISHED),
+    EVENT_TYPE_THERAPY_SESSION_FINISHED: _lamp_event_trigger(
+        EVENT_TYPE_THERAPY_SESSION_FINISHED
+    ),
     "therapy_goal_reached": make_entity_target_state_trigger("binary_sensor", STATE_ON),
 }
 
