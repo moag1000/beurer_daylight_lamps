@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/moag1000/beurer_daylight_lamps/main/docs/images/sunrise-lamp-dark.png">
+    <img src="https://raw.githubusercontent.com/moag1000/beurer_daylight_lamps/main/docs/images/sunrise-lamp.png" alt="Daylight lamp showing a sunrise" width="160">
+  </picture>
+</p>
+
 # Beurer Daylight Therapy Lamps
 
 [![HACS Default](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://github.com/hacs/integration)
