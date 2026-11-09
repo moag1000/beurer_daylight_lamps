@@ -43,6 +43,7 @@ I heavily used claude as I did in other projects but focused on keeping it tight
 - ⚪ `white:` in `light.turn_on` switches to native white at the given intensity
 - ✨ Light effects (Rainbow, Pulse, Forest, Wave, etc.)
 - 🔆 Separate white/color brightness sliders
+- 🌗 Smooth transitions: `transition` in `light.turn_on`/`turn_off` fades the brightness
 
 ### Connectivity
 - 📡 Bluetooth auto-discovery

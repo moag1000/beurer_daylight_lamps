@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -10,6 +11,7 @@ from homeassistant.components.light import (  # type: ignore[attr-defined]
     ATTR_COLOR_TEMP_KELVIN,
     ATTR_EFFECT,
     ATTR_RGB_COLOR,
+    ATTR_TRANSITION,
     ATTR_WHITE,
     ColorMode,
     LightEntity,
@@ -29,6 +31,8 @@ from homeassistant.util.color import (
 
 from .const import (
     DOMAIN,
+    FADE_MAX_STEPS,
+    FADE_STEP_SECONDS,
     LOGGER,
     VERSION,
     WHITE_MODE_THRESHOLD_KELVIN,
@@ -111,7 +115,9 @@ class BeurerLight(
         ColorMode.COLOR_TEMP,
         ColorMode.WHITE,
     }
-    _attr_supported_features: LightEntityFeature = LightEntityFeature.EFFECT
+    _attr_supported_features: LightEntityFeature = (
+        LightEntityFeature.EFFECT | LightEntityFeature.TRANSITION
+    )
     _attr_min_color_temp_kelvin: int = MIN_COLOR_TEMP_KELVIN
     _attr_max_color_temp_kelvin: int = MAX_COLOR_TEMP_KELVIN
 
@@ -131,6 +137,10 @@ class BeurerLight(
         self._device_name = name
         self._attr_unique_id = format_mac(self._instance.mac)
         self._color_temp_kelvin: int | None = None  # Track color temperature
+        # Software transitions: the lamp has no fade command with a duration
+        self._fade_task: asyncio.Task[None] | None = None
+        # Brightness before a fade-out, restored by the next plain turn_on
+        self._brightness_before_fade_out: int | None = None
 
     async def async_added_to_hass(self) -> None:
         """Run when entity about to be added to hass."""
@@ -319,7 +329,83 @@ class BeurerLight(
         max_val = max(r, g, b)
         return min_val >= 200 and (max_val - min_val) <= 55
 
+    def _cancel_fade(self) -> None:
+        """Stop a running software transition (a new command wins)."""
+        if self._fade_task is not None and not self._fade_task.done():
+            self._fade_task.cancel()
+        self._fade_task = None
+
+    def _start_fade(
+        self, start: int, target: int, duration: float, *, off: bool
+    ) -> None:
+        """Run a brightness fade in the background."""
+        self._fade_task = self.hass.async_create_background_task(
+            self._async_fade(start, target, duration, off=off),
+            f"beurer_fade_{self._instance.mac}",
+        )
+
+    async def _async_fade(
+        self, start: int, target: int, duration: float, *, off: bool
+    ) -> None:
+        """Step the brightness from start to target over duration seconds."""
+        steps = max(1, min(FADE_MAX_STEPS, round(duration / FADE_STEP_SECONDS)))
+        interval = duration / steps
+        last = start
+        for step in range(1, steps + 1):
+            await asyncio.sleep(interval)
+            value = max(1, round(start + (target - start) * step / steps))
+            if value != last:
+                await self._handle_brightness_only(value)
+                last = value
+        if off:
+            await self._instance.turn_off()
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Stop a running transition."""
+        self._cancel_fade()
+        await super().async_will_remove_from_hass()
+
     async def async_turn_on(self, **kwargs: Any) -> None:
+        """Turn on the light (with an optional software transition)."""
+        self._cancel_fade()
+        transition = kwargs.pop(ATTR_TRANSITION, None)
+        restore = self._brightness_before_fade_out
+        self._brightness_before_fade_out = None
+        if (
+            restore is not None
+            and ATTR_BRIGHTNESS not in kwargs
+            and ATTR_WHITE not in kwargs
+            and ATTR_EFFECT not in kwargs
+        ):
+            # The lamp remembers the dim end of the last fade-out
+            kwargs[ATTR_BRIGHTNESS] = restore
+
+        if not transition or ATTR_EFFECT in kwargs or ATTR_WHITE in kwargs:
+            await self._async_turn_on(**kwargs)
+            return
+
+        # Fade from the current brightness (or from 1 when off) to the
+        # requested one (or the last one the lamp had)
+        current = (self.brightness or 255) if self._instance.is_on else 1
+        target = int(kwargs.get(ATTR_BRIGHTNESS) or self.brightness or 255)
+        # Apply color / mode at the start brightness, then fade
+        kwargs[ATTR_BRIGHTNESS] = current
+        await self._async_turn_on(**kwargs)
+        if target != current:
+            self._start_fade(current, target, float(transition), off=False)
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Turn off the light (with an optional software transition)."""
+        self._cancel_fade()
+        transition = kwargs.get(ATTR_TRANSITION)
+        current = self.brightness
+        if not transition or not self._instance.is_on or not current or current <= 1:
+            await self._instance.turn_off()
+            return
+        self._brightness_before_fade_out = current
+        self._start_fade(current, 1, float(transition), off=True)
+
+    async def _async_turn_on(self, **kwargs: Any) -> None:
         """Turn on the light."""
         LOGGER.debug(
             "Turn on with kwargs: %s, current_mode: %s, is_on: %s",
@@ -394,10 +480,6 @@ class BeurerLight(
         ):
             self._color_temp_kelvin = None
             await self._instance.set_effect(kwargs[ATTR_EFFECT])
-
-    async def async_turn_off(self, **kwargs: Any) -> None:
-        """Turn off the light."""
-        await self._instance.turn_off()
 
     async def async_update(self) -> None:
         """Fetch new state data for this light."""

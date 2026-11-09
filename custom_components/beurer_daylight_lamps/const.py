@@ -214,6 +214,10 @@ ADAPTER_FAILURE_COOLDOWN: Final = 300.0  # Cooldown for failed adapters (seconds
 
 # Adaptive polling intervals
 # Poll more frequently when light is on for responsive updates
+# Software transitions (light.turn_on/turn_off with transition)
+FADE_STEP_SECONDS: Final = 0.5  # one brightness step every 0.5 s
+FADE_MAX_STEPS: Final = 120  # long fades use bigger steps instead
+
 POLL_INTERVAL_LIGHT_ON: Final = 30  # 30 seconds when light is on
 POLL_INTERVAL_LIGHT_OFF: Final = 300  # 5 minutes when light is off
 POLL_INTERVAL_UNAVAILABLE: Final = 900  # 15 minutes when device unavailable

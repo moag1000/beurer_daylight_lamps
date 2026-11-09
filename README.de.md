@@ -23,6 +23,7 @@ Home-Assistant-Integration für Beurer Tageslichtlampen und Wake-up-Lights über
 ## Funktionen
 
 - 💡 An/Aus, Helligkeit, RGB-Farben und Farbtemperatur (ab 5000 K mit den echten weißen LEDs der Lampe)
+- 🌗 Weiche Übergänge: `transition` bei `light.turn_on`/`turn_off` blendet die Helligkeit über
 - ✨ Lichteffekte, getrennte Helligkeit für Weiß und Farbe, Auto-Aus-Timer
 - 🌅 Sonnenaufgangs- und Sonnenuntergangs-Simulation als Dienst
 - 📊 Lichttherapie-Tracking: Minuten heute und diese Woche, Tagesziel mit Fortschritt (bleibt über Neustarts erhalten)
