@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Lamp event entity**: reports *timer finished*, *timer cancelled*, *sleep timer finished* (WL75/WL90 radio/music) and *sunrise/sunset finished*.
 - **Alarm time entities** (WL75/WL90): set the wake-up time of each alarm slot directly from the dashboard.
 - **Integration triggers and conditions** (HA 2026.9 automation editor): lamp timer/sleep timer finished, timer cancelled, sunrise/sunset finished, daily therapy goal reached; conditions *goal reached* and *lamp is connected*.
+- **Brand images in the integration** (`brand/`, HA 2026.3+, now required by HACS/Marketplace): the Beurer icon and logo from the home-assistant/brands repository ship with the integration.
 - **Assist/LLM tools**: start sunrise or sunset, stop a simulation and read the therapy status by voice, for lamps exposed to Assist.
 
 ### Changed
