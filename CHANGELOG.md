@@ -5,19 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
-### Added
-
-- **Sunrise / sunset at the push of a button**: buttons *Start sunrise*, *Start sunset* and *Stop sunrise/sunset*, with the settings *Sunrise profile*, *Sunrise duration* and *Sunset duration* (kept across restarts). No service call or YAML needed.
-- **Start light therapy**: one button switches to full daylight (native white) and turns the lamp off once today's goal is reached; if the goal is already reached, the session lasts one full goal. Changing the light (off, color, effect, dimming below 80 %) ends the session without turning the lamp off. A new lamp event and trigger *Light therapy session finished* fire at the end.
-
-## [1.38.0] - 2026-11-09
+## [1.38.0] - 2026-11-10
 
 > **⚠️ Requires Home Assistant 2026.9.0 or newer (Python 3.14).** HACS hides this update on older installs. On HA 2025.12 – 2026.8, stay on **v1.37.0**: it has the same fixes and WL75 support.
 
 ### Added
 
+- **Sunrise / sunset at the push of a button**: buttons *Start sunrise*, *Start sunset* and *Stop sunrise/sunset*, with the settings *Sunrise profile*, *Sunrise duration* and *Sunset duration* (kept across restarts). No service call or YAML needed.
+- **Start light therapy**: one button switches to full daylight (native white) and turns the lamp off once today's goal is reached; if the goal is already reached, the session lasts one full goal. Changing the light (off, color, effect, dimming below 80 %) ends the session without turning the lamp off. A new lamp event and trigger *Light therapy session finished* fire at the end.
 - **Lamp event entity**: reports *timer finished*, *timer cancelled*, *sleep timer finished* (WL75/WL90 radio/music) and *sunrise/sunset finished*.
 - **Alarm time entities** (WL75/WL90): set the wake-up time of each alarm slot directly from the dashboard.
 - **Integration triggers and conditions** (HA 2026.9 automation editor): lamp timer/sleep timer finished, timer cancelled, sunrise/sunset finished, daily therapy goal reached; conditions *goal reached* and *lamp is connected*.
