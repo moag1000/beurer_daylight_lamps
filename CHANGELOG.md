@@ -5,7 +5,9 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.37.0] - 2026-10-21
+## [1.37.0] - 2026-11-09
+
+Thanks to @mike-vention for these fixes (closes #6, #7, #8).
 
 ### Fixed
 
@@ -19,24 +21,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Connected lamp marked unavailable when advertisements stopped**: `mark_unavailable` is ignored while connected.
 - **Light showed "unknown" during every reconnect**: a disconnect keeps the last known on/off state (`assumed_state` marks it stale) instead of clearing it.
 - **Mode-switch filter could drop the only real status**: if a notification was filtered during a mode switch, the command requests status once more afterwards.
-
-## [1.36.6] - 2026-10-21
-
-### Fixed
-
 - **Commands in the current mode did not refresh the entity**: `set_effect`, `set_color`, `set_color_with_brightness(_fast)`, `set_color_brightness`, `set_white`, `set_timer` and `cancel_timer` stored the new state optimistically without a push, and the confirming status was not a change. Effect, color, brightness and timer changes without a mode switch (also from the number/select entities and sunrise/sunset steps) showed up only at the next poll. Same root cause as the `turn_off` fix in 1.36.5.
 - **Next poll scheduled with the old interval**: the coordinator now adjusts the polling interval before `async_set_updated_data`, so after off -> on the next refresh comes in 30 s, not 300 s.
 - **Commands interleaved**: command methods now run under a per-device re-entrant lock. A second command (another entity, an automation, a poll) no longer slips between the packets of the isolated mode switch or clears the other command's mode-switch filter.
 - **Concurrent `connect()` opened a second connection**: `connect()` is serialized, so a command or poll during a reconnect no longer leaves an orphaned client holding a proxy slot.
 - **A stale client's disconnect tore down the live connection**: `_on_disconnect` ignores clients that are no longer current.
 - **White started at 99 % after off or RGB**: a white "off" status keeps the last white brightness instead of resetting it to `None`, so `color_temp_kelvin >= 5000` without brightness resumes the previous level.
-
-## [1.36.5] - 2026-10-21
-
-Fork of [moag1000/beurer_daylight_lamps](https://github.com/moag1000/beurer_daylight_lamps) with fixes for upstream issues #6, #7 and #8, plus one more.
-
-### Fixed
-
 - **`turn_off` left the entity "on" until the next poll**: `turn_off` set the off state optimistically without refreshing the entity, so the lamp's off notification no longer looked like a change and was not pushed to HA. The entity stayed "on" for up to 30 s (adaptive polling) and a toggle sent another `turn_off` instead of `turn_on`. `turn_off` now refreshes the entity immediately.
 - **`light.turn_on` with `white:` was ignored** (#6): `ATTR_WHITE` is now handled and switches to native white at the given intensity.
 - **Brightness-only `turn_on` after native white lit the RGB LEDs** (#7): `_handle_brightness_only` now checks native white mode first, so a colour temperature >= 5000 K followed by a brightness change stays white.
