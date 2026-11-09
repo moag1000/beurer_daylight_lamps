@@ -438,6 +438,8 @@ class TestAsyncSetupEntry:
         """Test that async_setup_entry creates switch entity."""
         mock_runtime_data = MagicMock()
         mock_runtime_data.coordinator = mock_coordinator
+        mock_runtime_data.instance.is_wl = False
+        mock_runtime_data.instance.is_wl75 = False
 
         mock_entry = MagicMock()
         mock_entry.runtime_data = mock_runtime_data

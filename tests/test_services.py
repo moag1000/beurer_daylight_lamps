@@ -475,6 +475,8 @@ class TestApplyPresetService:
         mock_instance.mac = "AA:BB:CC:DD:EE:FF"
         mock_instance.set_color = AsyncMock()
         mock_instance.set_color_brightness = AsyncMock()
+        mock_instance.set_color_with_brightness = AsyncMock()
+        mock_instance.set_white = AsyncMock()
 
         from custom_components.beurer_daylight_lamps import _async_setup_services
 
@@ -492,8 +494,9 @@ class TestApplyPresetService:
             )
 
             # Verify color was set (daylight_therapy has color_temp_kelvin)
-            mock_instance.set_color.assert_called_once()
-            mock_instance.set_color_brightness.assert_called_once_with(255)
+            # 5300 K uses the native white LEDs, not RGB emulation
+            mock_instance.set_white.assert_called_once_with(255)
+            mock_instance.set_color.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_apply_preset_with_rgb(self, hass: HomeAssistant) -> None:
@@ -502,6 +505,8 @@ class TestApplyPresetService:
         mock_instance.mac = "AA:BB:CC:DD:EE:FF"
         mock_instance.set_color = AsyncMock()
         mock_instance.set_color_brightness = AsyncMock()
+        mock_instance.set_color_with_brightness = AsyncMock()
+        mock_instance.set_white = AsyncMock()
 
         from custom_components.beurer_daylight_lamps import _async_setup_services
 
@@ -519,8 +524,9 @@ class TestApplyPresetService:
             )
 
             # sunset preset has RGB (255, 120, 50)
-            mock_instance.set_color.assert_called_once_with((255, 120, 50))
-            mock_instance.set_color_brightness.assert_called_once_with(180)
+            mock_instance.set_color_with_brightness.assert_called_once_with(
+                (255, 120, 50), 180
+            )
 
     @pytest.mark.asyncio
     async def test_apply_preset_no_targets(self, hass: HomeAssistant) -> None:
@@ -548,11 +554,13 @@ class TestApplyPresetService:
         mock_instance1.mac = "AA:BB:CC:DD:EE:FF"
         mock_instance1.set_color = AsyncMock()
         mock_instance1.set_color_brightness = AsyncMock()
+        mock_instance1.set_color_with_brightness = AsyncMock()
 
         mock_instance2 = MagicMock()
         mock_instance2.mac = "11:22:33:44:55:66"
         mock_instance2.set_color = AsyncMock()
         mock_instance2.set_color_brightness = AsyncMock()
+        mock_instance2.set_color_with_brightness = AsyncMock()
 
         from custom_components.beurer_daylight_lamps import _async_setup_services
 
@@ -570,10 +578,10 @@ class TestApplyPresetService:
             )
 
             # Both instances should be called
-            mock_instance1.set_color.assert_called_once()
-            mock_instance1.set_color_brightness.assert_called_once_with(100)
-            mock_instance2.set_color.assert_called_once()
-            mock_instance2.set_color_brightness.assert_called_once_with(100)
+            # 2700 K is emulated with RGB, color and brightness in one call
+            for inst in (mock_instance1, mock_instance2):
+                inst.set_color_with_brightness.assert_called_once()
+                assert inst.set_color_with_brightness.call_args[0][1] == 100
 
 
 class TestSendRawCommandService:

@@ -6,7 +6,7 @@ Diagnostics allow users to download troubleshooting information about their devi
 
 from __future__ import annotations
 
-import datetime
+import datetime as dt
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.diagnostics import async_redact_data
@@ -36,7 +36,7 @@ async def async_get_config_entry_diagnostics(
     # Format timestamps as ISO strings
     last_seen_ts = instance.last_seen
     last_seen_str = (
-        datetime.datetime.fromtimestamp(last_seen_ts, tz=datetime.UTC).isoformat()
+        dt.datetime.fromtimestamp(last_seen_ts, tz=dt.UTC).isoformat()
         if last_seen_ts
         else None
     )

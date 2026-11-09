@@ -85,16 +85,19 @@ Existing per-lamp sensors (`sensor.beurer_<lamp>_therapy_*`) keep their current 
 **Event** — fired on every `end_session()`:
 
 ```python
-hass.bus.async_fire("beurer_daylight_lamps_therapy_session", {
-    "entry_id": entry.entry_id,
-    "lamp_name": device_name,
-    "person_id": session.person_id,          # None if unknown
-    "start_time": session.start_time.isoformat(),
-    "end_time": session.end_time.isoformat(),
-    "duration_minutes": round(session.duration_minutes, 1),
-    "color_temp_kelvin": session.color_temp_kelvin,
-    "brightness_pct": session.brightness_pct,
-})
+hass.bus.async_fire(
+    "beurer_daylight_lamps_therapy_session",
+    {
+        "entry_id": entry.entry_id,
+        "lamp_name": device_name,
+        "person_id": session.person_id,  # None if unknown
+        "start_time": session.start_time.isoformat(),
+        "end_time": session.end_time.isoformat(),
+        "duration_minutes": round(session.duration_minutes, 1),
+        "color_temp_kelvin": session.color_temp_kelvin,
+        "brightness_pct": session.brightness_pct,
+    },
+)
 ```
 
 ## Edge Cases

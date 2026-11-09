@@ -31,7 +31,7 @@ from homeassistant.helpers.service import async_extract_entity_ids
 from homeassistant.util.color import color_temperature_to_rgb
 
 from .beurer_daylight_lamps import BeurerInstance
-from .const import DOMAIN, LOGGER
+from .const import DOMAIN, LOGGER, WHITE_MODE_THRESHOLD_KELVIN
 from .coordinator import BeurerDataUpdateCoordinator
 from .data import BeurerConfigEntry, BeurerRuntimeData
 from .exceptions import BeurerInitializationError as BeurerInitializationError
@@ -47,6 +47,7 @@ SERVICE_SET_TIMER = "set_timer"
 SERVICE_START_SUNRISE = "start_sunrise"
 SERVICE_START_SUNSET = "start_sunset"
 SERVICE_STOP_SIMULATION = "stop_simulation"
+SERVICE_SYNC_TIME = "sync_time"
 ATTR_PRESET = "preset"
 ATTR_COMMAND = "command"
 ATTR_MINUTES = "minutes"
@@ -147,6 +148,7 @@ SERVICE_SUNSET_SCHEMA = vol.Schema(
 )
 
 SERVICE_STOP_SIMULATION_SCHEMA = vol.Schema({})
+SERVICE_SYNC_TIME_SCHEMA = vol.Schema({})
 
 SERVICE_SET_THERAPY_USER_SCHEMA = vol.Schema(
     {
@@ -479,10 +481,6 @@ async def _async_get_instances_from_target(
     seen_config_entries: set[str] = set()
 
     for entity_id in entity_ids:
-        # Only process light entities from our integration
-        if not entity_id.startswith("light."):
-            continue
-
         entity_entry = entity_reg.async_get(entity_id)
         if not entity_entry:
             LOGGER.debug("%sEntity %s not found in registry", log_prefix, entity_id)
@@ -527,6 +525,7 @@ async def _async_setup_services(hass: HomeAssistant) -> None:
     _register_timer_service(hass)
     _register_simulation_services(hass)
     _register_alarm_service(hass)
+    _register_time_sync_service(hass)
     _register_therapy_user_service(hass)
 
 
@@ -546,19 +545,23 @@ def _register_preset_service(hass: HomeAssistant) -> None:
         for instance in instances:
             LOGGER.debug("Applying preset '%s' to %s", preset_name, instance.mac)
 
+            brightness = preset.get("brightness")
+            kelvin = preset.get("color_temp_kelvin")
             if "rgb" in preset:
-                await instance.set_color(preset["rgb"])
-            elif "color_temp_kelvin" in preset:
-                rgb_float = color_temperature_to_rgb(preset["color_temp_kelvin"])
+                await instance.set_color_with_brightness(preset["rgb"], brightness)
+            elif kelvin is not None and kelvin >= WHITE_MODE_THRESHOLD_KELVIN:
+                # Daylight presets use the native white LEDs, like light.turn_on.
+                await instance.set_white(brightness)
+            elif kelvin is not None:
+                rgb_float = color_temperature_to_rgb(kelvin)
                 rgb: tuple[int, int, int] = (
                     int(rgb_float[0]),
                     int(rgb_float[1]),
                     int(rgb_float[2]),
                 )
-                await instance.set_color(rgb)
-
-            if "brightness" in preset:
-                await instance.set_color_brightness(preset["brightness"])
+                await instance.set_color_with_brightness(rgb, brightness)
+            elif brightness is not None:
+                await instance.set_color_brightness(brightness)
 
             LOGGER.info("Applied preset '%s' to %s", preset_name, instance.mac)
 
@@ -776,7 +779,17 @@ def _register_alarm_service(hass: HomeAssistant) -> None:
 
         for instance in instances:
             if not instance.is_wl or instance.wl90 is None:
-                LOGGER.warning("Device %s is not a WL90, skipping alarm", instance.mac)
+                LOGGER.warning(
+                    "Device %s is not a WL model, skipping alarm", instance.mac
+                )
+                continue
+
+            if instance.is_wl75 and slot > 1:
+                LOGGER.warning(
+                    "Device %s is a WL75 which only supports alarm slots 0 and 1 (requested slot %d)",
+                    instance.mac,
+                    slot,
+                )
                 continue
 
             LOGGER.info(
@@ -800,6 +813,41 @@ def _register_alarm_service(hass: HomeAssistant) -> None:
         schema=SERVICE_ALARM_SCHEMA,
     )
     LOGGER.debug("Registered service %s.%s", DOMAIN, SERVICE_SET_ALARM)
+
+
+def _register_time_sync_service(hass: HomeAssistant) -> None:
+    """Register the sync_time service."""
+
+    async def async_sync_time(call: ServiceCall) -> None:
+        """Sync Home Assistant local time to the device clock."""
+        instances = await _async_get_instances_from_target(hass, call, "SYNC_TIME")
+        if not instances:
+            return
+
+        failed_devices: list[str] = []
+        for instance in instances:
+            LOGGER.info("SYNC_TIME: Syncing time to %s", instance.mac)
+            success = await instance.sync_time()
+            if success:
+                LOGGER.info("SYNC_TIME: Synced successfully to %s", instance.mac)
+            else:
+                LOGGER.error("SYNC_TIME: Failed to sync time to %s", instance.mac)
+                failed_devices.append(instance.mac)
+
+        if failed_devices:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="command_failed",
+                translation_placeholders={"devices": ", ".join(failed_devices)},
+            )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SYNC_TIME,
+        async_sync_time,
+        schema=SERVICE_SYNC_TIME_SCHEMA,
+    )
+    LOGGER.debug("Registered service %s.%s", DOMAIN, SERVICE_SYNC_TIME)
 
 
 def _register_therapy_user_service(hass: HomeAssistant) -> None:
@@ -857,8 +905,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> b
     if unload_ok:
         # Shutdown coordinator first
         await entry.runtime_data.coordinator.async_shutdown()
-        # Then disconnect the BLE instance
-        await entry.runtime_data.instance.disconnect()
+        # Then disconnect the BLE instance for good (no auto-reconnect: an
+        # orphaned reconnect kept a proxy slot until HA restarted)
+        await entry.runtime_data.instance.shutdown()
 
         # Remove the virtual Therapy Hub device only when the last entry is gone
         remaining = [

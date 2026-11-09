@@ -63,12 +63,19 @@ async def async_setup_entry(
         for desc in SWITCH_DESCRIPTIONS
     ]
     # Add device hardware switches (feedback sound, fade)
-    entities.extend(
-        [
-            BeurerDeviceSwitch(coordinator, name, desc)
-            for desc in DEVICE_SWITCH_DESCRIPTIONS
-        ]
-    )
+    # Note: WL75 does not support the fade hardware setting
+    instance = entry.runtime_data.instance
+    for desc in DEVICE_SWITCH_DESCRIPTIONS:
+        if desc.key == "fade" and instance.is_wl75:
+            continue
+        entities.append(BeurerDeviceSwitch(coordinator, name, desc))
+
+    # Add alarm switches for WL models (WL75 has 2 slots, WL90 has 3 slots)
+    if instance.is_wl and instance.wl90 is not None:
+        entities.extend(
+            BeurerAlarmSwitch(coordinator, name, slot)
+            for slot in range(len(instance.wl90.alarms))
+        )
 
     async_add_entities(entities)
 
@@ -263,3 +270,95 @@ class BeurerDeviceSwitch(CoordinatorEntity[BeurerDataUpdateCoordinator], SwitchE
             await self._instance.set_feedback(False)
         elif self.entity_description.key == "fade":
             await self._instance.set_fade(False)
+
+
+class BeurerAlarmSwitch(CoordinatorEntity[BeurerDataUpdateCoordinator], SwitchEntity):
+    """Switch for enabling or disabling an alarm slot on WL75/WL90 lamps."""
+
+    _attr_has_entity_name: bool = True
+
+    def __init__(
+        self,
+        coordinator: BeurerDataUpdateCoordinator,
+        name: str,
+        slot: int,
+    ) -> None:
+        """Initialize the alarm switch."""
+        super().__init__(coordinator)
+        self._instance = coordinator.instance
+        self._device_name = name
+        self._slot = slot
+        self._attr_translation_key = f"alarm_{slot + 1}"
+        self._attr_unique_id = f"{format_mac(self._instance.mac)}_alarm_{slot + 1}"
+
+    @property
+    def icon(self) -> str:
+        """Return alarm icon based on state."""
+        return "mdi:alarm" if self.is_on else "mdi:alarm-off"
+
+    @property
+    def _alarm(self) -> Any:
+        """Return the AlarmItem for this slot."""
+        if self._instance.wl90 and self._slot < len(self._instance.wl90.alarms):
+            return self._instance.wl90.alarms[self._slot]
+        return None
+
+    @property
+    def available(self) -> bool:
+        """Return True if entity is available and alarm slot exists."""
+        return self._instance.available and self._alarm is not None
+
+    @property
+    def is_on(self) -> bool:
+        """Return True if the alarm is enabled."""
+        alarm = self._alarm
+        return bool(alarm.enabled) if alarm else False
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Enable this alarm on the device."""
+        alarm = self._alarm
+        if not alarm or not self._instance.wl90:
+            return
+        alarm.enabled = True
+        await self._instance.wl90.sync_alarm(self._slot, alarm)
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Disable this alarm on the device."""
+        alarm = self._alarm
+        if not alarm or not self._instance.wl90:
+            return
+        alarm.enabled = False
+        await self._instance.wl90.sync_alarm(self._slot, alarm)
+        self.async_write_ha_state()
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return alarm details (time, days, tone, volume, snooze, sunrise)."""
+        alarm = self._alarm
+        if not alarm:
+            return {}
+        return {
+            "slot": self._slot,
+            "time": f"{alarm.hour:02d}:{alarm.minute:02d}",
+            "days": alarm.days_list,
+            "tone": alarm.tone,
+            "volume": alarm.volume,
+            "snooze_minutes": alarm.snooze_minutes,
+            "sunrise_enabled": alarm.sunrise_enabled,
+            "sunrise_time": alarm.sunrise_time,
+            "sunrise_brightness": alarm.sunrise_brightness,
+        }
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device info for device registry."""
+        mac = format_mac(self._instance.mac)
+        return DeviceInfo(
+            identifiers={(DOMAIN, mac)},
+            name=self._device_name,
+            manufacturer="Beurer",
+            model=detect_model(self._device_name),
+            sw_version=VERSION,
+            connections={(CONNECTION_BLUETOOTH, mac)},
+        )

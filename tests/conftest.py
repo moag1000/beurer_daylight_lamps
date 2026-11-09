@@ -78,6 +78,7 @@ def mock_beurer_instance() -> Generator[MagicMock, None, None]:
     """Create a mock BeurerInstance."""
     with patch("custom_components.beurer_daylight_lamps.BeurerInstance") as mock_class:
         instance = MagicMock()
+        instance.last_time_sync = None
         instance.mac = "AA:BB:CC:DD:EE:FF"
         instance.is_on = True
         instance.rgb_color = (255, 255, 255)

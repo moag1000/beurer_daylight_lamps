@@ -196,6 +196,9 @@
             },
             "therapy_progress": {
                 "name": "Tagesfortschritt"
+            },
+            "last_time_sync": {
+                "name": "Letzte Zeitsynchronisierung"
             }
         },
         "binary_sensor": {
@@ -218,6 +221,15 @@
             },
             "fade": {
                 "name": "Sanfter Uebergang"
+            },
+            "alarm_1": {
+                "name": "Alarm 1"
+            },
+            "alarm_2": {
+                "name": "Alarm 2"
+            },
+            "alarm_3": {
+                "name": "Alarm 3"
             }
         }
     },
@@ -292,6 +304,10 @@
         "stop_simulation": {
             "name": "Simulation stoppen",
             "description": "Stoppt jede laufende Sonnenaufgang- oder Sonnenuntergang-Simulation auf der Lampe."
+        },
+        "sync_time": {
+            "name": "Uhrzeit synchronisieren",
+            "description": "Synchronisiert die aktuelle lokale Uhrzeit und das Datum von Home Assistant mit der internen Uhr der Lampe."
         },
         "set_therapy_user": {
             "name": "Therapie-Person setzen",

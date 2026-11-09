@@ -241,6 +241,9 @@
             },
             "connection_uptime": {
                 "name": "Connection uptime"
+            },
+            "last_time_sync": {
+                "name": "Last time sync"
             }
         },
         "binary_sensor": {
@@ -263,6 +266,15 @@
             },
             "fade": {
                 "name": "Fade transitions"
+            },
+            "alarm_1": {
+                "name": "Alarm 1"
+            },
+            "alarm_2": {
+                "name": "Alarm 2"
+            },
+            "alarm_3": {
+                "name": "Alarm 3"
             }
         }
     },
@@ -365,16 +377,16 @@
             }
         },
         "set_alarm": {
-            "name": "Set Alarm (WL90)",
-            "description": "Configure an alarm on a WL90 Wake-up Light. Supports sunrise simulation, weekday selection, tone, and snooze.",
+            "name": "Set Alarm",
+            "description": "Configure an alarm on a WL75 or WL90 Wake-up Light. Supports sunrise simulation, weekday selection, tone, and snooze.",
             "fields": {
                 "device_id": {
                     "name": "Device",
-                    "description": "The WL90 device to configure"
+                    "description": "The WL75 or WL90 device to configure"
                 },
                 "slot": {
                     "name": "Alarm slot",
-                    "description": "Alarm slot number (0, 1, or 2)"
+                    "description": "Alarm slot number: 0 or 1 on WL75; 0, 1, or 2 on WL90"
                 },
                 "enabled": {
                     "name": "Enabled",
@@ -417,6 +429,10 @@
                     "description": "Maximum sunrise brightness percentage (0-100)"
                 }
             }
+        },
+        "sync_time": {
+            "name": "Sync time",
+            "description": "Synchronize current Home Assistant local time and date to the lamp's internal clock."
         },
         "set_therapy_user": {
             "name": "Set therapy user",

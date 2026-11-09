@@ -27,6 +27,7 @@ ignore = [
     "SLF001",  # private-member-access (common in HA integrations for internal state)
     "ARG001",  # unused-function-argument (HA callback signatures require specific params)
     "ARG002",  # unused-method-argument (HA platform method signatures)
+    "CPY001",  # missing-copyright-notice (no per-file headers; see LICENSE)
 ]
 
 [lint.per-file-ignores]

@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.37.0] - 2026-11-09
+
+Thanks to @mike-vention for the fixes (closes #6, #7, #8) and to @BigDi for WL75 support (#9).
+
+### Added
+
+- **WL75 Wake-up Light support**: the WL75 speaks its own BLE protocol (short `FE EF` framing, separate white light and mood light channels). Light, effects (scenes), timers, FM radio, settings and 2 alarm slots are supported; the Bluetooth speaker and the fade setting are hidden because the WL75 has neither. Also matches the `WL 75` / `WL 90` pairing names.
+- **Alarm switches** for WL75 (2 slots) and WL90 (3 slots), with the alarm details as attributes.
+- **`sync_time` service** and a **Last time sync** diagnostic sensor; the clock is now synced in Home Assistant's local time on connect and once a day.
+
+### Changed
+
+- **Native white is reported as color temperature**: in native white the light reports `COLOR_TEMP` (the requested Kelvin, or 5300 K) instead of `WHITE`, so the color temperature controls stay usable. `white:` keeps working.
+- **Lint**: `CPY001` is ignored and the code passes `ruff check .` / `ruff format --check .` with current ruff.
+
+### Fixed
+
+- **Emulated color temperature was reported without Kelvin**: `color_temp_kelvin` checked the instance mode, which is only ever WHITE or RGB, so it always returned `None`; scenes saved in that state did nothing. The entity now reports COLOR_TEMP (with Kelvin) only while the lamp still shows the RGB that emulates it, without an effect; any change made elsewhere (select, number, preset, remote, restored state) is reported as RGB instead of a stale COLOR_TEMP.
+- **`effect: Off` in native white lit the RGB LEDs**: both the light entity and `set_effect` (select) no longer switch to RGB to stop an effect that is not running.
+- **Effect sent together with a color was lost**: a scene captured during an effect (effect + rgb_color) now applies the effect after the color.
+- **`apply_preset` used RGB for daylight**: presets at or above 5000 K use the native white LEDs like `light.turn_on`; RGB presets set color and brightness in one call (which also clears a running effect). `WHITE_MODE_THRESHOLD_KELVIN` moved to `const.py`.
+- **A packet lost to a dead link was not resent**: when a write times out or fails with a link error, `_send_packet` reconnects and sends it once more (e.g. turn_off's OFF WHITE no longer gets lost, leaving the light on). Link errors are logged as warnings.
+- **Watchdog cancelled itself inside `disconnect()`**: the disconnect was aborted half-way, leaving a dead link marked connected.
+- **Unload left a reconnecting instance behind**: `async_unload_entry` calls the new `shutdown()`; no reconnect is scheduled afterwards, so a reload no longer leaks a proxy slot.
+- **Connected lamp marked unavailable when advertisements stopped**: `mark_unavailable` is ignored while connected.
+- **Light showed "unknown" during every reconnect**: a disconnect keeps the last known on/off state (`assumed_state` marks it stale) instead of clearing it.
+- **Mode-switch filter could drop the only real status**: if a notification was filtered during a mode switch, the command requests status once more afterwards.
+- **Commands in the current mode did not refresh the entity**: `set_effect`, `set_color`, `set_color_with_brightness(_fast)`, `set_color_brightness`, `set_white`, `set_timer` and `cancel_timer` stored the new state optimistically without a push, and the confirming status was not a change. Effect, color, brightness and timer changes without a mode switch (also from the number/select entities and sunrise/sunset steps) showed up only at the next poll. Same root cause as the `turn_off` fix in 1.36.5.
+- **Next poll scheduled with the old interval**: the coordinator now adjusts the polling interval before `async_set_updated_data`, so after off -> on the next refresh comes in 30 s, not 300 s.
+- **Commands interleaved**: command methods now run under a per-device re-entrant lock. A second command (another entity, an automation, a poll) no longer slips between the packets of the isolated mode switch or clears the other command's mode-switch filter.
+- **Concurrent `connect()` opened a second connection**: `connect()` is serialized, so a command or poll during a reconnect no longer leaves an orphaned client holding a proxy slot.
+- **A stale client's disconnect tore down the live connection**: `_on_disconnect` ignores clients that are no longer current.
+- **White started at 99 % after off or RGB**: a white "off" status keeps the last white brightness instead of resetting it to `None`, so `color_temp_kelvin >= 5000` without brightness resumes the previous level.
+- **`turn_off` left the entity "on" until the next poll**: `turn_off` set the off state optimistically without refreshing the entity, so the lamp's off notification no longer looked like a change and was not pushed to HA. The entity stayed "on" for up to 30 s (adaptive polling) and a toggle sent another `turn_off` instead of `turn_on`. `turn_off` now refreshes the entity immediately.
+- **`light.turn_on` with `white:` was ignored** (#6): `ATTR_WHITE` is now handled and switches to native white at the given intensity.
+- **Brightness-only `turn_on` after native white lit the RGB LEDs** (#7): `_handle_brightness_only` now checks native white mode first, so a colour temperature >= 5000 K followed by a brightness change stays white.
+- **HA brightness 1-2 was sent as 0 %** (#8): new `ha_brightness_to_percent()` rounds and keeps any non-zero brightness at least 1 %. Used by `set_color_with_brightness`, `set_color_with_brightness_fast`, `set_color_brightness` and `set_white`.
+
 ## [1.36.4] - 2026-05-21
 
 ### Fixed

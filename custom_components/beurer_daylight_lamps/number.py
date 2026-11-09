@@ -87,15 +87,13 @@ async def async_setup_entry(
     entities.append(BeurerTimerNumber(coordinator, name))
     # Add therapy daily goal entity
     entities.append(BeurerTherapyGoalNumber(coordinator, name))
-    # Add WL90-specific volume controls
+    # Add WL volume controls (radio volume for WL75 and WL90, music volume for WL90 only)
     instance = entry.runtime_data.instance
     if instance.is_wl:
-        entities.extend(
-            [
-                BeurerWL90Number(coordinator, name, desc)
-                for desc in WL90_NUMBER_DESCRIPTIONS
-            ]
-        )
+        for desc in WL90_NUMBER_DESCRIPTIONS:
+            if desc.key == "music_volume" and not instance.is_wl90:
+                continue
+            entities.append(BeurerWL90Number(coordinator, name, desc))
     async_add_entities(entities)
 
 

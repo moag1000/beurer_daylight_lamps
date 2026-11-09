@@ -22,7 +22,7 @@ I heavily used claude as I did in other projects but focused on keeping it tight
 | TL70  | ⚠️ Untested | Should work |
 | TL80  | ⚠️ Untested | Should work |
 | TL90  | ⚠️ Untested | Should work |
-| WL75  | ⚠️ Untested | Wake-up Light (same protocol family as WL90) |
+| WL75  | ✅ Tested (by contributor) | Wake-up Light with FM radio, 2 alarms (own BLE protocol) |
 | WL90  | ⚠️ Untested | Wake-up Light with Radio, Speaker, Alarms |
 
 ## Features
@@ -30,7 +30,8 @@ I heavily used claude as I did in other projects but focused on keeping it tight
 ### Light Control
 - 💡 On/off and brightness control
 - 🎨 RGB color mode with color picker
-- 🌡️ Color temperature (2700K - 6500K)
+- 🌡️ Color temperature (2700K - 6500K): from 5000K the lamp's native white LEDs are used (reported as color temperature, e.g. 5300K), below that it is emulated with RGB
+- ⚪ `white:` in `light.turn_on` switches to native white at the given intensity
 - ✨ Light effects (Rainbow, Pulse, Forest, Wave, etc.)
 - 🔆 Separate white/color brightness sliders
 
@@ -76,14 +77,16 @@ I heavily used claude as I did in other projects but focused on keeping it tight
 | **Sensor** | Command success rate | Percentage of successful BLE commands (diagnostic, disabled) |
 | **Sensor** | Connection uptime | Seconds since current connection established (diagnostic, disabled) |
 
-#### WL90-Only Entities
+#### Wake-up Light Entities (WL75 / WL90)
 
 | Entity Type | Name | Description |
 |-------------|------|-------------|
-| **Media Player** | FM Radio | Radio with on/off, volume, seek, presets |
-| **Media Player** | Bluetooth Speaker | BT speaker with on/off, volume |
-| **Number** | Radio volume | Radio volume slider 0-10 |
-| **Number** | Speaker volume | Speaker volume slider 0-10 |
+| **Media Player** | FM Radio | Radio with on/off, volume, seek, presets (WL75, WL90) |
+| **Media Player** | Bluetooth Speaker | BT speaker with on/off, volume (WL90 only) |
+| **Number** | Radio volume | Radio volume slider 0-10 (WL75, WL90) |
+| **Number** | Speaker volume | Speaker volume slider 0-10 (WL90 only) |
+| **Switch** | Alarm 1-3 | Enable/disable an alarm slot (WL75: 2 slots, WL90: 3 slots) |
+| **Sensor** | Last time sync | When the lamp clock was last synced (all models, diagnostic) |
 
 #### Entity Notes
 
@@ -175,9 +178,9 @@ target:
   entity_id: light.beurer_tl100
 ```
 
-#### `beurer_daylight_lamps.set_alarm` (WL90 only)
+#### `beurer_daylight_lamps.set_alarm` (WL75 / WL90)
 
-Configure one of 3 alarm slots with sunrise simulation.
+Configure an alarm slot with sunrise simulation (WL90: slots 0-2, WL75: slots 0-1).
 
 ```yaml
 service: beurer_daylight_lamps.set_alarm
@@ -195,6 +198,16 @@ data:
   sunrise_enabled: true
   sunrise_time: 20           # Start 20 min before alarm
   sunrise_brightness: 50
+```
+
+#### `beurer_daylight_lamps.sync_time`
+
+Sync the lamp clock to Home Assistant's local time. This also happens on every connect and automatically once a day.
+
+```yaml
+service: beurer_daylight_lamps.sync_time
+target:
+  entity_id: light.beurer_wl75
 ```
 
 ## Requirements
@@ -539,7 +552,8 @@ automation:
 
 This integration uses **Bluetooth Low Energy (BLE)** for communication:
 
-- **State Updates**: The lamp sends BLE notifications when its state changes. These are processed in real-time.
+- **State Updates**: The lamp sends BLE notifications when its state changes. These are processed in real-time. After every command the new state is pushed to Home Assistant right away, without waiting for the next poll.
+- **Command Serialization**: Commands to one lamp run one after another (per-device lock), and only one connection attempt runs at a time, so automations, entities and polling cannot interleave packets.
 - **RSSI Updates**: Signal strength is updated whenever the lamp sends a Bluetooth advertisement (typically every few seconds).
 - **Adaptive Polling**: Periodic refresh ensures state consistency with intervals that adapt to device state:
   - 30 seconds when light is on (responsive updates)
@@ -574,9 +588,11 @@ This integration uses **Bluetooth Low Energy (BLE)** for communication:
 
 6. **Simulation requires connection**: Sunrise/sunset simulations require an active BLE connection. If the connection drops, the simulation will pause and resume when reconnected.
 
-7. **Color temperature approximation**: Color temperatures are approximated using RGB values since the lamp doesn't have a native CT mode. Results may vary slightly from true Kelvin values.
+7. **Color temperature approximation**: The lamp has no adjustable white. Color temperatures below 5000K are approximated with RGB and may vary slightly from true Kelvin values; 5000K and above use the fixed native white LEDs (about 5300K on the TL100).
 
-8. **White brightness capped at 99%**: Some device firmware versions switch to red/RGB mode when white brightness is set to exactly 100%. The integration caps white brightness at 99% to work around this firmware bug. The visual difference is imperceptible.
+8. **White brightness capped at 99%** (TL/WL90 protocol): Some device firmware versions switch to red/RGB mode when white brightness is set to exactly 100%. The integration caps white brightness at 99% to work around this firmware bug. The visual difference is imperceptible. The WL75 uses its own protocol and is not capped.
+
+9. **WL75 differences**: The WL75 has no Bluetooth speaker and no fade setting, so those entities are not created, and it has 2 alarm slots instead of 3.
 
 ## Diagnostics
 
@@ -651,6 +667,10 @@ Based on work by:
 - [deadolus/ha-beurer](https://github.com/deadolus/ha-beurer)
 - [jmac83/ha-beurer](https://github.com/jmac83/ha-beurer)
 - [Bellamonte/beurer_daylight_lamps](https://github.com/Bellamonte/beurer_daylight_lamps)
+
+Thanks to everyone who contributed fixes and features:
+- [@mike-vention](https://github.com/mike-vention): light state sync, native white handling, low brightness rounding, command serialization and BLE reconnect lifecycle fixes (v1.37.0, #6, #7, #8)
+- [@BigDi](https://github.com/BigDi): WL75 Wake-up Light support with its own BLE protocol, alarm switches and time sync (v1.37.0, #9)
 
 ## License
 

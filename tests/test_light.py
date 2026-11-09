@@ -7,6 +7,7 @@ from homeassistant.components.light import (
     ATTR_BRIGHTNESS,
     ATTR_EFFECT,
     ATTR_RGB_COLOR,
+    ATTR_WHITE,
     ColorMode,
 )
 
@@ -258,21 +259,56 @@ def test_effect_in_white_mode(mock_coordinator: MagicMock) -> None:
 
 
 def test_color_mode_white(mock_coordinator: MagicMock) -> None:
-    """Test color_mode returns WHITE when in native white mode."""
+    """Native white is reported as COLOR_TEMP so the HA color controls stay usable."""
     mock_coordinator.instance.color_mode = ColorMode.WHITE
 
     light = BeurerLight(mock_coordinator, "Test", "entry_id")
-    assert light.color_mode == ColorMode.WHITE
+    assert light.color_mode == ColorMode.COLOR_TEMP
+    assert light.color_temp_kelvin == 5300
+    assert ColorMode.WHITE in light.supported_color_modes
+
+
+def test_color_temp_kelvin_native_white_keeps_requested(
+    mock_coordinator: MagicMock,
+) -> None:
+    """A requested daylight temperature is reported back in native white."""
+    mock_coordinator.instance.color_mode = ColorMode.WHITE
+
+    light = BeurerLight(mock_coordinator, "Test", "entry_id")
+    light._color_temp_kelvin = 6000
+    assert light.color_temp_kelvin == 6000
+    light._color_temp_kelvin = 3000  # stale emulated value, not shown in white
+    assert light.color_temp_kelvin == 5300
 
 
 def test_color_mode_color_temp(mock_coordinator: MagicMock) -> None:
-    """Test color_mode returns COLOR_TEMP when tracking color temp."""
+    """COLOR_TEMP while the lamp shows the RGB emulating that temperature."""
+    from custom_components.beurer_daylight_lamps.light import _color_temp_rgb
+
     mock_coordinator.instance.color_mode = ColorMode.RGB
+    mock_coordinator.instance.effect = "Off"
+    mock_coordinator.instance.rgb_color = _color_temp_rgb(4000)
 
     light = BeurerLight(mock_coordinator, "Test", "entry_id")
     light._color_temp_kelvin = 4000
 
     assert light.color_mode == ColorMode.COLOR_TEMP
+    assert light.color_temp_kelvin == 4000
+
+
+def test_color_mode_rgb_after_color_changed_elsewhere(
+    mock_coordinator: MagicMock,
+) -> None:
+    """A color set outside the entity (select, remote) is reported as RGB."""
+    mock_coordinator.instance.color_mode = ColorMode.RGB
+    mock_coordinator.instance.effect = "Off"
+    mock_coordinator.instance.rgb_color = (255, 0, 0)
+
+    light = BeurerLight(mock_coordinator, "Test", "entry_id")
+    light._color_temp_kelvin = 3000  # stale, e.g. restored after a restart
+
+    assert light.color_mode == ColorMode.RGB
+    assert light.color_temp_kelvin is None
 
 
 @pytest.mark.asyncio
@@ -467,3 +503,65 @@ class TestAsyncSetupEntry:
         await async_setup_entry(mock_hass, mock_entry, added_entities.extend)
 
         assert added_entities[0]._device_name == "Beurer Lamp"
+
+
+@pytest.mark.asyncio
+async def test_turn_on_white_attribute(mock_coordinator: MagicMock) -> None:
+    """`white:` switches to native white at the given intensity."""
+    light = BeurerLight(mock_coordinator, "Test", "entry_id")
+    light._color_temp_kelvin = 3000
+
+    await light.async_turn_on(**{ATTR_WHITE: 128})
+
+    mock_coordinator.instance.set_white.assert_called_once_with(128)
+    assert light._color_temp_kelvin is None
+
+
+@pytest.mark.asyncio
+async def test_turn_on_brightness_only_after_native_white(
+    mock_coordinator: MagicMock,
+) -> None:
+    """Brightness alone keeps native white chosen by a high color temp."""
+    mock_coordinator.instance.color_mode = ColorMode.WHITE
+    mock_coordinator.instance.color_on = False
+
+    light = BeurerLight(mock_coordinator, "Test", "entry_id")
+    light._color_temp_kelvin = 6500  # set by the >= 5000 K native-white path
+
+    await light.async_turn_on(**{ATTR_BRIGHTNESS: 200})
+
+    mock_coordinator.instance.set_white.assert_called_once_with(200)
+    mock_coordinator.instance.set_color_brightness.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_turn_on_effect_off_in_native_white(mock_coordinator: MagicMock) -> None:
+    """effect Off in native white keeps white instead of lighting RGB."""
+    mock_coordinator.instance.color_mode = ColorMode.WHITE
+
+    light = BeurerLight(mock_coordinator, "Test", "entry_id")
+    await light.async_turn_on(**{ATTR_EFFECT: "Off", ATTR_BRIGHTNESS: 120})
+
+    mock_coordinator.instance.set_effect.assert_not_called()
+    mock_coordinator.instance.set_white.assert_called_once_with(120)
+
+
+@pytest.mark.asyncio
+async def test_turn_on_color_with_effect_applies_effect_last(
+    mock_coordinator: MagicMock,
+) -> None:
+    """A scene with rgb_color + effect keeps the effect (color would clear it)."""
+    light = BeurerLight(mock_coordinator, "Test", "entry_id")
+    await light.async_turn_on(
+        **{ATTR_RGB_COLOR: (255, 0, 0), ATTR_EFFECT: "Rainbow", ATTR_BRIGHTNESS: 100}
+    )
+
+    inst = mock_coordinator.instance
+    inst.set_color_with_brightness.assert_called_once_with((255, 0, 0), 100)
+    inst.set_effect.assert_called_once_with("Rainbow")
+    names = [
+        c[0]
+        for c in inst.mock_calls
+        if c[0] in ("set_color_with_brightness", "set_effect")
+    ]
+    assert names == ["set_color_with_brightness", "set_effect"]

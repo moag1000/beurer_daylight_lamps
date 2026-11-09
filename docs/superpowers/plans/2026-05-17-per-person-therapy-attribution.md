@@ -240,8 +240,10 @@ async def test_therapy_user_select_created(hass: HomeAssistant) -> None:
     await setup_integration(hass)
     registry = er.async_get(hass)
     entries = [
-        e for e in registry.entities.values()
-        if e.platform == DOMAIN and e.domain == "select"
+        e
+        for e in registry.entities.values()
+        if e.platform == DOMAIN
+        and e.domain == "select"
         and e.unique_id.endswith("_therapy_user")
     ]
     assert len(entries) == 1
@@ -252,7 +254,8 @@ async def test_therapy_user_select_default_unknown(hass: HomeAssistant) -> None:
     """Default option is the 'unknown' sentinel when no persons exist."""
     await setup_integration(hass)
     state = next(
-        s for s in hass.states.async_all("select")
+        s
+        for s in hass.states.async_all("select")
         if s.entity_id.endswith("_therapy_user")
     )
     assert state.state == THERAPY_USER_UNKNOWN
@@ -412,16 +415,12 @@ class BeurerTherapyUserSelect(
         self._instance = coordinator.instance
         self._device_name = device_name
         self._entry = entry
-        self._attr_unique_id = (
-            f"{format_mac(self._instance.mac)}_therapy_user"
-        )
+        self._attr_unique_id = f"{format_mac(self._instance.mac)}_therapy_user"
         self._current: str = THERAPY_USER_UNKNOWN
 
     @property
     def options(self) -> list[str]:
-        persons = sorted(
-            s.entity_id for s in self._hass.states.async_all("person")
-        )
+        persons = sorted(s.entity_id for s in self._hass.states.async_all("person"))
         return [THERAPY_USER_UNKNOWN, *persons]
 
     @property
@@ -488,11 +487,13 @@ async def test_auto_session_uses_select_person(hass: HomeAssistant) -> None:
     hass.states.async_set("person.michael", "home")
     entry = await setup_integration(hass)
     sel = next(
-        s for s in hass.states.async_all("select")
+        s
+        for s in hass.states.async_all("select")
         if s.entity_id.endswith("_therapy_user")
     )
     await hass.services.async_call(
-        "select", "select_option",
+        "select",
+        "select_option",
         {"entity_id": sel.entity_id, "option": "person.michael"},
         blocking=True,
     )
@@ -523,6 +524,7 @@ def _resolve_therapy_person(self) -> str | None:
     """Resolve the active therapy person from this lamp's select entity."""
     from homeassistant.helpers import entity_registry as er
     from .const import THERAPY_USER_UNKNOWN
+
     registry = er.async_get(self._hass)
     mac = format_mac(self.mac)
     unique = f"{mac}_therapy_user"
@@ -676,16 +678,19 @@ async def test_set_therapy_user_service(hass: HomeAssistant) -> None:
     hass.states.async_set("person.anna", "home")
     entry = await setup_integration(hass)
     light_state = next(
-        s for s in hass.states.async_all("light")
+        s
+        for s in hass.states.async_all("light")
         if s.entity_id.startswith("light.test_lamp")
     )
     await hass.services.async_call(
-        DOMAIN, "set_therapy_user",
+        DOMAIN,
+        "set_therapy_user",
         {"entity_id": light_state.entity_id, "person": "person.anna"},
         blocking=True,
     )
     sel = next(
-        s for s in hass.states.async_all("select")
+        s
+        for s in hass.states.async_all("select")
         if s.entity_id.endswith("_therapy_user")
     )
     assert sel.state == "person.anna"
@@ -733,7 +738,8 @@ async def _set_therapy_user(call: ServiceCall) -> None:
     if select_entity_id is None:
         raise vol.Invalid("Therapy user select entity not found")
     await hass.services.async_call(
-        "select", "select_option",
+        "select",
+        "select_option",
         {"entity_id": select_entity_id, "option": person},
         blocking=True,
     )
@@ -836,11 +842,13 @@ async def test_event_fired_on_session_end(hass: HomeAssistant) -> None:
     hass.states.async_set("person.michael", "home")
     entry = await setup_integration(hass)
     sel = next(
-        s for s in hass.states.async_all("select")
+        s
+        for s in hass.states.async_all("select")
         if s.entity_id.endswith("_therapy_user")
     )
     await hass.services.async_call(
-        "select", "select_option",
+        "select",
+        "select_option",
         {"entity_id": sel.entity_id, "option": "person.michael"},
         blocking=True,
     )
@@ -854,9 +862,9 @@ async def test_event_fired_on_session_end(hass: HomeAssistant) -> None:
     instance._rgb_color = (200, 200, 200)
     instance._track_therapy_from_rgb()
     # backdate start so duration >= 1 minute
-    instance.therapy_tracker._current_session.start_time = (
-        datetime.now(tz=UTC) - timedelta(minutes=2)
-    )
+    instance.therapy_tracker._current_session.start_time = datetime.now(
+        tz=UTC
+    ) - timedelta(minutes=2)
     instance._color_on = False
     instance._track_therapy_from_rgb()
     await hass.async_block_till_done()
@@ -881,6 +889,7 @@ In `beurer_daylight_lamps.py`, add a private helper on `BeurerInstance` (near `_
 def _end_therapy_and_emit(self) -> None:
     """End the active session and fire the per-person event if any."""
     from .const import EVENT_THERAPY_SESSION
+
     session = self._therapy_tracker.end_session()
     if session is None or session.end_time is None:
         return
@@ -932,14 +941,13 @@ Append to `tests/test_therapy_hub.py`:
 async def test_hub_device_created(hass: HomeAssistant) -> None:
     from homeassistant.helpers import device_registry as dr
     from custom_components.beurer_daylight_lamps.const import (
-        DOMAIN, THERAPY_HUB_IDENTIFIER,
+        DOMAIN,
+        THERAPY_HUB_IDENTIFIER,
     )
 
     await setup_integration(hass)
     dev_reg = dr.async_get(hass)
-    hub = dev_reg.async_get_device(
-        identifiers={(DOMAIN, THERAPY_HUB_IDENTIFIER)}
-    )
+    hub = dev_reg.async_get_device(identifiers={(DOMAIN, THERAPY_HUB_IDENTIFIER)})
     assert hub is not None
     assert hub.name == "Beurer Therapy Hub"
 ```
@@ -1014,6 +1022,7 @@ In `__init__.py`'s `async_setup_entry`, after `await hass.config_entries.async_f
 
 ```python
 from .therapy_hub import get_or_create_hub
+
 hub = get_or_create_hub(hass)
 hub.ensure_device(entry)
 ```
@@ -1022,8 +1031,10 @@ In `async_unload_entry`, after platforms are unloaded, add:
 
 ```python
 from .therapy_hub import HUB_DATA_KEY, get_or_create_hub
+
 remaining = [
-    e for e in hass.config_entries.async_entries(DOMAIN)
+    e
+    for e in hass.config_entries.async_entries(DOMAIN)
     if e.entry_id != entry.entry_id and e.state.recoverable
 ]
 if not remaining:
@@ -1066,11 +1077,13 @@ async def test_per_person_sensors_aggregate(hass: HomeAssistant) -> None:
     hass.states.async_set("person.michael", "home")
     entry = await setup_integration(hass)
     sel = next(
-        s for s in hass.states.async_all("select")
+        s
+        for s in hass.states.async_all("select")
         if s.entity_id.endswith("_therapy_user")
     )
     await hass.services.async_call(
-        "select", "select_option",
+        "select",
+        "select_option",
         {"entity_id": sel.entity_id, "option": "person.michael"},
         blocking=True,
     )
@@ -1080,9 +1093,9 @@ async def test_per_person_sensors_aggregate(hass: HomeAssistant) -> None:
     instance._color_brightness = 230
     instance._rgb_color = (200, 200, 200)
     instance._track_therapy_from_rgb()
-    instance.therapy_tracker._current_session.start_time = (
-        datetime.now(tz=UTC) - timedelta(minutes=5)
-    )
+    instance.therapy_tracker._current_session.start_time = datetime.now(
+        tz=UTC
+    ) - timedelta(minutes=5)
     instance._color_on = False
     instance._track_therapy_from_rgb()
     await hass.async_block_till_done()
@@ -1107,6 +1120,7 @@ from datetime import UTC, datetime, timedelta
 
 def _iter_trackers(hass: HomeAssistant):
     from .const import DOMAIN
+
     for entry in hass.config_entries.async_entries(DOMAIN):
         runtime = getattr(entry, "runtime_data", None)
         if runtime is None:
@@ -1114,9 +1128,7 @@ def _iter_trackers(hass: HomeAssistant):
         yield runtime.instance.therapy_tracker
 
 
-def _sum_minutes_for(
-    hass: HomeAssistant, person_id: str, since: datetime
-) -> float:
+def _sum_minutes_for(hass: HomeAssistant, person_id: str, since: datetime) -> float:
     total = 0.0
     for tracker in _iter_trackers(hass):
         for session in tracker.sessions:
@@ -1138,9 +1150,7 @@ def _sum_minutes_for(
 
 
 def today_minutes_for(hass: HomeAssistant, person_id: str) -> float:
-    midnight = datetime.now(tz=UTC).replace(
-        hour=0, minute=0, second=0, microsecond=0
-    )
+    midnight = datetime.now(tz=UTC).replace(hour=0, minute=0, second=0, microsecond=0)
     return _sum_minutes_for(hass, person_id, midnight)
 
 
@@ -1152,9 +1162,7 @@ def week_minutes_for(hass: HomeAssistant, person_id: str) -> float:
     return _sum_minutes_for(hass, person_id, week_start)
 
 
-def goal_progress_for(
-    hass: HomeAssistant, person_id: str, goal_minutes: int
-) -> int:
+def goal_progress_for(hass: HomeAssistant, person_id: str, goal_minutes: int) -> int:
     if goal_minutes <= 0:
         return 0
     return min(100, int(today_minutes_for(hass, person_id) / goal_minutes * 100))
@@ -1176,19 +1184,24 @@ domain_data[f"{HUB_DATA_KEY}_sensors_added"] = True
 hub = get_or_create_hub(hass)
 hub.ensure_device(entry)
 
+
 def _person_slug(entity_id: str) -> str:
     return entity_id.split(".", 1)[1]
+
 
 def _build_person_sensors() -> list[SensorEntity]:
     entities: list[SensorEntity] = []
     for ps in hass.states.async_all("person"):
         slug = _person_slug(ps.entity_id)
-        entities.extend([
-            BeurerPersonTherapySensor(hass, ps.entity_id, slug, "today"),
-            BeurerPersonTherapySensor(hass, ps.entity_id, slug, "week"),
-            BeurerPersonTherapySensor(hass, ps.entity_id, slug, "progress"),
-        ])
+        entities.extend(
+            [
+                BeurerPersonTherapySensor(hass, ps.entity_id, slug, "today"),
+                BeurerPersonTherapySensor(hass, ps.entity_id, slug, "week"),
+                BeurerPersonTherapySensor(hass, ps.entity_id, slug, "progress"),
+            ]
+        )
     return entities
+
 
 async_add_entities(_build_person_sensors())
 ```
@@ -1199,7 +1212,9 @@ Add the entity class to `sensor.py`:
 from homeassistant.helpers.device_registry import DeviceInfo
 from .const import THERAPY_HUB_IDENTIFIER, CONF_THERAPY_GOAL, DEFAULT_THERAPY_GOAL
 from .therapy_hub import (
-    today_minutes_for, week_minutes_for, goal_progress_for,
+    today_minutes_for,
+    week_minutes_for,
+    goal_progress_for,
 )
 
 
@@ -1305,9 +1320,8 @@ In `sensor.py`'s `async_setup_entry`, after the initial `async_add_entities(_bui
 ```python
 from homeassistant.helpers.event import async_track_state_added_domain
 
-known_persons: set[str] = {
-    s.entity_id for s in hass.states.async_all("person")
-}
+known_persons: set[str] = {s.entity_id for s in hass.states.async_all("person")}
+
 
 @callback
 def _handle_new_person(event) -> None:
@@ -1316,11 +1330,14 @@ def _handle_new_person(event) -> None:
         return
     known_persons.add(new_id)
     slug = _person_slug(new_id)
-    async_add_entities([
-        BeurerPersonTherapySensor(hass, new_id, slug, "today"),
-        BeurerPersonTherapySensor(hass, new_id, slug, "week"),
-        BeurerPersonTherapySensor(hass, new_id, slug, "progress"),
-    ])
+    async_add_entities(
+        [
+            BeurerPersonTherapySensor(hass, new_id, slug, "today"),
+            BeurerPersonTherapySensor(hass, new_id, slug, "week"),
+            BeurerPersonTherapySensor(hass, new_id, slug, "progress"),
+        ]
+    )
+
 
 unsub = async_track_state_added_domain(hass, "person", _handle_new_person)
 entry.async_on_unload(unsub)

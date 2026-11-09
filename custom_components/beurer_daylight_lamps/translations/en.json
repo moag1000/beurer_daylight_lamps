@@ -175,6 +175,9 @@
             },
             "therapy_progress": {
                 "name": "Daily goal progress"
+            },
+            "last_time_sync": {
+                "name": "Last time sync"
             }
         },
         "binary_sensor": {
@@ -197,6 +200,15 @@
             },
             "fade": {
                 "name": "Fade"
+            },
+            "alarm_1": {
+                "name": "Alarm 1"
+            },
+            "alarm_2": {
+                "name": "Alarm 2"
+            },
+            "alarm_3": {
+                "name": "Alarm 3"
             }
         }
     },
