@@ -601,8 +601,11 @@ class TestSunriseSimulationExecution:
 class TestTherapyTrackerCurrentSession:
     """Tests for TherapyTracker with current session calculations."""
 
-    def test_today_minutes_includes_current_session(self) -> None:
+    def test_today_minutes_includes_current_session(self, freezer) -> None:
         """Test today_minutes includes active current session."""
+        # Fixed midday: a session started 15 min ago must not cross local midnight
+        # (unfrozen, the test failed in the first 15 min of each local day).
+        freezer.move_to("2026-01-08 12:00:00")
         tracker = TherapyTracker()
 
         # Start a current session with therapy light
