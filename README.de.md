@@ -84,6 +84,7 @@ Alternativ: **Einstellungen** → **Geräte & Dienste** → **Integration hinzuf
 | Auswahl | Effekt | Lichteffekte |
 | Zahl | Helligkeit Weiß / Farbe, Timer, Tägliches Lichtziel | |
 | Sensor | Lichttherapie heute / diese Woche, Tagesziel Fortschritt | Lichttherapie-Tracking |
+| Sensor | Fortschritt Sonnenauf-/-untergang | Fortschritt einer laufenden Simulation (0–100 %), Attribut `simulation`: Sonnenaufgang, Sonnenuntergang oder keine |
 | Binärsensor | Verbunden, Bluetooth erreichbar, Tagesziel erreicht | |
 | Ereignis | Lampen-Ereignis | Timer abgelaufen/abgebrochen, Einschlaf-Timer abgelaufen, Sonnenauf-/-untergang beendet, Lichttherapie beendet |
 | Schalter | Signalton, Überblenden, Adaptive Lighting | |
@@ -147,7 +148,7 @@ Fertige Automations-Vorlagen in [`blueprints/automation/beurer_daylight_lamps/`]
 ## Fehlerbehebung
 
 - **Lampe wird nicht gefunden:** Lampe einschalten, nicht mit der Beurer-App verbunden lassen, näher an den Bluetooth-Adapter stellen oder einen ESPHome-Bluetooth-Proxy nutzen.
-- **Verbindung bricht ab:** Signalstärke-Sensor aktivieren (unter -80 dBm ist es zu schwach), Proxy näher an die Lampe.
+- **Verbindung bricht ab:** Unter **Einstellungen** → **System** → **Reparaturen** erscheint ein Hinweis, wenn das Signal 10 Minuten lang bei -85 dBm oder schwächer liegt oder sich die Lampe 6-mal in einer Stunde neu verbindet. Er verschwindet von selbst, sobald die Verbindung stabil ist. Außerdem: Signalstärke-Sensor aktivieren (unter -80 dBm ist es zu schwach), Proxy näher an die Lampe.
 - **Entität nicht verfügbar:** Unter **Einstellungen** → **System** → **Reparaturen** nachsehen oder die Taste „Neu verbinden“ drücken.
 - **Diagnose:** Integration → drei Punkte → **Diagnose herunterladen** (MAC-Adresse wird geschwärzt).
 

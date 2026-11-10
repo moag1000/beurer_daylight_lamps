@@ -127,6 +127,7 @@ rules:
     status: done
   repair-issues:
     status: done
+    comment: Adapter full, device not found, init failed, weak signal / frequent reconnects.
   stale-devices:
     status: done
 

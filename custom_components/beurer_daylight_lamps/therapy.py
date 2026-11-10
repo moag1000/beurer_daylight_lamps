@@ -330,6 +330,24 @@ class SunriseSimulation:
         self._task: asyncio.Task[None] | None = None
         self._current_step = 0
         self._total_steps = 0
+        self._kind: str | None = None
+
+    def _notify(self) -> None:
+        """Tell entities that the simulation state or progress changed."""
+        self._instance.notify_state_changed()
+
+    def _set_step(self, step: int) -> None:
+        """Record the current step and notify entities."""
+        self._current_step = step
+        self._notify()
+
+    def _reset(self) -> None:
+        """Clear the simulation state after it ends or is stopped."""
+        self._running = False
+        self._current_step = 0
+        self._total_steps = 0
+        self._kind = None
+        self._notify()
 
     def _create_background_task(
         self,
@@ -358,6 +376,11 @@ class SunriseSimulation:
             return 0
         return int(self._current_step / self._total_steps * 100)
 
+    @property
+    def kind(self) -> str | None:
+        """Return "sunrise" or "sunset" while a simulation runs, else None."""
+        return self._kind if self._running else None
+
     async def start_sunrise(
         self,
         duration_minutes: int = 15,
@@ -381,6 +404,8 @@ class SunriseSimulation:
         )
 
         self._running = True
+        self._kind = "sunrise"
+        self._notify()
         self._task = self._create_background_task(
             self._run_sunrise(duration_minutes, config),
             f"beurer_sunrise_{self._instance.mac}",
@@ -407,6 +432,8 @@ class SunriseSimulation:
         )
 
         self._running = True
+        self._kind = "sunset"
+        self._notify()
         self._task = self._create_background_task(
             self._run_sunset(duration_minutes, end_brightness_pct),
             f"beurer_sunset_{self._instance.mac}",
@@ -420,8 +447,7 @@ class SunriseSimulation:
             with contextlib.suppress(asyncio.CancelledError):
                 await self._task
         self._task = None
-        self._current_step = 0
-        self._total_steps = 0
+        self._reset()
         LOGGER.debug("Simulation stopped")
 
     async def _apply_with_retry(
@@ -505,7 +531,7 @@ class SunriseSimulation:
                 if not self._running:
                     break
 
-                self._current_step = i
+                self._set_step(i)
 
                 # Calculate current values
                 kelvin = int(config.start_kelvin + kelvin_step * i)
@@ -573,9 +599,7 @@ class SunriseSimulation:
             LOGGER.debug("Sunrise simulation cancelled")
             raise
         finally:
-            self._running = False
-            self._current_step = 0
-            self._total_steps = 0
+            self._reset()
 
     async def _execute_sunset_steps(
         self,
@@ -593,7 +617,7 @@ class SunriseSimulation:
             if not self._running:
                 break
 
-            self._current_step = i
+            self._set_step(i)
             brightness_pct = int(start_brightness_pct - brightness_step * i)
             brightness_255 = int(brightness_pct / 100 * 255)
 
@@ -687,6 +711,4 @@ class SunriseSimulation:
             LOGGER.debug("Sunset simulation cancelled")
             raise
         finally:
-            self._running = False
-            self._current_step = 0
-            self._total_steps = 0
+            self._reset()

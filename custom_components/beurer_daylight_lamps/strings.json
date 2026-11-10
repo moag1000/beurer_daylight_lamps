@@ -165,6 +165,14 @@
                     }
                 }
             }
+        },
+        "weak_signal": {
+            "title": "Weak Bluetooth signal to {name}",
+            "description": "The Bluetooth signal of **{name}** has been very weak for at least 10 minutes (last reading {rssi} dBm). Commands, sunrise simulations and therapy sessions may fail or lag.\n\nWhat helps:\n- Move the lamp closer to the Bluetooth adapter, or\n- Add an ESPHome or Shelly Bluetooth proxy near the lamp.\n\nThis notice disappears on its own once the signal is better than -78 dBm."
+        },
+        "frequent_reconnects": {
+            "title": "{name} keeps losing its Bluetooth connection",
+            "description": "**{name}** reconnected {reconnects} times within the last hour (last signal {rssi} dBm). Commands, sunrise simulations and therapy sessions may be interrupted.\n\nWhat helps:\n- Move the lamp closer to the Bluetooth adapter, or\n- Add an ESPHome or Shelly Bluetooth proxy near the lamp, or\n- Make sure the Beurer LightUp app is not connected at the same time.\n\nThis notice disappears on its own once the connection is stable again."
         }
     },
     "entity": {
@@ -269,6 +277,19 @@
             },
             "last_time_sync": {
                 "name": "Last time sync"
+            },
+            "simulation_progress": {
+                "name": "Sunrise/sunset progress",
+                "state_attributes": {
+                    "simulation": {
+                        "name": "Simulation",
+                        "state": {
+                            "none": "None",
+                            "sunrise": "Sunrise",
+                            "sunset": "Sunset"
+                        }
+                    }
+                }
             }
         },
         "binary_sensor": {

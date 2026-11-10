@@ -81,6 +81,7 @@ I heavily used claude as I did in other projects but focused on keeping it tight
 | **Sensor** | Light exposure today | Minutes of bright light today |
 | **Sensor** | Light exposure this week | Minutes of bright light this week |
 | **Sensor** | Daily goal progress | Percentage of daily goal completed |
+| **Sensor** | Sunrise/sunset progress | Progress of a running simulation (0-100 %), attribute `simulation`: sunrise, sunset or none |
 | **Binary Sensor** | Connected | BLE connection status |
 | **Binary Sensor** | Bluetooth reachable | Device seen by any adapter |
 | **Binary Sensor** | Daily goal reached | True when daily exposure goal is met |
@@ -688,10 +689,11 @@ The diagnostic file contains device state, connection info, and configuration (M
 
 ### Connection keeps dropping
 
-1. Check the signal strength sensor (enable it under the device's disabled entities)
-2. If RSSI is below -80 dBm, move the lamp closer or use a Bluetooth adapter with better range
-3. Ensure no other devices are interfering with Bluetooth (e.g., USB 3.0 devices near the adapter)
-4. **Recommended**: Use an ESPHome Bluetooth Proxy for better range and reliability
+1. Check **Settings** → **System** → **Repairs**: the integration warns there when the signal stays at -85 dBm or weaker for 10 minutes, or when the lamp reconnects 6 times within an hour. The notice clears itself once the link is stable.
+2. Check the signal strength sensor (enable it under the device's disabled entities)
+3. If RSSI is below -80 dBm, move the lamp closer or use a Bluetooth adapter with better range
+4. Ensure no other devices are interfering with Bluetooth (e.g., USB 3.0 devices near the adapter)
+5. **Recommended**: Use an ESPHome Bluetooth Proxy for better range and reliability
 
 ### Lamp responds slowly
 

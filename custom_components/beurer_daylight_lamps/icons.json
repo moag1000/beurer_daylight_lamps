@@ -50,6 +50,19 @@
       },
       "connection_uptime": {
         "default": "mdi:timer-outline"
+      },
+      "simulation_progress": {
+        "default": "mdi:weather-sunset-up",
+        "state_attributes": {
+          "simulation": {
+            "default": "mdi:weather-sunset",
+            "state": {
+              "none": "mdi:sleep",
+              "sunrise": "mdi:weather-sunset-up",
+              "sunset": "mdi:weather-sunset-down"
+            }
+          }
+        }
       }
     },
     "binary_sensor": {
