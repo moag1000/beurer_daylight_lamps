@@ -856,8 +856,11 @@ class BeurerInstance:
                         break  # Exit loop on unexpected error
 
             finally:
-                # Clear task reference when loop exits
-                self._watchdog_task = None
+                # Clear the reference only if it still points at this loop: a
+                # restarted watchdog must not lose its own reference (it could
+                # then no longer be stopped).
+                if self._watchdog_task is asyncio.current_task():
+                    self._watchdog_task = None
                 LOGGER.debug("Watchdog: %s exited", self._mac)
 
         # Store task reference for proper cleanup
