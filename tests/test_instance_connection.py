@@ -5,8 +5,8 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from bleak.exc import BleakError
 import pytest
+from bleak.exc import BleakError
 
 from custom_components.beurer_daylight_lamps import beurer_daylight_lamps as mod
 from custom_components.beurer_daylight_lamps.beurer_daylight_lamps import (

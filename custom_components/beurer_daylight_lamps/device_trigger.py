@@ -16,7 +16,8 @@ from homeassistant.const import (
     STATE_OFF,
     STATE_ON,
 )
-from homeassistant.helpers import config_validation as cv, entity_registry as er
+from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import entity_registry as er
 
 from .const import DOMAIN
 

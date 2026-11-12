@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from homeassistant.const import CONF_MAC, CONF_NAME
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
-import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.beurer_daylight_lamps.config_flow import (
@@ -53,9 +53,9 @@ class TestUserStep:
         flow = _flow(hass)
         with patch(
             f"{CF}.async_discovered_service_info",
-            side_effect=lambda _h, connectable: connectable_list
-            if connectable
-            else passive,
+            side_effect=lambda _h, connectable: (
+                connectable_list if connectable else passive
+            ),
         ):
             connectable_list = connectable
             result = await flow.async_step_user()
@@ -154,9 +154,9 @@ class TestEnsureInstance:
             ),
             patch(
                 f"{CF}.bluetooth.async_last_service_info",
-                side_effect=lambda _h, _m, connectable=True: None
-                if connectable
-                else last,
+                side_effect=lambda _h, _m, connectable=True: (
+                    None if connectable else last
+                ),
             ),
             patch(f"{CF}.BeurerInstance") as inst_cls,
         ):

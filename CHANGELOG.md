@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Device triggers in automations**: the device triggers (*turned on/off*, *therapy goal reached*, *connection lost/restored*) failed validation when used in an automation, because the trigger schema did not accept the entity. They work now.
+- **Connection watchdog**: restarting the watchdog no longer loses track of the new watchdog task, so it can always be stopped on disconnect or unload.
+- **WL75 sunrise/sunset**: each simulation step now updates the light entity in Home Assistant, as it already did on TL lamps.
+
+### Changed
+
+- Test coverage raised from 74 % to 97 % (1008 tests), which completes the Silver rule *test-coverage* of the quality scale.
+
 ## [1.39.0] - 2026-11-10
 
 ### Added

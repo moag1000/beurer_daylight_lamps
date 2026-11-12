@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
-from homeassistant.components.light import ColorMode
 import pytest
+from homeassistant.components.light import ColorMode
 
 from custom_components.beurer_daylight_lamps.beurer_daylight_lamps import (
     BeurerInstance,

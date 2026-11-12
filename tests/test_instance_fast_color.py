@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from homeassistant.components.light import ColorMode
 import pytest
+from homeassistant.components.light import ColorMode
 
 from custom_components.beurer_daylight_lamps.beurer_daylight_lamps import (
     BeurerInstance,
@@ -92,6 +92,6 @@ async def test_wl75_following_steps() -> None:
 async def test_mode_switch_error_resets_target() -> None:
     inst = make("TL100")
     inst._switch_to_mode = AsyncMock(side_effect=OSError("x"))
-    with pytest.raises(OSError):
+    with pytest.raises(OSError, match="x"):
         await inst.set_color_with_brightness_fast((1, 2, 3))
     assert inst._mode_switch_target is None

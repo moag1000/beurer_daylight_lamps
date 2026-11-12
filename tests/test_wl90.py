@@ -153,9 +153,7 @@ class TestRadio:
         await ctrl.radio_seek(direction=0, auto_seek=False)
         instance._send_packet.assert_awaited_with([CMD_RADIO_TUNE, 0, 0])
 
-    async def test_sleep_timer(
-        self, ctrl: WL90Controller, instance: MagicMock
-    ) -> None:
+    async def test_sleep_timer(self, ctrl: WL90Controller, instance: MagicMock) -> None:
         assert await ctrl.set_radio_sleep_timer(30)
         assert instance._send_packet.await_args_list[-2].args[0] == [
             CMD_RADIO_TIMER_TOGGLE,
@@ -214,9 +212,7 @@ class TestMusic:
         instance._send_packet.assert_awaited_with([CMD_MUSIC_VOLUME, 10])
         assert ctrl.music.volume == 10
 
-    async def test_sleep_timer(
-        self, ctrl: WL90Controller, instance: MagicMock
-    ) -> None:
+    async def test_sleep_timer(self, ctrl: WL90Controller, instance: MagicMock) -> None:
         assert await ctrl.set_music_sleep_timer(45)
         instance._send_packet.assert_awaited_with([CMD_MUSIC_TIMER_VALUE, 45])
         assert ctrl.music.sleep_timer_on

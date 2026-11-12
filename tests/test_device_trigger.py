@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+import pytest
 from homeassistant.const import STATE_OFF, STATE_ON
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers import device_registry as dr, entity_registry as er
-import pytest
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.beurer_daylight_lamps import device_trigger

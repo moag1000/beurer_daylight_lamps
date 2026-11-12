@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from bleak.exc import BleakError
 from bleak_retry_connector import (
     BleakAbortedError,
@@ -13,7 +14,6 @@ from bleak_retry_connector import (
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
-import pytest
 
 from custom_components.beurer_daylight_lamps import beurer_daylight_lamps as mod
 from custom_components.beurer_daylight_lamps.beurer_daylight_lamps import (
@@ -154,7 +154,9 @@ class TestConnect:
         with (
             patch(f"{M}.establish_connection", new=AsyncMock(return_value=client)),
             patch.object(inst, "_select_best_adapter"),
-            patch.object(inst, "_setup_after_connect", new=AsyncMock(return_value=True)),
+            patch.object(
+                inst, "_setup_after_connect", new=AsyncMock(return_value=True)
+            ),
             patch.object(inst, "_start_watchdog") as watchdog,
             patch(
                 f"{M}.bluetooth.async_last_service_info",
@@ -193,8 +195,12 @@ class TestConnect:
     async def test_setup_failure(self) -> None:
         inst = make_instance()
         with (
-            patch(f"{M}.establish_connection", new=AsyncMock(return_value=gatt_client())),
-            patch.object(inst, "_setup_after_connect", new=AsyncMock(return_value=False)),
+            patch(
+                f"{M}.establish_connection", new=AsyncMock(return_value=gatt_client())
+            ),
+            patch.object(
+                inst, "_setup_after_connect", new=AsyncMock(return_value=False)
+            ),
         ):
             assert not await inst.connect()
 
@@ -240,9 +246,13 @@ class TestConnect:
             assert not await inst.connect()
         assert issues.async_get_issue(DOMAIN, "adapter_full_aabbccddeeff")
         with (
-            patch(f"{M}.establish_connection", new=AsyncMock(return_value=gatt_client())),
+            patch(
+                f"{M}.establish_connection", new=AsyncMock(return_value=gatt_client())
+            ),
             patch.object(inst, "_select_best_adapter"),
-            patch.object(inst, "_setup_after_connect", new=AsyncMock(return_value=True)),
+            patch.object(
+                inst, "_setup_after_connect", new=AsyncMock(return_value=True)
+            ),
             patch.object(inst, "_start_watchdog"),
             patch(f"{M}.bluetooth.async_last_service_info", return_value=None),
         ):

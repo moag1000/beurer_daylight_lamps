@@ -120,9 +120,7 @@ class TestRadio:
         await ctrl.radio_seek(direction=0, auto_seek=False)
         instance._send_packet.assert_awaited_with([CMD_WL75_RADIO_FINE_TUNE, 1])
 
-    async def test_sleep_timer(
-        self, ctrl: WL75Controller, instance: MagicMock
-    ) -> None:
+    async def test_sleep_timer(self, ctrl: WL75Controller, instance: MagicMock) -> None:
         assert await ctrl.set_radio_sleep_timer(20)
         instance._send_packet.assert_awaited_with([CMD_WL75_RADIO_TIMER_VALUE, 20])
         assert ctrl.radio.sleep_timer_on
@@ -153,9 +151,7 @@ class TestRadio:
         ]
 
 
-async def test_music_not_supported(
-    ctrl: WL75Controller, instance: MagicMock
-) -> None:
+async def test_music_not_supported(ctrl: WL75Controller, instance: MagicMock) -> None:
     assert not await ctrl.music_on()
     assert not await ctrl.music_off()
     assert not await ctrl.set_music_volume(3)

@@ -5,8 +5,8 @@ from __future__ import annotations
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from homeassistant.core import HomeAssistant
 import pytest
+from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.beurer_daylight_lamps.const import DOMAIN
@@ -18,6 +18,8 @@ from custom_components.beurer_daylight_lamps.sensor import (
     BeurerPersonTherapySensor,
     BeurerSensor,
     BeurerTherapySensor,
+)
+from custom_components.beurer_daylight_lamps.sensor import (
     async_setup_entry as sensor_setup_entry,
 )
 from custom_components.beurer_daylight_lamps.switch import (
@@ -60,9 +62,9 @@ class TestDeviceSwitch:
         assert sw.unique_id == "aa:bb:cc:dd:ee:ff_feedback_sound"
         assert sw.device_info["manufacturer"] == "Beurer"
         await sw.async_turn_on()
-        coordinator.instance.set_feedback.assert_awaited_with(True)
+        coordinator.instance.set_feedback.assert_awaited_with(True)  # noqa: FBT003
         await sw.async_turn_off()
-        coordinator.instance.set_feedback.assert_awaited_with(False)
+        coordinator.instance.set_feedback.assert_awaited_with(False)  # noqa: FBT003
         coordinator.instance.set_fade.assert_not_awaited()
 
     async def test_fade(self, coordinator: MagicMock) -> None:
@@ -72,9 +74,9 @@ class TestDeviceSwitch:
         coordinator.instance.fade_enabled = False
         assert sw.is_on is False
         await sw.async_turn_on()
-        coordinator.instance.set_fade.assert_awaited_with(True)
+        coordinator.instance.set_fade.assert_awaited_with(True)  # noqa: FBT003
         await sw.async_turn_off()
-        coordinator.instance.set_fade.assert_awaited_with(False)
+        coordinator.instance.set_fade.assert_awaited_with(False)  # noqa: FBT003
 
     async def test_unknown_key(self, coordinator: MagicMock) -> None:
         desc = MagicMock()
@@ -216,9 +218,7 @@ class TestPersonSensors:
         # A second lamp does not add the person sensors again
         before = len(added)
         await sensor_setup_entry(hass, entry, add)
-        assert not any(
-            isinstance(e, BeurerPersonTherapySensor) for e in added[before:]
-        )
+        assert not any(isinstance(e, BeurerPersonTherapySensor) for e in added[before:])
 
         # Values come from the hub, the goal from the first entry
         progress = next(p for p in persons if p.unique_id == "therapy_progress_anna")

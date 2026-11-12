@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
-from homeassistant.components.media_player import MediaPlayerState, MediaType
 import pytest
+from homeassistant.components.media_player import MediaPlayerState, MediaType
 
 from custom_components.beurer_daylight_lamps.media_player import (
     BeurerMusicPlayer,

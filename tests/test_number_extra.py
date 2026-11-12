@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from homeassistant.exceptions import HomeAssistantError
 import pytest
+from homeassistant.exceptions import HomeAssistantError
 
 from custom_components.beurer_daylight_lamps.number import (
     WL90_NUMBER_DESCRIPTIONS,
@@ -112,7 +112,9 @@ class TestSimulationDuration:
 
     async def test_set_and_read(self, coordinator: MagicMock) -> None:
         coordinator.instance.simulation_settings = SimulationSettings()
-        sunrise = BeurerSimulationDurationNumber(coordinator, "TL100", "sunrise_duration")
+        sunrise = BeurerSimulationDurationNumber(
+            coordinator, "TL100", "sunrise_duration"
+        )
         sunset = BeurerSimulationDurationNumber(coordinator, "TL100", "sunset_duration")
         sunrise.async_write_ha_state = MagicMock()
         assert sunrise.available

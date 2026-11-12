@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from homeassistant.components.light import ColorMode
 import pytest
+from homeassistant.components.light import ColorMode
 
 from custom_components.beurer_daylight_lamps.beurer_daylight_lamps import (
     BeurerInstance,
@@ -53,7 +53,7 @@ def sent(inst: BeurerInstance) -> list[list[int]]:
     return [c.args[0] for c in inst._send_packet.await_args_list]
 
 
-NOW = datetime(2026, 11, 12, 7, 30, 15)  # a Thursday
+NOW = datetime(2026, 11, 12, 7, 30, 15, tzinfo=UTC)  # a Thursday
 
 
 class TestTimeAndSettings:

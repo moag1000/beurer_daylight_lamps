@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady, ServiceValidationError
 from homeassistant.helpers import issue_registry as ir
-import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 import custom_components.beurer_daylight_lamps as integ
@@ -167,7 +167,7 @@ class TestSetupHelpers:
             patch(f"{PKG}.BeurerInstance", side_effect=ValueError("boom")),
             pytest.raises(ConfigEntryNotReady),
         ):
-            integ._create_instance(hass, entry, MagicMock(), -60, True)
+            integ._create_instance(hass, entry, MagicMock(), -60, True)  # noqa: FBT003
         issue = ir.async_get(hass).async_get_issue(
             DOMAIN, f"initialization_failed_{entry.entry_id}"
         )
@@ -177,7 +177,7 @@ class TestSetupHelpers:
     def test_create_instance_unavailable(self, hass: HomeAssistant) -> None:
         entry = MockConfigEntry(domain=DOMAIN, data={"mac": "AA:BB:CC:DD:EE:FF"})
         with patch(f"{PKG}.BeurerInstance") as cls:
-            inst = integ._create_instance(hass, entry, MagicMock(), None, False)
+            inst = integ._create_instance(hass, entry, MagicMock(), None, False)  # noqa: FBT003
         assert inst is cls.return_value
         assert inst._ble_available is False
         assert inst._device_name == "Beurer Lamp"
@@ -189,9 +189,7 @@ class TestSetupHelpers:
         with (
             patch(f"{PKG}.bluetooth.async_register_callback") as reg,
             patch(f"{PKG}.bluetooth.async_track_unavailable") as track,
-            patch(
-                f"{PKG}._get_ble_device_and_rssi", return_value=(new_device, -55)
-            ),
+            patch(f"{PKG}._get_ble_device_and_rssi", return_value=(new_device, -55)),
         ):
             integ._register_bluetooth_callbacks(hass, entry, inst, "AA:BB")
             discovered = reg.call_args.args[1]
@@ -210,6 +208,4 @@ class TestSetupHelpers:
 
 
 async def test_remove_config_entry_device(hass: HomeAssistant) -> None:
-    assert await integ.async_remove_config_entry_device(
-        hass, MagicMock(), MagicMock()
-    )
+    assert await integ.async_remove_config_entry_device(hass, MagicMock(), MagicMock())

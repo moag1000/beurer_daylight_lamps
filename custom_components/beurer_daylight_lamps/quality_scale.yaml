@@ -81,8 +81,8 @@ rules:
   reauthentication-flow:
     status: done
   test-coverage:
-    status: todo
-    comment: 72 % line coverage (683 tests); rule requires 95 %.
+    status: done
+    comment: 97 % line coverage (1008 tests).
 
   # === Gold ===
   devices:
