@@ -1439,6 +1439,8 @@ class BeurerInstance:
                     [CMD_WL75_MOODLIGHT_BRIGHTNESS, brightness_percent]
                 )
                 await asyncio.sleep(COMMAND_DELAY)
+            # Push the new color like the TL path does (WL75 only sends ACKs)
+            await self._trigger_update()
             return
 
         # Only switch mode if not already in RGB mode
