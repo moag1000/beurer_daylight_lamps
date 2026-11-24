@@ -232,13 +232,20 @@ class TestBeurerTimerNumber:
     async def test_async_set_native_value_failure(
         self, mock_coordinator: MagicMock
     ) -> None:
-        """Test setting timer value fails raises error."""
-        mock_coordinator.instance.set_timer = AsyncMock(return_value=False)
+        """A lost timer command reaches the UI as a translated error."""
+        from custom_components.beurer_daylight_lamps.exceptions import (
+            BeurerWriteError,
+        )
+
+        mock_coordinator.instance.set_timer = AsyncMock(
+            side_effect=BeurerWriteError("Lamp")
+        )
         mock_coordinator.instance.timer_active = False
         timer = BeurerTimerNumber(mock_coordinator, "Test Lamp")
 
-        with pytest.raises(HomeAssistantError, match="Failed to set timer"):
+        with pytest.raises(HomeAssistantError) as err:
             await timer.async_set_native_value(30)
+        assert err.value.translation_key == "write_failed"
 
 
 # =============================================================================

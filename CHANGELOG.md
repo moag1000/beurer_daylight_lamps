@@ -17,10 +17,21 @@ Thanks to @n-st for reporting #18 and to @rickkdotnet for reporting #17 with a p
 - **WL75 white brightness**: the mood light status no longer overwrites the white light brightness.
 - **Wrong integration version in diagnostics and device info**: they showed 1.38.0 since v1.38.0; a test now keeps it in line with the manifest.
 - **Per-person therapy minutes used the UTC day**: *today* and *this week* of the per-person sensors now start at local midnight / Monday, like the lamp's own counters since 1.38.0.
+- **Failed commands looked successful**: when a command did not reach the lamp (out of range, link lost), actions, switches and numbers reported success and the entity showed the new state. They now show an error naming the lamp, and the state only changes once the lamp received the command. An action targeting several lamps still runs on all of them and names the ones that failed.
+- **Sunrise/sunset did not retry**: a lost step was meant to be repeated, but the retry never triggered. It now retries, and *sunrise finished* is no longer fired for a sunrise that was stopped or could not reach the lamp.
+- **Commands could interleave**: alarm, radio, speaker, timer, time sync and settings commands were not serialized with the light commands, so a packet could land in the middle of a mode switch.
+- **Alarm switch**: no longer shows an alarm as on (or off) when the lamp never received it.
+- **Feedback sound / fade switches reset the clock display**: changing either setting before the lamp had reported its settings wrote default display, date and time formats to the lamp. The settings are now read first; if the lamp does not answer, nothing is written.
+- **Missing names**: the FM radio, Bluetooth speaker, both volume controls and three connection sensors had no name, and the *Set alarm* action had no description in the UI (the English and German translations were incomplete).
+- **Malformed notifications**: a cut-off or corrupted notification is ignored instead of setting wrong state (a short RGB status raised an error).
+- **Slower startup with an unreachable lamp**: adding the light entity no longer waits for a Bluetooth connection.
+- **The config flow's connection test** fails right away when the lamp cannot be reached, instead of waiting for a second connect attempt.
 
 ### Changed
 
 - **The *Adaptive Lighting* switch now does something**: it only appears when the [Adaptive Lighting](https://github.com/basnijholt/adaptive-lighting) integration is installed (an existing switch is removed otherwise). While it is off, while a therapy session runs or while an effect plays, the lamp is marked as manually controlled in Adaptive Lighting (`adaptive_lighting.set_manual_control`), so it does not change the daylight; afterwards Adaptive Lighting takes the lamp back. If Adaptive Lighting had already put the lamp on manual control itself (because you changed it by hand), that stays as it was. Before, the switch had no effect at all. If you install Adaptive Lighting later, reload the lamp (or restart Home Assistant) to get the switch.
+- **The lamp now becomes unavailable when Home Assistant no longer sees it** (no connection and no Bluetooth advertisements for a few minutes), and available again as soon as it advertises. Since 1.33.0 it stayed available forever after the first connection, so commands to a lamp that was gone failed slowly and automations could not tell.
+- The *Fade* switch is now named *Fade transitions* in English, as in the source strings.
 
 ## [1.39.1] - 2026-11-17
 

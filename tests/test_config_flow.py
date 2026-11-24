@@ -195,19 +195,20 @@ async def test_connection_without_cached_device_not_found(hass: HomeAssistant) -
 
 
 @pytest.mark.asyncio
-async def test_connection_bleak_error(hass: HomeAssistant) -> None:
-    """Test connection handles BleakError."""
+async def test_connection_lamp_unreachable(hass: HomeAssistant) -> None:
+    """An unreachable lamp fails the test without a second connect via toggle."""
     from custom_components.beurer_daylight_lamps.config_flow import BeurerConfigFlow
 
-    mock_device = MagicMock()
     mock_instance = MagicMock()
-    mock_instance.update = AsyncMock(side_effect=BleakError("Connection failed"))
+    mock_instance.update = AsyncMock()
+    mock_instance.is_connected = False
+    mock_instance.turn_on = AsyncMock()
     mock_instance.disconnect = AsyncMock()
 
     flow = BeurerConfigFlow()
     flow.hass = hass
     flow._mac = "AA:BB:CC:DD:EE:FF"
-    flow._ble_device = mock_device
+    flow._ble_device = MagicMock()
     flow._rssi = -60
 
     with patch(
@@ -217,7 +218,39 @@ async def test_connection_bleak_error(hass: HomeAssistant) -> None:
         result = await flow._test_connection()
 
     assert result is False
-    mock_instance.disconnect.assert_called_once()
+    mock_instance.turn_on.assert_not_awaited()
+    mock_instance.disconnect.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_connection_toggle_fails(hass: HomeAssistant) -> None:
+    """A lost toggle command fails the test instead of escaping the flow."""
+    from custom_components.beurer_daylight_lamps.config_flow import BeurerConfigFlow
+    from custom_components.beurer_daylight_lamps.exceptions import BeurerWriteError
+
+    mock_instance = MagicMock()
+    mock_instance.is_on = False
+    mock_instance.update = AsyncMock()
+    mock_instance.turn_on = AsyncMock(side_effect=BeurerWriteError("Lamp"))
+    mock_instance.disconnect = AsyncMock()
+
+    flow = BeurerConfigFlow()
+    flow.hass = hass
+    flow._mac = "AA:BB:CC:DD:EE:FF"
+    flow._ble_device = MagicMock()
+    flow._rssi = -60
+
+    with (
+        patch(
+            "custom_components.beurer_daylight_lamps.config_flow.BeurerInstance",
+            return_value=mock_instance,
+        ),
+        patch("asyncio.sleep", new=AsyncMock()),
+    ):
+        result = await flow._test_connection()
+
+    assert result is False
+    mock_instance.disconnect.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -276,56 +309,6 @@ async def test_connection_asyncio_timeout(hass: HomeAssistant) -> None:
             "custom_components.beurer_daylight_lamps.config_flow.bluetooth.async_ble_device_from_address",
             return_value=None,
         ),
-    ):
-        result = await flow._test_connection()
-
-    assert result is False
-
-
-@pytest.mark.asyncio
-async def test_connection_os_error(hass: HomeAssistant) -> None:
-    """Test connection handles OSError."""
-    from custom_components.beurer_daylight_lamps.config_flow import BeurerConfigFlow
-
-    mock_device = MagicMock()
-    mock_instance = MagicMock()
-    mock_instance.update = AsyncMock(side_effect=OSError("Bluetooth unavailable"))
-    mock_instance.disconnect = AsyncMock()
-
-    flow = BeurerConfigFlow()
-    flow.hass = hass
-    flow._mac = "AA:BB:CC:DD:EE:FF"
-    flow._ble_device = mock_device
-    flow._rssi = -60
-
-    with patch(
-        "custom_components.beurer_daylight_lamps.config_flow.BeurerInstance",
-        return_value=mock_instance,
-    ):
-        result = await flow._test_connection()
-
-    assert result is False
-
-
-@pytest.mark.asyncio
-async def test_connection_value_error(hass: HomeAssistant) -> None:
-    """Test connection handles ValueError."""
-    from custom_components.beurer_daylight_lamps.config_flow import BeurerConfigFlow
-
-    mock_device = MagicMock()
-    mock_instance = MagicMock()
-    mock_instance.update = AsyncMock(side_effect=ValueError("Invalid device"))
-    mock_instance.disconnect = AsyncMock()
-
-    flow = BeurerConfigFlow()
-    flow.hass = hass
-    flow._mac = "AA:BB:CC:DD:EE:FF"
-    flow._ble_device = mock_device
-    flow._rssi = -60
-
-    with patch(
-        "custom_components.beurer_daylight_lamps.config_flow.BeurerInstance",
-        return_value=mock_instance,
     ):
         result = await flow._test_connection()
 

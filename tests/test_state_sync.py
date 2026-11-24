@@ -175,24 +175,6 @@ def test_push_update_sets_interval_before_scheduling() -> None:
     assert calls == ["interval", "data"]
 
 
-async def test_lost_packet_is_retried_after_link_error(
-    instance: lib.BeurerInstance,
-) -> None:
-    """A packet lost to a dead link is sent once more after reconnecting."""
-    del instance._send_packet  # use the real one, fake only _write
-    calls = []
-
-    async def write(_data: bytearray) -> bool:
-        calls.append(1)
-        instance._last_write_link_error = len(calls) == 1
-        return len(calls) > 1
-
-    with patch.object(instance, "_write", side_effect=write):
-        assert await instance._send_packet([0x35, 1]) is True
-
-    assert len(calls) == 2
-
-
 async def test_watchdog_does_not_cancel_itself(instance: lib.BeurerInstance) -> None:
     """disconnect() called from the watchdog must not cancel the watchdog."""
 
@@ -269,3 +251,32 @@ async def test_effect_off_without_color_does_not_switch_to_rgb(
         await instance.set_effect("Off")
 
     assert instance.sent == []
+
+
+@pytest.mark.parametrize("teardown", ["disconnect", "callback"])
+async def test_both_teardown_paths_leave_the_same_state(
+    instance: lib.BeurerInstance, teardown: str
+) -> None:
+    """A watchdog/write-error disconnect and a link loss end in one state."""
+    instance._available = True
+    instance._light_on = True
+    instance._connection_start_time = 1.0
+    instance._reconcile_therapy = MagicMock()
+    instance._client.disconnect = AsyncMock()
+    instance._client.stop_notify = AsyncMock()
+
+    if teardown == "disconnect":
+        await instance.disconnect()
+    else:
+        instance._client.is_connected = False
+        with patch.object(
+            instance, "_safe_create_task", side_effect=lambda c, _n: c.close()
+        ):
+            instance._on_disconnect(instance._client)
+
+    instance._client.is_connected = False
+    assert instance.is_on is None
+    assert instance._connection_start_time is None
+    instance._reconcile_therapy.assert_called_once()
+    # The last known values stay for turn_on to restore
+    assert instance._light_on is True

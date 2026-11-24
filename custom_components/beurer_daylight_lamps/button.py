@@ -157,8 +157,5 @@ class BeurerButton(CoordinatorEntity[BeurerDataUpdateCoordinator], ButtonEntity)
     async def _sync_time(self) -> None:
         """Sync Home Assistant time to the device clock."""
         LOGGER.info("Syncing time to %s", self._instance.mac)
-        success = await self._instance.sync_time()
-        if success:
-            LOGGER.info("Time synced successfully to %s", self._instance.mac)
-        else:
-            LOGGER.error("Failed to sync time to %s", self._instance.mac)
+        await self._instance.sync_time()
+        LOGGER.info("Time synced successfully to %s", self._instance.mac)

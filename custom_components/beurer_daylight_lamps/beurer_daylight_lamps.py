@@ -48,6 +48,13 @@ from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.device_registry import format_mac
 from homeassistant.util import dt as dt_util
 
+from .exceptions import (
+    BeurerConnectionError,
+    BeurerError,
+    BeurerNotSupportedError,
+    BeurerSettingsUnknownError,
+    BeurerWriteError,
+)
 from .signal_health import PROBLEM_WEAK_SIGNAL, SignalHealthMonitor
 from .therapy import (
     SimulationSettings,
@@ -137,6 +144,7 @@ from .const import (
     RESP_MOONLIGHT_TIMER_END,
     RESP_SETTINGS_FROM_DEVICE,
     RESP_SETTINGS_SYNC,
+    RESP_STATUS,
     # WL75 response command bytes
     RESP_WL75_LIGHT_BRIGHTNESS,
     RESP_WL75_LIGHT_STATUS,
@@ -177,6 +185,11 @@ class _TaskLock:
         self._lock = asyncio.Lock()
         self._owner: asyncio.Task[Any] | None = None
 
+    def owned(self) -> bool:
+        """Return True if the current task holds the lock."""
+        task = asyncio.current_task()
+        return task is not None and self._owner is task
+
     @contextlib.asynccontextmanager
     async def hold(self) -> Any:
         """Hold the lock for the current task (re-entrant)."""
@@ -213,6 +226,53 @@ def _serialized(func: Any) -> Any:
             return result
 
     return wrapper
+
+
+# ESPHome / aioesphomeapi report these known-transient situations (the lamp
+# drops the link mid-handshake while its GATT stack is not ready yet) only as
+# a plain BleakError with this text, there is no dedicated exception type.
+_TRANSIENT_GATT_ERRORS = (
+    "changed connection status while waiting",
+    "BluetoothGATTNotifyResponse",
+    "BluetoothGATTErrorResponse",
+)
+
+
+def _is_transient_gatt_error(err: BaseException) -> bool:
+    """Return True for a known-transient ESPHome GATT failure."""
+    text = str(err)
+    return any(marker in text for marker in _TRANSIENT_GATT_ERRORS)
+
+
+# Smallest TL payload length (byte 6) of a status notification per version
+_TL_STATUS_MIN_PAYLOAD = {1: 0x08, 2: 0x0C}
+
+
+def is_valid_tl_frame(data: bytes | bytearray) -> bool:
+    """Return True if data is a complete, uncorrupted TL notification.
+
+    Lamp -> host frames: FE EF 0C len AB BB plen payload[plen - 2] checksum
+    55 0D 0A, checksum = plen XOR payload. A 20-byte MTU cuts the RGB status
+    (21 bytes) inside the trailer, so the trailer is not required; every byte
+    up to the checksum is, which is all the handlers read. A white or RGB
+    status must also be long enough for the fields its handler reads.
+    """
+    if len(data) < 7 or data[0:2] != b"\xfe\xef" or data[4:6] != b"\xab\xbb":
+        return False
+    plen = data[6]
+    checksum_index = 7 + plen - 2
+    if plen < 2 or len(data) <= checksum_index:
+        return False
+    checksum = plen
+    for byte in data[7:checksum_index]:
+        checksum ^= byte
+    if checksum != data[checksum_index]:
+        return False
+    # A white or RGB status must carry the fields its handler reads; other
+    # responses (settings, timer end) put different data at these offsets
+    if data[7] != RESP_STATUS or plen < 0x08:
+        return True
+    return plen >= _TL_STATUS_MIN_PAYLOAD.get(data[8], 0)
 
 
 def ha_brightness_to_percent(brightness: int) -> int:
@@ -275,7 +335,6 @@ class BeurerInstance:
         self._last_command_time: float = 0.0
         self._last_seen: float = time.time()
         self._ble_available: bool = True
-        self._ever_connected: bool = False
 
         # Diagnostic state
         self._last_raw_notification: str | None = None
@@ -292,6 +351,9 @@ class BeurerInstance:
         self._display_setting: int = 0
         self._date_format: int = 0
         self._time_format: int = 0
+        # Set once the lamp reported its settings; until then the values
+        # above are placeholders that must never be written back
+        self._settings_read = asyncio.Event()
         self._last_time_sync: float | None = None
 
         # Connection health and reconnection
@@ -317,9 +379,9 @@ class BeurerInstance:
         """Initialize connection health and reconnection state."""
         self._reconnect_lock: asyncio.Lock = asyncio.Lock()
         self._command_lock = _TaskLock()
-        self._connect_lock = _TaskLock()
+        # True while connect() sets up a link (its setup sends packets)
+        self._in_connect = False
         self._filtered_during_switch = False
-        self._last_write_link_error = False
         # Set on unload: no reconnects, the instance is going away.
         self._closing = False
         self._reconnect_backoff: float = RECONNECT_INITIAL_BACKOFF
@@ -724,18 +786,11 @@ class BeurerInstance:
         if self._closing:
             return
         LOGGER.info("Disconnected from %s - will attempt reconnect", self._mac)
-        self._available = False
-        # Keep the last known on/off state: assumed_state already flags it as
-        # stale, and clearing it showed the light as "unknown" until reconnect.
+        # Only here, once the link is really gone: disconnect() can fail and
+        # leave the link up, and it must stay usable then.
         self._write_uuid = None
         self._read_uuid = None
-        self._connection_start_time = None  # Clear connection uptime
-
-        # Stop the connection watchdog
-        self._stop_watchdog()
-
-        # Unavailable: pause therapy minutes until the lamp reports again
-        self._reconcile_therapy()
+        self._reset_connection_state()
         if self._update_callbacks:
             self._safe_create_task(self._trigger_update(), "beurer_disconnect_update")
 
@@ -748,6 +803,21 @@ class BeurerInstance:
             self._safe_create_task(
                 self._auto_reconnect(), "beurer_disconnect_reconnect"
             )
+
+    def _reset_connection_state(self) -> None:
+        """Forget everything that belonged to the link that just ended.
+
+        Shared by disconnect() and the disconnect callback, so both teardown
+        paths leave the same state. The last on/off and color values stay:
+        is_on reports unknown until the lamp sends its state again, and
+        turn_on restores the colour settings from them.
+        """
+        self._stop_watchdog()
+        self._available = False
+        self._connection_start_time = None
+        # The light state is unknown while disconnected: pause the session
+        # instead of counting minutes that may not be real.
+        self._reconcile_therapy()
 
     def _safe_create_task(
         self, coro: Coroutine[Any, Any, None], name: str | None = None
@@ -774,7 +844,7 @@ class BeurerInstance:
                     "Background task '%s' cancelled for %s", task_name, self._mac
                 )
                 raise  # Re-raise to properly signal cancellation
-            except (BleakError, TimeoutError, OSError) as err:
+            except (BleakError, TimeoutError, OSError, BeurerError) as err:
                 LOGGER.error(
                     "Error in background task '%s' for %s: %s",
                     task_name,
@@ -836,8 +906,10 @@ class BeurerInstance:
                                 self._mac,
                                 time_since_data,
                             )
-                            # Disconnect and let auto-reconnect handle it
-                            await self.disconnect()
+                            # Disconnect (not in the middle of a command) and
+                            # let auto-reconnect handle it
+                            async with self._command_lock.hold():
+                                await self.disconnect()
                             if self._ble_available:
                                 self._safe_create_task(
                                     self._auto_reconnect(),
@@ -937,6 +1009,27 @@ class BeurerInstance:
         return self._mac
 
     @property
+    def name(self) -> str:
+        """Return the lamp's name (used in error messages)."""
+        return self._device_name
+
+    @_serialized
+    async def send_command(self, *messages: list[int]) -> None:
+        """Send one or more command packets as one serialized command.
+
+        Packets of one command are spaced by COMMAND_DELAY. This is the entry
+        point for code outside this class (WL75/WL90 controllers, the raw
+        command service).
+
+        Raises:
+            BeurerError: If a packet could not be delivered.
+        """
+        for index, message in enumerate(messages):
+            if index:
+                await asyncio.sleep(COMMAND_DELAY)
+            await self._send_packet(message)
+
+    @property
     def is_on(self) -> bool | None:
         """Return True if lamp is on, None if unknown/unavailable.
 
@@ -1019,20 +1112,14 @@ class BeurerInstance:
 
     @property
     def available(self) -> bool:
-        """Return True if device is available for commands.
+        """Return True if a command can reach the lamp.
 
-        Device is available if:
-        - Connected via GATT (active connection), OR
-        - Reachable via BLE AND we've received status, OR
-        - Was previously connected (commands will trigger reconnect)
+        That is while connected, or while Home Assistant's Bluetooth stack
+        sees it advertising: a command then reconnects by itself. A lamp no
+        adapter has seen for minutes cannot be connected either, so it is
+        reported unavailable instead of failing every command.
         """
-        if self.is_connected:
-            return True
-        if self.ble_available and self._available:
-            return True
-        # Keep available after disconnect so HA allows commands through.
-        # _send_packet handles reconnection transparently before sending.
-        return self._ever_connected
+        return self.is_connected or self._ble_available
 
     @property
     def is_connected(self) -> bool:
@@ -1068,95 +1155,59 @@ class BeurerInstance:
             result ^= byte
         return result
 
-    async def _write(self, data: bytearray) -> bool:
-        """Write data to the device.
+    async def _ensure_connected(self) -> None:
+        """Connect if needed.
 
-        Args:
-            data: The bytearray to write to the device
-
-        Returns:
-            True if write was successful, False otherwise.
+        Raises:
+            BeurerConnectionError: If no connection could be established.
         """
-        self._last_write_link_error = False
-        if not self._client or not self._client.is_connected:
-            LOGGER.debug("Device not connected, attempting reconnect for write")
-            if not await self.connect():
-                LOGGER.debug("Failed to reconnect for write to %s", self._mac)
-                self._command_failure_count += 1
-                return False
+        if self._client is not None and self._client.is_connected:
+            return
+        if self._in_connect:
+            # The link dropped during the connection setup: fail that setup
+            # instead of starting a nested connect.
+            raise BeurerConnectionError(self._device_name, self._mac)
+        if not await self.connect():
+            raise BeurerConnectionError(self._device_name, self._mac)
 
-        # Safety check after reconnect (for type checker)
-        if self._client is None:
+    async def _write(self, data: bytearray) -> None:
+        """Write one packet to the connected device.
+
+        On a failed write the dead link is torn down, so the next send
+        reconnects.
+
+        Raises:
+            BeurerWriteError: If the write timed out or failed.
+        """
+        if self._client is None or not self._write_uuid:
             self._command_failure_count += 1
-            return False
+            raise BeurerWriteError(self._device_name)
 
-        if not self._write_uuid:
-            LOGGER.error("Write UUID not available")
-            self._command_failure_count += 1
-            return False
-
+        LOGGER.debug("Writing to %s: %s", self._mac, data.hex())
         try:
-            LOGGER.debug(
-                "Writing to %s: %s",
-                self._mac,
-                data.hex(),
-            )
             # Explicit 6s timeout matching Beurer LightUp APK's
             # TimeOutRequestProxy (bleak default is ~30s)
             await asyncio.wait_for(
                 self._client.write_gatt_char(self._write_uuid, data),
                 timeout=COMMAND_TIMEOUT,
             )
-        except TimeoutError:
+        except (TimeoutError, BleakError, OSError) as err:
             LOGGER.warning(
-                "Command timeout (%.0fs) writing to %s",
-                COMMAND_TIMEOUT,
-                self._mac,
+                "Write to %s failed: %s", self._mac, err or type(err).__name__
             )
             self._command_failure_count += 1
-            self._last_write_link_error = True
             await self.disconnect()
-            return False
-        except (BleakError, OSError) as err:
-            LOGGER.warning("Error during write to %s: %s", self._mac, err)
-            self._command_failure_count += 1
-            self._last_write_link_error = True
-            await self.disconnect()
-            return False
-        else:
-            self._command_success_count += 1
-            # A successful GATT write proves the BLE link is alive even
-            # if the lamp does not push notifications back (some firmware
-            # / proxy combinations suppress notify deliveries). Treat the
-            # write itself as fresh activity so the watchdog does not
-            # tear down a healthy connection just because notifications
-            # are silent.
-            self._last_seen = time.time()
-            return True
+            raise BeurerWriteError(self._device_name) from err
 
-    async def _send_packet(self, message: list[int]) -> bool:
-        """Send a command packet to the device.
+        self._command_success_count += 1
+        # A successful GATT write proves the BLE link is alive even if the
+        # lamp does not push notifications back (some firmware / proxy
+        # combinations suppress notify deliveries), so the watchdog must
+        # not tear the connection down.
+        self._last_seen = time.time()
 
-        Includes rate limiting to prevent overwhelming the device with
-        rapid command sequences.
-
-        Args:
-            message: List of command bytes to send
-
-        Returns:
-            True if packet was sent successfully, False otherwise.
-        """
-        if (
-            not self._client or not self._client.is_connected
-        ) and not await self.connect():
-            return False
-
-        # Rate limiting: ensure minimum interval between commands
-        now = time.monotonic()
-        elapsed = now - self._last_command_time
-        if elapsed < MIN_COMMAND_INTERVAL:
-            await asyncio.sleep(MIN_COMMAND_INTERVAL - elapsed)
-
+    def _frame_packet(self, message: list[int]) -> bytearray:
+        """Wrap command bytes in the model's packet framing."""
         length = len(message)
         if self._is_wl75:
             # WL75 packet framing from APK (WL75Wrapper): header FE EF, then
@@ -1166,48 +1217,67 @@ class BeurerInstance:
             checksum = plen
             for byte in message:
                 checksum ^= byte
-            packet = bytearray([0xFE, 0xEF, plen, *message, checksum])
-        else:
-            plen = length + 2  # payload_len includes command bytes + checksum
+            return bytearray([0xFE, 0xEF, plen, *message, checksum])
 
-            # Calculate checksum: plen XOR all command bytes
-            checksum = plen
-            for byte in message:
-                checksum ^= byte
+        plen = length + 2  # payload_len includes command bytes + checksum
+        checksum = plen
+        for byte in message:
+            checksum ^= byte
+        # Packet format from btsnoop analysis:
+        # header FE EF 0A, outer_len = command_len + 7, magic AB AA,
+        # payload_len = command_len + 2, command bytes, checksum
+        # (plen XOR cmd_bytes), trailer 55 0D 0A
+        return bytearray(
+            [
+                0xFE,
+                0xEF,
+                0x0A,
+                length + 7,
+                0xAB,
+                0xAA,
+                plen,
+                *message,
+                checksum,
+                0x55,
+                0x0D,
+                0x0A,
+            ]
+        )
 
-            # Packet format from btsnoop analysis:
-            # - Header: FE EF 0A
-            # - outer_len = command_len + 7
-            # - Magic: AB AA
-            # - payload_len = command_len + 2 (includes checksum)
-            # - Command bytes
-            # - Checksum: plen XOR cmd_bytes
-            # - Trailer: 55 0D 0A
-            packet = bytearray(
-                [
-                    0xFE,
-                    0xEF,
-                    0x0A,
-                    length + 7,
-                    0xAB,
-                    0xAA,
-                    plen,
-                    *message,
-                    checksum,
-                    0x55,
-                    0x0D,
-                    0x0A,
-                ]
-            )
+    async def _send_packet(self, message: list[int]) -> None:
+        """Send a command packet to the device.
 
-        result = await self._write(packet)
-        if not result and self._last_write_link_error and not self._closing:
-            # The link died under this packet (e.g. turn_off's OFF WHITE): the
-            # packet is lost, not delivered. Reconnect and send it once more.
+        Connects first if needed and keeps a minimum interval between
+        packets. A packet lost to a dead link (e.g. turn_off's OFF WHITE)
+        is sent once more over a fresh connection.
+
+        Raises:
+            BeurerConnectionError: If the lamp cannot be reached.
+            BeurerWriteError: If the packet could not be delivered.
+        """
+        if not self._command_lock.owned():
+            # Commands are packet sequences; one sent outside the command lock
+            # can land inside another command's isolated mode switch, which
+            # freezes the lamp firmware. Use send_command() from outside.
+            raise RuntimeError("_send_packet called without the command lock")
+        packet = self._frame_packet(message)
+        await self._ensure_connected()
+
+        # Rate limiting: ensure minimum interval between commands
+        elapsed = time.monotonic() - self._last_command_time
+        if elapsed < MIN_COMMAND_INTERVAL:
+            await asyncio.sleep(MIN_COMMAND_INTERVAL - elapsed)
+
+        try:
+            await self._write(packet)
+        except BeurerWriteError:
+            if self._closing:
+                raise
             LOGGER.warning("Retrying command to %s after link error", self._mac)
-            result = await self._write(packet)
-        self._last_command_time = time.monotonic()
-        return result
+            await self._ensure_connected()
+            await self._write(packet)
+        finally:
+            self._last_command_time = time.monotonic()
 
     async def _switch_to_mode(self, mode_byte: int) -> None:
         """Perform isolated mode switch with extended firmware settle.
@@ -1539,14 +1609,15 @@ class BeurerInstance:
         finally:
             self._mode_switch_target = None
 
-    async def sync_time(self) -> bool:
+    @_serialized
+    async def sync_time(self) -> None:
         """Sync current time from Home Assistant to the device.
 
         Sends the current date/time so the device clock stays accurate.
         Uses Home Assistant local time so the lamp clock displays the correct local hour.
 
-        Returns:
-            True if time sync command was sent successfully.
+        Raises:
+            BeurerError: If the command could not be delivered.
         """
         now = dt_util.now()
 
@@ -1558,7 +1629,7 @@ class BeurerInstance:
         )
 
         if self._is_wl75:
-            result = await self._send_packet(
+            await self._send_packet(
                 [
                     CMD_WL75_TIME_SYNC,
                     now.second,
@@ -1569,118 +1640,112 @@ class BeurerInstance:
                     now.year - 2000,
                 ]
             )
-            if result:
-                self._last_time_sync = time.time()
-                await asyncio.sleep(COMMAND_DELAY)
-            return result
+        else:
+            await self._send_packet(
+                [
+                    CMD_TIME_SYNC,
+                    now.second,
+                    now.minute,
+                    now.hour,
+                    now.isoweekday(),  # 1=Monday, 7=Sunday
+                    now.day,
+                    now.month,
+                    now.year - 2000,
+                ]
+            )
+        self._last_time_sync = time.time()
+        await asyncio.sleep(COMMAND_DELAY)
 
-        result = await self._send_packet(
-            [
-                CMD_TIME_SYNC,
-                now.second,
-                now.minute,
-                now.hour,
-                now.isoweekday(),  # 1=Monday, 7=Sunday
-                now.day,
-                now.month,
-                now.year - 2000,
-            ]
-        )
-        if result:
-            self._last_time_sync = time.time()
-            await asyncio.sleep(COMMAND_DELAY)
-        return result
-
-    async def query_settings(self) -> bool:
+    @_serialized
+    async def query_settings(self) -> None:
         """Query device settings (feedback, fade, display, date/time format).
 
         Response will be handled by _handle_settings_notification.
-
-        Returns:
-            True if settings query was sent successfully.
         """
         LOGGER.debug("Querying settings from %s", self._mac)
         cmd = CMD_WL75_SETTINGS_READ if self._is_wl75 else CMD_SETTINGS_READ
-        result = await self._send_packet([cmd])
-        if result:
-            await asyncio.sleep(COMMAND_DELAY)
-        return result
+        await self._send_packet([cmd])
+        await asyncio.sleep(COMMAND_DELAY)
 
-    async def set_feedback(self, enabled: bool) -> bool:
+    async def _ensure_settings_read(self) -> None:
+        """Read the settings first if the lamp has not reported them yet.
+
+        The settings write carries display, date and time format too: with
+        the placeholders it would reset them on the lamp.
+        """
+        if self._settings_read.is_set():
+            return
+        cmd = CMD_WL75_SETTINGS_READ if self._is_wl75 else CMD_SETTINGS_READ
+        await self._send_packet([cmd])
+        try:
+            async with asyncio.timeout(COMMAND_TIMEOUT):
+                await self._settings_read.wait()
+        except TimeoutError as err:
+            raise BeurerSettingsUnknownError(self._device_name) from err
+
+    @_serialized
+    async def set_feedback(self, enabled: bool) -> None:
         """Set device feedback sound (beep on button press).
 
         Args:
             enabled: True to enable feedback sound, False to disable.
-
-        Returns:
-            True if settings command was sent successfully.
         """
         LOGGER.info("Setting feedback sound to %s on %s", enabled, self._mac)
+        await self._ensure_settings_read()
         # APK inverts the value: 0 = enabled, 1 = disabled
         feedback_value = 0 if enabled else 1
         if self._is_wl75:
-            result = await self._send_packet(
+            await self._send_packet(
                 [
                     CMD_WL75_SETTINGS_WRITE,
-                    self._display_setting or 0,
-                    self._date_format or 0,
-                    self._time_format or 0,
+                    self._display_setting,
+                    self._date_format,
+                    self._time_format,
                     feedback_value,
                 ]
             )
-            if result:
-                self._feedback_enabled = enabled
-                await asyncio.sleep(COMMAND_DELAY)
-                await self._trigger_update()
-            return result
+        else:
+            await self._send_packet(
+                [
+                    CMD_SETTINGS_WRITE,
+                    self._display_setting,
+                    self._date_format,
+                    self._time_format,
+                    feedback_value,
+                    0 if self._fade_enabled else 1,
+                ]
+            )
+        self._feedback_enabled = enabled
+        await asyncio.sleep(COMMAND_DELAY)
+        await self._trigger_update()
 
-        result = await self._send_packet(
-            [
-                CMD_SETTINGS_WRITE,
-                self._display_setting,
-                self._date_format,
-                self._time_format,
-                feedback_value,
-                0 if (self._fade_enabled or self._fade_enabled is None) else 1,
-            ]
-        )
-        if result:
-            self._feedback_enabled = enabled
-            await asyncio.sleep(COMMAND_DELAY)
-            await self._trigger_update()
-        return result
-
-    async def set_fade(self, enabled: bool) -> bool:
-        """Set smooth fade transitions.
+    @_serialized
+    async def set_fade(self, enabled: bool) -> None:
+        """Set smooth fade transitions (not on WL75, which has no fade).
 
         Args:
             enabled: True to enable fade transitions, False to disable.
-
-        Returns:
-            True if settings command was sent successfully.
         """
         if self._is_wl75:
-            LOGGER.debug("Fade is not supported on WL75")
-            return False
+            raise BeurerNotSupportedError(self._device_name)
 
         LOGGER.info("Setting fade to %s on %s", enabled, self._mac)
+        await self._ensure_settings_read()
         # APK inverts the value: 0 = enabled, 1 = disabled
         fade_value = 0 if enabled else 1
-        result = await self._send_packet(
+        await self._send_packet(
             [
                 CMD_SETTINGS_WRITE,
                 self._display_setting,
                 self._date_format,
                 self._time_format,
-                0 if (self._feedback_enabled or self._feedback_enabled is None) else 1,
+                0 if self._feedback_enabled else 1,
                 fade_value,
             ]
         )
-        if result:
-            self._fade_enabled = enabled
-            await asyncio.sleep(COMMAND_DELAY)
-            await self._trigger_update()
-        return result
+        self._fade_enabled = enabled
+        await asyncio.sleep(COMMAND_DELAY)
+        await self._trigger_update()
 
     @_serialized
     async def set_white(
@@ -1799,7 +1864,7 @@ class BeurerInstance:
             self._mode_switch_target = None
 
     @_serialized
-    async def set_timer(self, minutes: int) -> bool:
+    async def set_timer(self, minutes: int) -> None:
         """Set auto-off timer to specified duration.
 
         Timer works in both WHITE and RGB mode. Uses two commands:
@@ -1808,113 +1873,59 @@ class BeurerInstance:
 
         Args:
             minutes: Timer duration in minutes (1-120)
-
-        Returns:
-            True if timer command was sent successfully, False otherwise.
         """
         if not 1 <= minutes <= 120:
-            LOGGER.error("Timer minutes must be between 1 and 120, got %d", minutes)
-            return False
+            raise ValueError(f"Timer minutes must be between 1 and 120, got {minutes}")
 
-        if self._is_wl75:
-            LOGGER.info(
-                "Setting timer to %d min for WL75 %s (mode=%s)",
-                minutes,
-                self._mac,
-                self._mode,
-            )
-            if self._mode == ColorMode.RGB or self._color_on:
-                result = await self._send_packet([CMD_WL75_MOODLIGHT_TIMER_SWITCH, 1])
-                if not result:
-                    return False
-                await asyncio.sleep(COMMAND_DELAY)
-                result = await self._send_packet(
-                    [CMD_WL75_MOODLIGHT_TIMER_VALUE, minutes]
-                )
-            else:
-                result = await self._send_packet([CMD_WL75_LIGHT_TIMER_SWITCH, 1])
-                if not result:
-                    return False
-                await asyncio.sleep(COMMAND_DELAY)
-                result = await self._send_packet([CMD_WL75_LIGHT_TIMER_VALUE, minutes])
-            if result:
-                self._timer_active = True
-                self._timer_minutes = minutes
-                await asyncio.sleep(COMMAND_DELAY)
-                await self._request_status()
-            return result
-
-        # Determine current mode from color_mode (more reliable than _color_on)
-        mode_byte = MODE_RGB if self._mode == ColorMode.RGB else MODE_WHITE
-
+        rgb = self._mode == ColorMode.RGB or (self._is_wl75 and self._color_on)
         LOGGER.info(
-            "Setting timer to %d min for %s (mode=0x%02X, color_mode=%s)",
+            "Setting timer to %d min for %s (%s)",
             minutes,
             self._mac,
-            mode_byte,
-            self._mode,
+            "RGB" if rgb else "white",
         )
-
-        # First toggle timer on: 0x38 MODE
-        result = await self._send_packet([CMD_TIMER_TOGGLE, mode_byte])
-        if not result:
-            return False
-
-        await asyncio.sleep(COMMAND_DELAY)
-
-        # Then set the timer duration: 0x33 MODE MINUTES
-        result = await self._send_packet([CMD_TIMER_VALUE, mode_byte, minutes])
-        if result:
-            self._timer_active = True
-            self._timer_minutes = minutes
-            await self._trigger_update()
+        if self._is_wl75:
+            if rgb:
+                await self._send_packet([CMD_WL75_MOODLIGHT_TIMER_SWITCH, 1])
+                await asyncio.sleep(COMMAND_DELAY)
+                await self._send_packet([CMD_WL75_MOODLIGHT_TIMER_VALUE, minutes])
+            else:
+                await self._send_packet([CMD_WL75_LIGHT_TIMER_SWITCH, 1])
+                await asyncio.sleep(COMMAND_DELAY)
+                await self._send_packet([CMD_WL75_LIGHT_TIMER_VALUE, minutes])
+        else:
+            mode_byte = MODE_RGB if rgb else MODE_WHITE
+            # First toggle timer on (0x38 MODE), then the duration (0x33 MODE MIN)
+            await self._send_packet([CMD_TIMER_TOGGLE, mode_byte])
             await asyncio.sleep(COMMAND_DELAY)
-            await self._request_status()
-        return result
+            await self._send_packet([CMD_TIMER_VALUE, mode_byte, minutes])
+        self._timer_active = True
+        self._timer_minutes = minutes
+        await self._trigger_update()
+        await asyncio.sleep(COMMAND_DELAY)
+        await self._request_status()
 
     @_serialized
-    async def cancel_timer(self) -> bool:
-        """Cancel the auto-off timer.
-
-        Command format: 0x36 MODE (2 bytes).
-
-        Returns:
-            True if cancel command was sent successfully, False otherwise.
-        """
+    async def cancel_timer(self) -> None:
+        """Cancel the auto-off timer (TL command format: 0x36 MODE)."""
+        rgb = self._mode == ColorMode.RGB or (self._is_wl75 and self._color_on)
+        LOGGER.info("Cancelling timer for %s", self._mac)
         if self._is_wl75:
-            LOGGER.info(
-                "Cancelling timer for WL75 %s (mode=%s)",
-                self._mac,
-                self._mode,
+            await self._send_packet(
+                [
+                    CMD_WL75_MOODLIGHT_TIMER_SWITCH
+                    if rgb
+                    else CMD_WL75_LIGHT_TIMER_SWITCH,
+                    0,
+                ]
             )
-            if self._mode == ColorMode.RGB or self._color_on:
-                result = await self._send_packet([CMD_WL75_MOODLIGHT_TIMER_SWITCH, 0])
-            else:
-                result = await self._send_packet([CMD_WL75_LIGHT_TIMER_SWITCH, 0])
-            if result:
-                self._timer_active = False
-                self._timer_minutes = 0
-                await asyncio.sleep(COMMAND_DELAY)
-                await self._request_status()
-            return result
-
-        mode_byte = MODE_RGB if self._mode == ColorMode.RGB else MODE_WHITE
-
-        LOGGER.info(
-            "Cancelling timer for %s (mode=0x%02X, color_mode=%s)",
-            self._mac,
-            mode_byte,
-            self._mode,
-        )
-
-        result = await self._send_packet([CMD_TIMER_CANCEL, mode_byte])
-        if result:
-            self._timer_active = False
-            self._timer_minutes = 0
-            await self._trigger_update()
-            await asyncio.sleep(COMMAND_DELAY)
-            await self._request_status()
-        return result
+        else:
+            await self._send_packet([CMD_TIMER_CANCEL, MODE_RGB if rgb else MODE_WHITE])
+        self._timer_active = False
+        self._timer_minutes = None
+        await self._trigger_update()
+        await asyncio.sleep(COMMAND_DELAY)
+        await self._request_status()
 
     @_serialized
     async def turn_on(self) -> None:
@@ -1930,11 +1941,7 @@ class BeurerInstance:
             self.is_on,
         )
 
-        if (
-            not self._client or not self._client.is_connected
-        ) and not await self.connect():
-            LOGGER.error("Failed to connect for turn_on")
-            return
+        await self._ensure_connected()
 
         if self._is_wl75:
             if self._mode == ColorMode.WHITE:
@@ -2014,6 +2021,11 @@ class BeurerInstance:
         # it is not seen as a change and would not refresh the entity.
         await self._trigger_update()
         await asyncio.sleep(TURN_OFF_DELAY)
+        await self._request_status()
+
+    @_serialized
+    async def request_status(self) -> None:
+        """Ask the lamp for its current state (for code outside this class)."""
         await self._request_status()
 
     async def _request_status(self) -> None:
@@ -2495,6 +2507,7 @@ class BeurerInstance:
                 self._date_format = payload[2]
                 self._time_format = payload[3]
                 self._feedback_enabled = payload[4] == 0
+                self._settings_read.set()
                 await self._trigger_update()
             return
 
@@ -2539,16 +2552,17 @@ class BeurerInstance:
             await self._handle_wl75_notification(data)
             return
 
-        if len(data) < 10:
-            LOGGER.debug("Short notification (%d bytes), ignoring", len(data))
+        if not is_valid_tl_frame(data):
+            # A fragment or a corrupted frame: reading it would set wrong state
+            LOGGER.debug("Ignoring malformed notification from %s", self._mac)
             return
 
         # Dispatch special command responses first
-        if len(data) > 7 and await self._dispatch_command_response(data[7], data):
+        if await self._dispatch_command_response(data[7], data):
             return
 
         # Check payload length for heartbeat/ACK packets
-        payload_len = data[6] if len(data) > 6 else 0
+        payload_len = data[6]
         if payload_len < 0x08:
             LOGGER.debug(
                 "Short payload (%d bytes), likely ACK/heartbeat - not updating state",
@@ -2634,6 +2648,7 @@ class BeurerInstance:
         # APK inverts feedback/fade: 0 means ON, 1 means OFF
         self._feedback_enabled = data[11] == 0
         self._fade_enabled = data[12] == 0
+        self._settings_read.set()
 
         LOGGER.info(
             "Settings from %s: display=%d, date_fmt=%d, time_fmt=%d, "
@@ -2911,23 +2926,16 @@ class BeurerInstance:
         read_uuid = self._read_uuid
 
         async def _do_start_notify() -> None:
-            try:
-                await client.start_notify(
-                    read_uuid,
-                    self._handle_notification,
-                    bluez={"use_start_notify": True},
-                )
-            except TypeError:
-                await client.start_notify(read_uuid, self._handle_notification)
+            await client.start_notify(
+                read_uuid,
+                self._handle_notification,
+                bluez={"use_start_notify": True},
+            )
 
         try:
             await _do_start_notify()
         except BleakError as err:
-            err_str = str(err)
-            if (
-                "changed connection status while waiting" in err_str
-                or "BluetoothGATTNotifyResponse" in err_str
-            ):
+            if _is_transient_gatt_error(err):
                 LOGGER.info(
                     "Beurer %s aborted GATT subscribe; retrying after settle",
                     self._mac,
@@ -2990,12 +2998,19 @@ class BeurerInstance:
     async def connect(self) -> bool:
         """Connect to the device, one attempt at a time.
 
-        Without the lock, a command or poll arriving while a reconnect is in
-        progress opened a second connection; the first client stayed connected
-        and held an extra proxy slot.
+        Runs under the command lock: a command or poll arriving during a
+        reconnect must neither open a second connection (an orphaned client
+        holds a proxy slot) nor interleave with the setup packets.
         """
-        async with self._connect_lock.hold():
-            return await self._connect()
+        async with self._command_lock.hold():
+            if self._in_connect:
+                # Re-entered from this connect's own setup packets
+                return self.is_connected
+            self._in_connect = True
+            try:
+                return await self._connect()
+            finally:
+                self._in_connect = False
 
     async def _connect(self) -> bool:  # noqa: PLR0912, PLR0915
         """Connect to the device using Home Assistant's Bluetooth stack.
@@ -3062,7 +3077,6 @@ class BeurerInstance:
                     self._clear_adapter_failure(service_info.source)
 
             self._reconnect_backoff = RECONNECT_INITIAL_BACKOFF
-            self._ever_connected = True
             if self._connection_start_time is not None:
                 self._reconnect_count += 1
                 self._signal_health.record_reconnect(time.time())
@@ -3092,25 +3106,11 @@ class BeurerInstance:
         except BleakConnectionError as err:
             LOGGER.error("Connection to %s failed: %s", self._mac, err)
             self._clear_adapter_full_issue()
-        except (
-            BleakError,
-            TimeoutError,
-            OSError,
-            ValueError,
-            RuntimeError,
-            AttributeError,
-        ) as err:
-            # ESPHome / aioesphomeapi surfaces a few known-transient
-            # situations as raw BleakError (peripheral disconnects mid-
-            # handshake, GATT subscribe races). Log those at WARNING so
-            # they do not raise a UI alert; the auto-reconnect path picks
-            # the connection up on the next attempt.
-            err_str = str(err)
-            transient = (
-                "changed connection status while waiting" in err_str
-                or "BluetoothGATTNotifyResponse" in err_str
-                or "BluetoothGATTErrorResponse" in err_str
-            )
+        except (BleakError, TimeoutError, OSError, BeurerError) as err:
+            # Known-transient ESPHome failures are logged at WARNING so they
+            # do not raise a UI alert; the auto-reconnect path picks the
+            # connection up on the next attempt.
+            transient = _is_transient_gatt_error(err)
             level_log = LOGGER.warning if transient else LOGGER.error
             level_log(
                 "%s connecting to %s: %s (type: %s)",
@@ -3210,28 +3210,17 @@ class BeurerInstance:
 
     @_serialized
     async def update(self) -> None:
-        """Update device state by requesting current status."""
+        """Poll the device state; an unreachable lamp is not an error here."""
         LOGGER.debug("Update called for %s", self._mac)
+        if not self.is_connected and not await self.connect():
+            # connect() already logged the reason at the right level
+            LOGGER.debug("Could not connect to %s for update", self._mac)
+            return
         try:
-            if (
-                not self._client or not self._client.is_connected
-            ) and not await self.connect():
-                # connect() already logs the specific reason at the right
-                # level; emitting another warning here just duplicates the
-                # alert in the HA UI for transient connection misses.
-                LOGGER.debug("Could not connect to %s for update", self._mac)
-                return
-
             await self._request_status()
-        except BleakError as err:
-            LOGGER.error("BleakError during update for %s: %s", self._mac, err)
-            await self.disconnect()
-        except TimeoutError as err:
-            LOGGER.error("Timeout during update for %s: %s", self._mac, err)
-            await self.disconnect()
-        except OSError as err:
-            LOGGER.error("OS error during update for %s: %s", self._mac, err)
-            await self.disconnect()
+        except BeurerError as err:
+            # _write already tore the dead link down; the next poll reconnects
+            LOGGER.debug("Status request to %s failed: %s", self._mac, err)
 
     @property
     def therapy_session_running(self) -> bool:
@@ -3319,9 +3308,4 @@ class BeurerInstance:
             except OSError as err:
                 LOGGER.debug("OS error during disconnect: %s", err)
 
-        self._available = False
-        self._light_on = False
-        self._color_on = False
-        # The light state is unknown while disconnected: pause the session
-        # instead of counting minutes that may not be real.
-        self._reconcile_therapy()
+        self._reset_connection_state()

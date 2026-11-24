@@ -33,6 +33,10 @@ from custom_components.beurer_daylight_lamps.const import (
     RESP_WL75_SAVE_RADIO_FREQ,
     RESP_WL75_UPDATE_ALARM,
 )
+from custom_components.beurer_daylight_lamps.exceptions import (
+    BeurerError,
+    BeurerWriteError,
+)
 from custom_components.beurer_daylight_lamps.wl75 import WL75Controller
 from custom_components.beurer_daylight_lamps.wl90 import AlarmItem
 
@@ -42,7 +46,14 @@ def instance() -> MagicMock:
     """Return a fake BeurerInstance."""
     inst = MagicMock()
     inst.mac = "AA:BB:CC:DD:EE:FF"
-    inst._send_packet = AsyncMock(return_value=True)
+    inst._send_packet = AsyncMock()
+
+    async def _send_command(*messages: list[int]) -> None:
+        for message in messages:
+            await inst._send_packet(message)
+
+    inst.send_command = _send_command
+    inst.name = "Lamp"
     return inst
 
 
@@ -56,7 +67,7 @@ def ctrl(instance: MagicMock) -> WL75Controller:
 def no_sleep():
     """Skip command delays."""
     with patch(
-        "custom_components.beurer_daylight_lamps.wl75.asyncio.sleep",
+        "custom_components.beurer_daylight_lamps.beurer_daylight_lamps.asyncio.sleep",
         new=AsyncMock(),
     ):
         yield
@@ -70,29 +81,36 @@ class TestRadio:
     """Radio commands."""
 
     async def test_on_off(self, ctrl: WL75Controller, instance: MagicMock) -> None:
-        assert await ctrl.radio_on()
+        await ctrl.radio_on()
         instance._send_packet.assert_awaited_with([CMD_WL75_RADIO_POWER, 1])
         assert ctrl.radio.is_on
-        assert await ctrl.radio_off()
+        await ctrl.radio_off()
         instance._send_packet.assert_awaited_with([CMD_WL75_RADIO_POWER, 0])
         assert not ctrl.radio.is_on
 
     async def test_failures_keep_state(
         self, ctrl: WL75Controller, instance: MagicMock
     ) -> None:
-        instance._send_packet.return_value = False
-        assert not await ctrl.radio_on()
+        instance._send_packet.side_effect = BeurerWriteError("Lamp")
+        with pytest.raises(BeurerError):
+            await ctrl.radio_on()
         assert not ctrl.radio.is_on
         ctrl.radio.is_on = True
-        assert not await ctrl.radio_off()
+        with pytest.raises(BeurerError):
+            await ctrl.radio_off()
         assert ctrl.radio.is_on
-        assert not await ctrl.set_radio_volume(1)
+        with pytest.raises(BeurerError):
+            await ctrl.set_radio_volume(1)
         assert ctrl.radio.volume == 5
-        assert not await ctrl.select_radio_preset(3)
+        with pytest.raises(BeurerError):
+            await ctrl.select_radio_preset(3)
         assert ctrl.radio.channel == 0
-        assert not await ctrl.set_radio_sleep_timer(0)
-        assert not await ctrl.set_radio_sleep_timer(20)
-        assert not await ctrl.sync_alarm(0, AlarmItem(enabled=True))
+        with pytest.raises(BeurerError):
+            await ctrl.set_radio_sleep_timer(0)
+        with pytest.raises(BeurerError):
+            await ctrl.set_radio_sleep_timer(20)
+        with pytest.raises(BeurerError):
+            await ctrl.sync_alarm(0, AlarmItem(enabled=True))
         assert not ctrl.alarms[0].enabled
 
     async def test_volume(self, ctrl: WL75Controller, instance: MagicMock) -> None:
@@ -121,11 +139,11 @@ class TestRadio:
         instance._send_packet.assert_awaited_with([CMD_WL75_RADIO_FINE_TUNE, 1])
 
     async def test_sleep_timer(self, ctrl: WL75Controller, instance: MagicMock) -> None:
-        assert await ctrl.set_radio_sleep_timer(20)
+        await ctrl.set_radio_sleep_timer(20)
         instance._send_packet.assert_awaited_with([CMD_WL75_RADIO_TIMER_VALUE, 20])
         assert ctrl.radio.sleep_timer_on
         assert ctrl.radio.sleep_timer_minutes == 20
-        assert await ctrl.set_radio_sleep_timer(0)
+        await ctrl.set_radio_sleep_timer(0)
         instance._send_packet.assert_awaited_with([CMD_WL75_RADIO_TIMER_TOGGLE, 0])
         assert not ctrl.radio.sleep_timer_on
         assert ctrl.radio.sleep_timer_minutes == 0
@@ -133,8 +151,9 @@ class TestRadio:
     async def test_sleep_timer_value_fails(
         self, ctrl: WL75Controller, instance: MagicMock
     ) -> None:
-        instance._send_packet.side_effect = [True, False]
-        assert not await ctrl.set_radio_sleep_timer(5)
+        instance._send_packet.side_effect = [None, BeurerWriteError("Lamp")]
+        with pytest.raises(BeurerError):
+            await ctrl.set_radio_sleep_timer(5)
         assert not ctrl.radio.sleep_timer_on
 
     async def test_save_and_query(
@@ -143,7 +162,7 @@ class TestRadio:
         await ctrl.save_radio_frequency()
         instance._send_packet.assert_awaited_with([CMD_WL75_RADIO_SAVE_FREQ])
         instance._send_packet.reset_mock()
-        assert await ctrl.query_radio_status()
+        await ctrl.query_radio_status()
         assert [c.args[0] for c in instance._send_packet.await_args_list] == [
             [CMD_WL75_RADIO_STATUS],
             [CMD_WL75_RADIO_PRESETS_1],
@@ -152,10 +171,14 @@ class TestRadio:
 
 
 async def test_music_not_supported(ctrl: WL75Controller, instance: MagicMock) -> None:
-    assert not await ctrl.music_on()
-    assert not await ctrl.music_off()
-    assert not await ctrl.set_music_volume(3)
-    assert not await ctrl.set_music_sleep_timer(3)
+    with pytest.raises(BeurerError):
+        await ctrl.music_on()
+    with pytest.raises(BeurerError):
+        await ctrl.music_off()
+    with pytest.raises(BeurerError):
+        await ctrl.set_music_volume(3)
+    with pytest.raises(BeurerError):
+        await ctrl.set_music_sleep_timer(3)
     assert not await ctrl.query_music_status()
     instance._send_packet.assert_not_awaited()
 
@@ -166,13 +189,14 @@ class TestAlarmSync:
     async def test_invalid_slot(
         self, ctrl: WL75Controller, instance: MagicMock
     ) -> None:
-        assert not await ctrl.sync_alarm(2)
+        with pytest.raises(ValueError, match="Invalid alarm slot"):
+            await ctrl.sync_alarm(2)
         instance._send_packet.assert_not_awaited()
 
     async def test_stored_alarm(
         self, ctrl: WL75Controller, instance: MagicMock
     ) -> None:
-        assert await ctrl.sync_alarm(1)
+        await ctrl.sync_alarm(1)
         instance._send_packet.assert_awaited_with(
             [CMD_WL75_ALARM_WRITE, 2, 0, 7, 0x3E, 0, 5, 4, 0, 20, 50]
         )
@@ -181,7 +205,7 @@ class TestAlarmSync:
         self, ctrl: WL75Controller, instance: MagicMock
     ) -> None:
         alarm = AlarmItem(enabled=True, hour=6, minute=15, days=0x41, snooze_minutes=1)
-        assert await ctrl.sync_alarm(0, alarm)
+        await ctrl.sync_alarm(0, alarm)
         instance._send_packet.assert_awaited_with(
             [CMD_WL75_ALARM_WRITE, 1, 15, 6, 0xC1, 0, 5, 1, 0, 20, 50]
         )

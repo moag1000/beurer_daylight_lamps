@@ -1,37 +1,28 @@
 {
     "exceptions": {
-        "device_not_found": {
-            "message": "Could not find Beurer lamp {name} ({mac}). Ensure the lamp is powered on and within Bluetooth range."
-        },
         "connection_failed": {
-            "message": "Failed to connect to {name}. The device may be out of range or already connected to another device."
+            "message": "Failed to connect to {name} ({mac}). The lamp may be out of Bluetooth range, switched off, or connected to another device."
         },
         "command_failed": {
-            "message": "Failed to send command to device(s): {devices}. Please try again."
+            "message": "The command failed on: {devices}."
         },
         "initialization_failed": {
             "message": "Failed to initialize {name}: {error}"
         },
-        "timer_failed": {
-            "message": "Failed to set timer on {name}. Timer only works in RGB/color mode."
-        },
-        "timer_invalid_range": {
-            "message": "Timer must be between 1 and 120 minutes, got {minutes}."
-        },
-        "device_unavailable": {
-            "message": "Device {name} is not available. It may be out of Bluetooth range or powered off."
-        },
         "write_failed": {
-            "message": "Failed to write to {name}. The Bluetooth connection may have been lost."
-        },
-        "reconnect_failed": {
-            "message": "Failed to reconnect to {name} after multiple attempts. Try moving the device closer or check if it's powered on."
+            "message": "The command did not reach {name}. The Bluetooth connection was lost; please try again."
         },
         "no_target_entities": {
             "message": "No Beurer lamp entities found for the specified target. Ensure you have selected a valid lamp."
         },
         "invalid_hex_command": {
             "message": "Invalid hex command: {error}. Use format like 33 01 1E or 33011E."
+        },
+        "not_supported": {
+            "message": "{name} does not have this function."
+        },
+        "settings_unknown": {
+            "message": "{name} did not report its current settings, so they were not changed. Please try again."
         }
     },
     "config": {
@@ -367,10 +358,6 @@
             "name": "Apply preset",
             "description": "Apply a predefined lighting preset to the lamp",
             "fields": {
-                "device_id": {
-                    "name": "Device",
-                    "description": "The Beurer lamp device to control"
-                },
                 "preset": {
                     "name": "Preset",
                     "description": "The preset to apply (daylight_therapy, relax, focus, reading, warm_cozy, cool_bright, sunset, night_light, energize)"
@@ -381,10 +368,6 @@
             "name": "Send raw command (Expert)",
             "description": "Send a raw BLE command to the lamp for reverse engineering and testing",
             "fields": {
-                "device_id": {
-                    "name": "Device",
-                    "description": "The Beurer lamp device to control"
-                },
                 "command": {
                     "name": "Command bytes",
                     "description": "Hex bytes to send (e.g., '33 01 1E'). Known: 30=status, 31=brightness, 32=color, 34=effect, 35=off, 36=cancel_timer, 37=mode, 38=timer. Unknown: 33, 39"
@@ -395,10 +378,6 @@
             "name": "Set Timer",
             "description": "Set an auto-off timer on the lamp. Works in both White and RGB mode. Note: Timer is automatically cancelled when switching modes.",
             "fields": {
-                "device_id": {
-                    "name": "Device",
-                    "description": "The Beurer lamp device to control"
-                },
                 "minutes": {
                     "name": "Minutes",
                     "description": "Timer duration in minutes (1-120)"
@@ -409,10 +388,6 @@
             "name": "Start Sunrise Simulation",
             "description": "Gradually increase brightness and color temperature to simulate a natural sunrise. This is a lifestyle/wellness feature for personal use, NOT a medical device.",
             "fields": {
-                "device_id": {
-                    "name": "Device",
-                    "description": "The Beurer lamp device to control"
-                },
                 "duration": {
                     "name": "Duration",
                     "description": "Duration of the sunrise simulation in minutes (1-60)"
@@ -427,10 +402,6 @@
             "name": "Start Sunset Simulation",
             "description": "Gradually decrease brightness and color temperature to simulate a natural sunset. This is a lifestyle/wellness feature for personal use, NOT a medical device.",
             "fields": {
-                "device_id": {
-                    "name": "Device",
-                    "description": "The Beurer lamp device to control"
-                },
                 "duration": {
                     "name": "Duration",
                     "description": "Duration of the sunset simulation in minutes (1-60)"
@@ -444,21 +415,12 @@
         "stop_simulation": {
             "name": "Stop Simulation",
             "description": "Stop any running sunrise or sunset simulation on the lamp.",
-            "fields": {
-                "device_id": {
-                    "name": "Device",
-                    "description": "The Beurer lamp device to control"
-                }
-            }
+            "fields": {}
         },
         "set_alarm": {
             "name": "Set Alarm",
             "description": "Configure an alarm on a WL75 or WL90 Wake-up Light. Supports sunrise simulation, weekday selection, tone, and snooze.",
             "fields": {
-                "device_id": {
-                    "name": "Device",
-                    "description": "The WL75 or WL90 device to configure"
-                },
                 "slot": {
                     "name": "Alarm slot",
                     "description": "Alarm slot number: 0 or 1 on WL75; 0, 1, or 2 on WL90"

@@ -109,14 +109,6 @@ class TestSetupAfterConnect:
         inst.query_settings.assert_awaited_once()
         inst._wl90.query_radio_status.assert_awaited_once()
 
-    async def test_notify_falls_back_without_bluez_kwarg(self) -> None:
-        inst = make_instance()
-        client = gatt_client()
-        client.start_notify = AsyncMock(side_effect=[TypeError, None])
-        inst._client = client
-        await self._run(inst)
-        assert client.start_notify.await_count == 2
-
     async def test_notify_retries_transient_abort(self) -> None:
         inst = make_instance()
         client = gatt_client()
@@ -166,7 +158,6 @@ class TestConnect:
             assert await inst.connect()
         assert inst._client is client
         assert inst.reconnect_count == 1
-        assert inst._ever_connected
         assert "proxy" not in inst._adapter_failures
         watchdog.assert_called_once()
 
@@ -329,13 +320,21 @@ class TestUpdateAndDisconnect:
         inst._request_status.assert_not_awaited()
 
     @pytest.mark.parametrize("error", [BleakError("x"), TimeoutError(), OSError()])
-    async def test_update_errors_disconnect(self, error: Exception) -> None:
+    async def test_failed_poll_drops_dead_link(self, error: Exception) -> None:
+        """A dead link found while polling is torn down, the poll does not fail."""
         inst = make_instance()
         inst._client = gatt_client()
-        inst._request_status = AsyncMock(side_effect=error)
-        inst.disconnect = AsyncMock()
+        inst._client.write_gatt_char = AsyncMock(side_effect=error)
+        inst._write_uuid = "w"
+
+        async def drop_link() -> None:
+            inst._client = None
+
+        inst.disconnect = AsyncMock(side_effect=drop_link)
+        inst.connect = AsyncMock(return_value=False)  # lamp stays out of reach
         await inst.update()
         inst.disconnect.assert_awaited_once()
+        inst.connect.assert_awaited_once()  # one reconnect for the lost packet
 
     @pytest.mark.parametrize("error", [BleakError("x"), TimeoutError(), OSError()])
     async def test_disconnect_swallows_errors(self, error: Exception) -> None:

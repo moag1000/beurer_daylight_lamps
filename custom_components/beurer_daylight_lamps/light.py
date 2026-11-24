@@ -159,8 +159,9 @@ class BeurerLight(
                 self._color_temp_kelvin,
                 self._instance.mac,
             )
-
-        await self._instance.update()
+        # No update() here: it connects, which could block the platform setup
+        # for minutes when the lamp is out of reach. The background connect
+        # in __init__ and the coordinator deliver the first state.
 
     @property
     def extra_restore_state_data(self) -> BeurerLightExtraStoredData:
@@ -169,11 +170,7 @@ class BeurerLight(
 
     @property
     def available(self) -> bool:
-        """Return True if entity is available.
-
-        Stays available after first successful connection so commands
-        can trigger reconnection transparently via _send_packet.
-        """
+        """Return True while a command can reach the lamp."""
         return self._instance.available
 
     @property

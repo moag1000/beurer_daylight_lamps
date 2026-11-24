@@ -5,6 +5,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from homeassistant.components.light import ColorMode
 
+from tests.tl_frames import as_tl_frame
+
 
 # Mock BleakClient before importing BeurerInstance to avoid platform-specific imports
 @pytest.fixture(autouse=True)
@@ -242,7 +244,7 @@ class TestNotificationParsing:
         data[9] = 1  # on
         data[10] = 50  # brightness 50%
 
-        await instance._handle_notification(char, data)
+        await instance._handle_notification(char, as_tl_frame(data))
 
         assert instance._available is True  # Now available after notification
         assert instance._light_on is True
@@ -272,7 +274,7 @@ class TestNotificationParsing:
         data[15] = 64  # B
         data[16] = 2  # effect index (Rainbow)
 
-        await instance._handle_notification(char, data)
+        await instance._handle_notification(char, as_tl_frame(data))
 
         assert instance._available is True
         assert instance._color_on is True
@@ -300,7 +302,7 @@ class TestNotificationParsing:
         data[6] = 0x08  # payload_len = 0x08 (status packet)
         data[8] = 255  # version = device off
 
-        await instance._handle_notification(char, data)
+        await instance._handle_notification(char, as_tl_frame(data))
 
         assert instance._available is True  # Still available, just off
         assert instance.is_on is False  # Derived from _light_on and _color_on
@@ -434,30 +436,28 @@ class TestBeurerDeviceAvailability:
         instance = BeurerInstance(mock_device)
         assert instance.last_seen > 0
 
-    def test_available_property(self, mock_device):
-        """Test available property combines ble_available and _available."""
+    def test_available_follows_reachability(self, mock_device):
+        """Unavailable only while no adapter sees the lamp and no link is up."""
         from custom_components.beurer_daylight_lamps.beurer_daylight_lamps import (
             BeurerInstance,
         )
 
         instance = BeurerInstance(mock_device)
+        instance._safe_create_task = MagicMock(
+            side_effect=lambda coro, _name: coro.close()
+        )
+        assert instance.available  # advertising: a command connects
 
-        # Initially not available (haven't received status)
-        assert instance.available is False
+        instance._client = MagicMock(is_connected=True)
+        instance.mark_unavailable()  # adverts stop while connected
+        assert instance.available
 
-        # Set both flags
-        instance._ble_available = True
-        instance._available = True
-        assert instance.available is True
+        instance._client.is_connected = False  # link lost, lamp gone
+        instance.mark_unavailable()
+        assert not instance.available
 
-        # Only ble_available
-        instance._available = False
-        assert instance.available is False
-
-        # Only _available
-        instance._ble_available = False
-        instance._available = True
-        assert instance.available is False
+        instance.mark_seen()  # advertising again
+        assert instance.available
 
 
 class TestBeurerDeviceProperties:
@@ -901,148 +901,6 @@ class TestBeurerDisconnectCallback:
         assert instance._read_uuid is None
 
 
-class TestBeurerWriteMethod:
-    """Tests for the _write method."""
-
-    @pytest.fixture
-    def mock_device(self):
-        """Create a mock BLE device."""
-        device = MagicMock()
-        device.address = "AA:BB:CC:DD:EE:FF"
-        device.name = "TL100"
-        return device
-
-    @pytest.mark.asyncio
-    async def test_write_no_write_uuid(self, mock_device):
-        """Test _write returns False if no write UUID available."""
-        from custom_components.beurer_daylight_lamps.beurer_daylight_lamps import (
-            BeurerInstance,
-        )
-
-        instance = BeurerInstance(mock_device)
-        instance._client = MagicMock()
-        instance._client.is_connected = True
-        instance._write_uuid = None
-
-        result = await instance._write(bytearray([0x01, 0x02]))
-        assert result is False
-
-    @pytest.mark.asyncio
-    async def test_write_success(self, mock_device):
-        """Test _write succeeds with valid client and UUID."""
-        from custom_components.beurer_daylight_lamps.beurer_daylight_lamps import (
-            BeurerInstance,
-        )
-
-        instance = BeurerInstance(mock_device)
-        instance._client = MagicMock()
-        instance._client.is_connected = True
-        instance._client.write_gatt_char = AsyncMock()
-        instance._write_uuid = "test-uuid"
-
-        result = await instance._write(bytearray([0x01, 0x02]))
-        assert result is True
-        instance._client.write_gatt_char.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_write_bleak_error(self, mock_device):
-        """Test _write handles BleakError gracefully."""
-        from bleak.exc import BleakError
-
-        from custom_components.beurer_daylight_lamps.beurer_daylight_lamps import (
-            BeurerInstance,
-        )
-
-        instance = BeurerInstance(mock_device)
-        instance._client = MagicMock()
-        instance._client.is_connected = True
-        instance._client.write_gatt_char = AsyncMock(
-            side_effect=BleakError("Test error")
-        )
-        instance._client.disconnect = AsyncMock()
-        instance._write_uuid = "test-uuid"
-
-        result = await instance._write(bytearray([0x01, 0x02]))
-        assert result is False
-
-    @pytest.mark.asyncio
-    async def test_write_timeout_error(self, mock_device):
-        """Test _write handles TimeoutError gracefully."""
-        from custom_components.beurer_daylight_lamps.beurer_daylight_lamps import (
-            BeurerInstance,
-        )
-
-        instance = BeurerInstance(mock_device)
-        instance._client = MagicMock()
-        instance._client.is_connected = True
-        instance._client.write_gatt_char = AsyncMock(
-            side_effect=TimeoutError("Timeout")
-        )
-        instance._client.disconnect = AsyncMock()
-        instance._write_uuid = "test-uuid"
-
-        result = await instance._write(bytearray([0x01, 0x02]))
-        assert result is False
-
-    @pytest.mark.asyncio
-    async def test_write_os_error(self, mock_device):
-        """Test _write handles OSError gracefully."""
-        from custom_components.beurer_daylight_lamps.beurer_daylight_lamps import (
-            BeurerInstance,
-        )
-
-        instance = BeurerInstance(mock_device)
-        instance._client = MagicMock()
-        instance._client.is_connected = True
-        instance._client.write_gatt_char = AsyncMock(side_effect=OSError("OS Error"))
-        instance._client.disconnect = AsyncMock()
-        instance._write_uuid = "test-uuid"
-
-        result = await instance._write(bytearray([0x01, 0x02]))
-        assert result is False
-
-
-class TestBeurerSendPacket:
-    """Tests for the _send_packet method."""
-
-    @pytest.fixture
-    def mock_device(self):
-        """Create a mock BLE device."""
-        device = MagicMock()
-        device.address = "AA:BB:CC:DD:EE:FF"
-        device.name = "TL100"
-        return device
-
-    @pytest.mark.asyncio
-    async def test_send_packet_builds_correct_packet(self, mock_device):
-        """Test _send_packet builds correct packet structure."""
-        from custom_components.beurer_daylight_lamps.beurer_daylight_lamps import (
-            BeurerInstance,
-        )
-
-        instance = BeurerInstance(mock_device)
-        instance._client = MagicMock()
-        instance._client.is_connected = True
-        instance._client.write_gatt_char = AsyncMock()
-        instance._write_uuid = "test-uuid"
-
-        result = await instance._send_packet([0x30, 0x01])
-        assert result is True
-
-        # Verify packet structure
-        call_args = instance._client.write_gatt_char.call_args
-        packet = call_args[0][1]
-
-        # Check header
-        assert packet[0] == 0xFE
-        assert packet[1] == 0xEF
-        assert packet[2] == 0x0A
-        # Check trailer
-        assert packet[-3] == 0x55
-        assert packet[-2] == 0x0D
-        assert packet[-1] == 0x0A
-
-
 class TestBeurerCommandMethods:
     """Tests for command methods."""
 
@@ -1335,104 +1193,6 @@ class TestBeurerTurnOnOff:
         assert instance._light_on is False
 
 
-class TestBeurerTimerMethod:
-    """Tests for timer method."""
-
-    @pytest.fixture
-    def mock_device(self):
-        """Create a mock BLE device."""
-        device = MagicMock()
-        device.address = "AA:BB:CC:DD:EE:FF"
-        device.name = "TL100"
-        return device
-
-    @pytest.mark.asyncio
-    async def test_set_timer_valid(self, mock_device):
-        """Test set_timer with valid minutes."""
-        from custom_components.beurer_daylight_lamps.beurer_daylight_lamps import (
-            BeurerInstance,
-        )
-
-        instance = BeurerInstance(mock_device)
-        instance._client = MagicMock()
-        instance._client.is_connected = True
-        instance._client.write_gatt_char = AsyncMock()
-        instance._write_uuid = "test-uuid"
-
-        result = await instance.set_timer(30)
-
-        assert result is True
-        instance._client.write_gatt_char.assert_called()
-
-    @pytest.mark.asyncio
-    async def test_set_timer_invalid_low(self, mock_device):
-        """Test set_timer rejects values below 1."""
-        from custom_components.beurer_daylight_lamps.beurer_daylight_lamps import (
-            BeurerInstance,
-        )
-
-        instance = BeurerInstance(mock_device)
-        instance._client = MagicMock()
-        instance._client.is_connected = True
-        instance._client.write_gatt_char = AsyncMock()
-        instance._write_uuid = "test-uuid"
-
-        result = await instance.set_timer(0)
-
-        assert result is False
-
-    @pytest.mark.asyncio
-    async def test_set_timer_invalid_high(self, mock_device):
-        """Test set_timer rejects values above 120."""
-        from custom_components.beurer_daylight_lamps.beurer_daylight_lamps import (
-            BeurerInstance,
-        )
-
-        instance = BeurerInstance(mock_device)
-        instance._client = MagicMock()
-        instance._client.is_connected = True
-        instance._client.write_gatt_char = AsyncMock()
-        instance._write_uuid = "test-uuid"
-
-        result = await instance.set_timer(121)
-
-        assert result is False
-
-    @pytest.mark.asyncio
-    async def test_set_timer_boundary_min(self, mock_device):
-        """Test set_timer at minimum boundary (1)."""
-        from custom_components.beurer_daylight_lamps.beurer_daylight_lamps import (
-            BeurerInstance,
-        )
-
-        instance = BeurerInstance(mock_device)
-        instance._client = MagicMock()
-        instance._client.is_connected = True
-        instance._client.write_gatt_char = AsyncMock()
-        instance._write_uuid = "test-uuid"
-
-        result = await instance.set_timer(1)
-
-        assert result is True
-
-    @pytest.mark.asyncio
-    async def test_set_timer_boundary_max(self, mock_device):
-        """Test set_timer at maximum boundary (120)."""
-        from custom_components.beurer_daylight_lamps.beurer_daylight_lamps import (
-            BeurerInstance,
-        )
-
-        instance = BeurerInstance(mock_device)
-        instance._client = MagicMock()
-        instance._client.is_connected = True
-        instance._client.write_gatt_char = AsyncMock()
-        instance._write_uuid = "test-uuid"
-
-        result = await instance.set_timer(120)
-
-        assert result is True
-
-
 class TestBeurerEffectMethod:
     """Tests for set_effect method."""
 
@@ -1559,7 +1319,7 @@ class TestNotificationEdgeCases:
         data = bytearray([0x00] * 11)
         data[6] = 0x04  # payload_len = 0x04 (heartbeat)
 
-        await instance._handle_notification(char, data)
+        await instance._handle_notification(char, as_tl_frame(data))
 
         assert instance._heartbeat_count == initial_heartbeat + 1
         assert instance._available is True  # Should become available
@@ -1582,7 +1342,7 @@ class TestNotificationEdgeCases:
         data[6] = 0x08  # payload_len = 0x08 (status packet)
         data[8] = 0  # version = shutdown
 
-        await instance._handle_notification(char, data)
+        await instance._handle_notification(char, as_tl_frame(data))
 
         # Disconnect should be triggered (async)
 
@@ -1601,7 +1361,7 @@ class TestNotificationEdgeCases:
         data[6] = 0x08  # payload_len = 0x08 (status packet)
         data[8] = 99  # unknown version
 
-        await instance._handle_notification(char, data)
+        await instance._handle_notification(char, as_tl_frame(data))
 
         assert instance._last_unknown_notification is not None
 
@@ -1627,7 +1387,7 @@ class TestNotificationEdgeCases:
         data[15] = 255  # B
         data[16] = 0  # effect = Off
 
-        await instance._handle_notification(char, data)
+        await instance._handle_notification(char, as_tl_frame(data))
 
         assert instance._color_on is True
         assert instance._rgb_color == (255, 255, 255)
@@ -1654,7 +1414,7 @@ class TestNotificationEdgeCases:
         data[15] = 0  # B
         data[16] = 0  # effect = Off
 
-        await instance._handle_notification(char, data)
+        await instance._handle_notification(char, as_tl_frame(data))
 
         assert instance._rgb_color == (255, 0, 0)
         # Non-white color should not start therapy session
@@ -1676,7 +1436,7 @@ class TestNotificationEdgeCases:
         data[8] = 2  # version = RGB mode
         data[9] = 0  # OFF
 
-        await instance._handle_notification(char, data)
+        await instance._handle_notification(char, as_tl_frame(data))
 
         assert instance._color_on is False
 
@@ -1697,7 +1457,7 @@ class TestNotificationEdgeCases:
         data[6] = 0x08  # payload_len
         data[8] = 255  # version = device off
 
-        await instance._handle_notification(char, data)
+        await instance._handle_notification(char, as_tl_frame(data))
 
         assert instance._light_on is False
         assert instance._color_on is False
@@ -1719,7 +1479,7 @@ class TestNotificationEdgeCases:
         data[9] = 1  # on
         data[10] = 50  # 50% brightness
 
-        await instance._handle_notification(char, data)
+        await instance._handle_notification(char, as_tl_frame(data))
 
         # 50% of 255 = 127.5 -> 127
         assert instance._brightness == 127
@@ -1745,7 +1505,7 @@ class TestNotificationEdgeCases:
         data[15] = 0
         data[16] = 2  # effect index = Rainbow (index 2)
 
-        await instance._handle_notification(char, data)
+        await instance._handle_notification(char, as_tl_frame(data))
 
         assert instance._effect == "Rainbow"
 
@@ -1769,7 +1529,7 @@ class TestNotificationEdgeCases:
         data[9] = 1  # on
         data[10] = 100
 
-        await instance._handle_notification(char, data)
+        await instance._handle_notification(char, as_tl_frame(data))
 
         callback.assert_called()
 
@@ -1798,7 +1558,7 @@ class TestRequestStatusMethod:
         instance._client.write_gatt_char = AsyncMock()
         instance._write_uuid = "test-uuid"
 
-        await instance._request_status()
+        await instance.request_status()
 
         # Should have sent 2 packets (white and RGB status)
         assert instance._client.write_gatt_char.call_count == 2
@@ -1956,7 +1716,7 @@ class TestModeSwitchGuard:
 
         # Send RGB notification (version=2) — should be filtered
         data = self._make_notification(version=2)
-        await instance._handle_notification(char, data)
+        await instance._handle_notification(char, as_tl_frame(data))
 
         # RGB state should NOT have been updated (notification was discarded)
         assert instance._rgb_color == (255, 255, 255)  # default, not (255,128,64)
@@ -1978,7 +1738,7 @@ class TestModeSwitchGuard:
 
         # Send white notification (version=1) — should be filtered
         data = self._make_notification(version=1)
-        await instance._handle_notification(char, data)
+        await instance._handle_notification(char, as_tl_frame(data))
 
         # White state should NOT have changed
         assert instance._brightness == 200  # unchanged
@@ -1996,12 +1756,12 @@ class TestModeSwitchGuard:
 
         # White notification passes
         data = self._make_notification(version=1)
-        await instance._handle_notification(char, data)
+        await instance._handle_notification(char, as_tl_frame(data))
         assert instance._light_on is True
 
         # RGB notification passes
         data = self._make_notification(version=2)
-        await instance._handle_notification(char, data)
+        await instance._handle_notification(char, as_tl_frame(data))
         assert instance._color_on is True
 
     @pytest.mark.asyncio
@@ -2017,7 +1777,7 @@ class TestModeSwitchGuard:
 
         # Send white notification (version=1) — should pass through
         data = self._make_notification(version=1)
-        await instance._handle_notification(char, data)
+        await instance._handle_notification(char, as_tl_frame(data))
 
         assert instance._light_on is True
         assert instance._brightness == 127  # 50% of 255
@@ -2035,7 +1795,7 @@ class TestModeSwitchGuard:
 
         # Send RGB notification (version=2) — should pass through
         data = self._make_notification(version=2)
-        await instance._handle_notification(char, data)
+        await instance._handle_notification(char, as_tl_frame(data))
 
         assert instance._color_on is True
         assert instance._rgb_color == (255, 128, 64)
@@ -2061,7 +1821,7 @@ class TestModeSwitchGuard:
         char = MagicMock()
 
         data = self._make_notification(version=255)
-        await instance._handle_notification(char, data)
+        await instance._handle_notification(char, as_tl_frame(data))
 
         assert instance._light_on is False
         assert instance._color_on is False

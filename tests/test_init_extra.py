@@ -6,12 +6,17 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryNotReady, ServiceValidationError
+from homeassistant.exceptions import (
+    ConfigEntryNotReady,
+    HomeAssistantError,
+    ServiceValidationError,
+)
 from homeassistant.helpers import issue_registry as ir
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 import custom_components.beurer_daylight_lamps as integ
 from custom_components.beurer_daylight_lamps.const import DOMAIN
+from custom_components.beurer_daylight_lamps.exceptions import BeurerWriteError
 
 PKG = "custom_components.beurer_daylight_lamps"
 
@@ -19,16 +24,17 @@ PKG = "custom_components.beurer_daylight_lamps"
 def _instance(mac: str = "AA:BB:CC:DD:EE:FF") -> MagicMock:
     inst = MagicMock()
     inst.mac = mac
-    inst._send_packet = AsyncMock(return_value=True)
-    inst.set_timer = AsyncMock(return_value=True)
-    inst.sync_time = AsyncMock(return_value=True)
+    inst.name = f"Lamp {mac}"
+    inst.send_command = AsyncMock()
+    inst.set_timer = AsyncMock()
+    inst.sync_time = AsyncMock()
     inst.set_color_brightness = AsyncMock()
     inst.sunrise_simulation.start_sunrise = AsyncMock()
     inst.sunrise_simulation.start_sunset = AsyncMock()
     inst.sunrise_simulation.stop = AsyncMock()
     inst.is_wl = True
     inst.is_wl75 = False
-    inst.wl90.sync_alarm = AsyncMock(return_value=True)
+    inst.wl90.sync_alarm = AsyncMock()
     return inst
 
 
@@ -97,19 +103,20 @@ class TestServices:
         self, hass: HomeAssistant, services
     ) -> None:
         ok, bad = _instance("AA:AA:AA:AA:AA:AA"), _instance("BB:BB:BB:BB:BB:BB")
-        bad._send_packet.return_value = False
-        services.return_value = [ok, bad]
-        with pytest.raises(ServiceValidationError) as err:
+        bad.send_command.side_effect = BeurerWriteError(bad.name)
+        services.return_value = [bad, ok]
+        with pytest.raises(HomeAssistantError) as err:
             await _call(hass, integ.SERVICE_SEND_RAW, {"command": "0x3E 0x1E"})
-        assert err.value.translation_placeholders == {"devices": "BB:BB:BB:BB:BB:BB"}
-        ok._send_packet.assert_awaited_once_with([0x3E, 0x1E])
+        assert err.value.translation_key == "command_failed"
+        assert err.value.translation_placeholders == {"devices": bad.name}
+        # One unreachable lamp must not keep the others from getting the command
+        ok.send_command.assert_awaited_once_with([0x3E, 0x1E])
 
     async def test_timer(self, hass: HomeAssistant, services) -> None:
-        ok, bad = _instance(), _instance()
-        bad.set_timer.return_value = False
-        services.return_value = [ok, bad]
+        inst = _instance()
+        services.return_value = [inst]
         await _call(hass, integ.SERVICE_SET_TIMER, {"minutes": 15})
-        ok.set_timer.assert_awaited_once_with(15)
+        inst.set_timer.assert_awaited_once_with(15)
 
     async def test_sunrise_and_stop(self, hass: HomeAssistant, services) -> None:
         inst = _instance()
@@ -119,30 +126,24 @@ class TestServices:
         await _call(hass, integ.SERVICE_STOP_SIMULATION)
         inst.sunrise_simulation.stop.assert_awaited_once()
 
-    async def test_sunrise_unknown_profile(self, hass: HomeAssistant, services) -> None:
-        inst = _instance()
-        services.return_value = [inst]
-        with patch(f"{PKG}.SunriseProfile", side_effect=ValueError):
-            await _call(hass, integ.SERVICE_START_SUNRISE, {})
-        inst.sunrise_simulation.start_sunrise.assert_not_awaited()
-
     async def test_set_alarm(self, hass: HomeAssistant, services) -> None:
         wl90, tl, wl75, failing = _instance(), _instance(), _instance(), _instance()
         tl.is_wl = False
         wl75.is_wl75 = True
-        failing.wl90.sync_alarm.return_value = False
+        failing.wl90.sync_alarm.side_effect = BeurerWriteError(failing.name)
         services.return_value = [wl90, tl, wl75, failing]
-        await _call(
-            hass,
-            integ.SERVICE_SET_ALARM,
-            {
-                "slot": 2,
-                "enabled": True,
-                "hour": 6,
-                "minute": 45,
-                "days": "Mon, Sat,Funday",
-            },
-        )
+        with pytest.raises(HomeAssistantError):
+            await _call(
+                hass,
+                integ.SERVICE_SET_ALARM,
+                {
+                    "slot": 2,
+                    "enabled": True,
+                    "hour": 6,
+                    "minute": 45,
+                    "days": "Mon, Sat,Funday",
+                },
+            )
         slot, alarm = wl90.wl90.sync_alarm.await_args.args
         assert slot == 2
         assert (alarm.hour, alarm.minute) == (6, 45)
@@ -156,9 +157,9 @@ class TestServices:
         services.return_value = [ok]
         await _call(hass, integ.SERVICE_SYNC_TIME)
         ok.sync_time.assert_awaited_once()
-        bad.sync_time.return_value = False
+        bad.sync_time.side_effect = BeurerWriteError(bad.name)
         services.return_value = [ok, bad]
-        with pytest.raises(ServiceValidationError):
+        with pytest.raises(HomeAssistantError):
             await _call(hass, integ.SERVICE_SYNC_TIME)
 
 

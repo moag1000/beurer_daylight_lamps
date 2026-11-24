@@ -27,7 +27,7 @@ LIGHT = "light.bedroom_lamp"
 # Calls get a copy: Home Assistant merges the target into the data dict.
 ENTITY_SERVICES = [
     (integ.SERVICE_APPLY_PRESET, {"preset": "relax"}, "set_color_with_brightness"),
-    (integ.SERVICE_SEND_RAW, {"command": "33 01 1E"}, "_send_packet"),
+    (integ.SERVICE_SEND_RAW, {"command": "33 01 1E"}, "send_command"),
     (integ.SERVICE_SET_TIMER, {"minutes": 1}, "set_timer"),
     (integ.SERVICE_START_SUNRISE, {}, "sunrise_simulation.start_sunrise"),
     (integ.SERVICE_START_SUNSET, {}, "sunrise_simulation.start_sunset"),

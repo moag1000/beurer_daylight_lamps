@@ -5,6 +5,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from custom_components.beurer_daylight_lamps.const import EVENT_TYPE_SUNRISE_FINISHED
+from custom_components.beurer_daylight_lamps.exceptions import BeurerWriteError
 from custom_components.beurer_daylight_lamps.therapy import (
     SUNRISE_PROFILES,
     SunriseConfig,
@@ -305,8 +307,8 @@ class TestSunriseSimulation:
         instance = MagicMock()
         instance.set_color_with_brightness_fast = AsyncMock()
         instance.turn_off = AsyncMock()
-        instance._request_status = AsyncMock()
-        instance.connect = AsyncMock(return_value=True)
+        instance.request_status = AsyncMock()
+        instance.is_connected = True
         instance.color_brightness = 200
         instance.white_brightness = 255
         return instance
@@ -398,7 +400,8 @@ class TestSunriseSimulationExecution:
         instance = MagicMock()
         instance.set_color_with_brightness_fast = AsyncMock()
         instance.turn_off = AsyncMock()
-        instance._request_status = AsyncMock()
+        instance.request_status = AsyncMock()
+        instance.is_connected = True
         instance.connect = AsyncMock(return_value=True)
         instance.color_brightness = 200
         instance.white_brightness = 255
@@ -460,20 +463,56 @@ class TestSunriseSimulationExecution:
         assert sim._running is False
 
     @pytest.mark.asyncio
-    async def test_run_sunrise_handles_error(self, mock_instance: MagicMock) -> None:
-        """Test _run_sunrise handles errors gracefully."""
+    async def test_lost_step_is_retried(self, mock_instance: MagicMock) -> None:
+        """A single failed write is repeated and the sunrise still completes."""
         sim = SunriseSimulation(mock_instance)
         config = SUNRISE_PROFILES[SunriseProfile.NATURAL]
-
         mock_instance.set_color_with_brightness_fast = AsyncMock(
-            side_effect=OSError("Test error")
+            side_effect=[BeurerWriteError("Lamp"), None, None]
         )
         sim._running = True
 
-        # Should not raise, just log error
-        await sim._run_sunrise(duration_minutes=1, config=config)
+        with patch("asyncio.sleep", new_callable=AsyncMock):
+            await sim._run_sunrise(duration_minutes=1, config=config)
 
+        assert mock_instance.set_color_with_brightness_fast.await_count == 3
+        mock_instance.emit_lamp_event.assert_called_once_with(
+            EVENT_TYPE_SUNRISE_FINISHED
+        )
+
+    @pytest.mark.asyncio
+    async def test_unreachable_lamp_does_not_report_finished(
+        self, mock_instance: MagicMock
+    ) -> None:
+        """A sunrise that never reached the lamp must not fire "finished"."""
+        sim = SunriseSimulation(mock_instance)
+        config = SUNRISE_PROFILES[SunriseProfile.NATURAL]
+        mock_instance.set_color_with_brightness_fast = AsyncMock(
+            side_effect=BeurerWriteError("Lamp")
+        )
+        sim._running = True
+
+        with patch("asyncio.sleep", new_callable=AsyncMock):
+            await sim._run_sunrise(duration_minutes=20, config=config)
+
+        mock_instance.emit_lamp_event.assert_not_called()
         assert sim._running is False
+
+    @pytest.mark.asyncio
+    async def test_stopped_sunrise_does_not_report_finished(
+        self, mock_instance: MagicMock
+    ) -> None:
+        sim = SunriseSimulation(mock_instance)
+        config = SUNRISE_PROFILES[SunriseProfile.NATURAL]
+        sim._running = True
+
+        async def stop(_: float) -> None:
+            sim._running = False
+
+        with patch("asyncio.sleep", side_effect=stop):
+            await sim._run_sunrise(duration_minutes=5, config=config)
+
+        mock_instance.emit_lamp_event.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_run_sunset_with_color_brightness(
@@ -563,12 +602,12 @@ class TestSunriseSimulationExecution:
         sim = SunriseSimulation(mock_instance)
         mock_instance.color_brightness = 200
         mock_instance.set_color_with_brightness_fast = AsyncMock(
-            side_effect=OSError("Test error")
+            side_effect=BeurerWriteError("Lamp")
         )
         sim._running = True
 
-        # Should not raise
-        await sim._run_sunset(duration_minutes=1, end_brightness_pct=0)
+        with patch("asyncio.sleep", new_callable=AsyncMock):
+            await sim._run_sunset(duration_minutes=1, end_brightness_pct=0)
 
         assert sim._running is False
 
