@@ -143,6 +143,7 @@ from .const import (
     RESP_MOONLIGHT_TIMER_END,
     RESP_SETTINGS_FROM_DEVICE,
     RESP_SETTINGS_SYNC,
+    RESP_STATUS,
     # WL75 response command bytes
     RESP_WL75_LIGHT_BRIGHTNESS,
     RESP_WL75_LIGHT_STATUS,
@@ -239,6 +240,37 @@ def _is_transient_gatt_error(err: BaseException) -> bool:
     """Return True for a known-transient ESPHome GATT failure."""
     text = str(err)
     return any(marker in text for marker in _TRANSIENT_GATT_ERRORS)
+
+
+# Smallest TL payload length (byte 6) of a status notification per version
+_TL_STATUS_MIN_PAYLOAD = {1: 0x08, 2: 0x0C}
+
+
+def is_valid_tl_frame(data: bytes | bytearray) -> bool:
+    """Return True if data is a complete, uncorrupted TL notification.
+
+    Lamp -> host frames: FE EF 0C len AB BB plen payload[plen - 2] checksum
+    55 0D 0A, checksum = plen XOR payload. A 20-byte MTU cuts the RGB status
+    (21 bytes) inside the trailer, so the trailer is not required; every byte
+    up to the checksum is, which is all the handlers read. A white or RGB
+    status must also be long enough for the fields its handler reads.
+    """
+    if len(data) < 7 or data[0:2] != b"\xfe\xef" or data[4:6] != b"\xab\xbb":
+        return False
+    plen = data[6]
+    checksum_index = 7 + plen - 2
+    if plen < 2 or len(data) <= checksum_index:
+        return False
+    checksum = plen
+    for byte in data[7:checksum_index]:
+        checksum ^= byte
+    if checksum != data[checksum_index]:
+        return False
+    # A white or RGB status must carry the fields its handler reads; other
+    # responses (settings, timer end) put different data at these offsets
+    if data[7] != RESP_STATUS or plen < 0x08:
+        return True
+    return plen >= _TL_STATUS_MIN_PAYLOAD.get(data[8], 0)
 
 
 def ha_brightness_to_percent(brightness: int) -> int:
@@ -2487,16 +2519,17 @@ class BeurerInstance:
             await self._handle_wl75_notification(data)
             return
 
-        if len(data) < 10:
-            LOGGER.debug("Short notification (%d bytes), ignoring", len(data))
+        if not is_valid_tl_frame(data):
+            # A fragment or a corrupted frame: reading it would set wrong state
+            LOGGER.debug("Ignoring malformed notification from %s", self._mac)
             return
 
         # Dispatch special command responses first
-        if len(data) > 7 and await self._dispatch_command_response(data[7], data):
+        if await self._dispatch_command_response(data[7], data):
             return
 
         # Check payload length for heartbeat/ACK packets
-        payload_len = data[6] if len(data) > 6 else 0
+        payload_len = data[6]
         if payload_len < 0x08:
             LOGGER.debug(
                 "Short payload (%d bytes), likely ACK/heartbeat - not updating state",
@@ -2859,14 +2892,11 @@ class BeurerInstance:
         read_uuid = self._read_uuid
 
         async def _do_start_notify() -> None:
-            try:
-                await client.start_notify(
-                    read_uuid,
-                    self._handle_notification,
-                    bluez={"use_start_notify": True},
-                )
-            except TypeError:
-                await client.start_notify(read_uuid, self._handle_notification)
+            await client.start_notify(
+                read_uuid,
+                self._handle_notification,
+                bluez={"use_start_notify": True},
+            )
 
         try:
             await _do_start_notify()

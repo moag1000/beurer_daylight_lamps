@@ -20,18 +20,19 @@ from custom_components.beurer_daylight_lamps.beurer_daylight_lamps import (
     BeurerInstance,
 )
 from custom_components.beurer_daylight_lamps.const import DOMAIN, RESP_STATUS
+from tests.tl_frames import RGB_STATUS_PLEN, WHITE_STATUS_PLEN, as_tl_frame
 
 MAC = "AA:BB:CC:DD:EE:FF"
 
 
 def _status(version: int, on: bool = True) -> bytearray:
     data = bytearray(17)
-    data[6] = 0x0B
+    data[6] = RGB_STATUS_PLEN if version == 2 else WHITE_STATUS_PLEN
     data[7] = RESP_STATUS
     data[8] = version
     data[9] = 1 if on else 0
     data[10] = 100
-    return data
+    return as_tl_frame(data)
 
 
 @pytest.fixture

@@ -109,14 +109,6 @@ class TestSetupAfterConnect:
         inst.query_settings.assert_awaited_once()
         inst._wl90.query_radio_status.assert_awaited_once()
 
-    async def test_notify_falls_back_without_bluez_kwarg(self) -> None:
-        inst = make_instance()
-        client = gatt_client()
-        client.start_notify = AsyncMock(side_effect=[TypeError, None])
-        inst._client = client
-        await self._run(inst)
-        assert client.start_notify.await_count == 2
-
     async def test_notify_retries_transient_abort(self) -> None:
         inst = make_instance()
         client = gatt_client()
