@@ -5,8 +5,12 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
+from homeassistant.components.light.const import ColorMode
 from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
 from homeassistant.const import EntityCategory
+from homeassistant.core import callback
+from homeassistant.exceptions import ServiceValidationError
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import (
     CONNECTION_BLUETOOTH,
     DeviceInfo,
@@ -50,6 +54,21 @@ DEVICE_SWITCH_DESCRIPTIONS = [
 # BLE commands are sent one at a time
 PARALLEL_UPDATES = 1
 
+# Adaptive Lighting (HACS) integration
+AL_DOMAIN = "adaptive_lighting"
+AL_SERVICE_SET_MANUAL_CONTROL = "set_manual_control"
+
+
+def _remove_stale_switches(
+    hass: HomeAssistant, mac: str, descriptions: list[SwitchEntityDescription]
+) -> None:
+    """Remove switches this lamp no longer offers from the entity registry."""
+    registry = er.async_get(hass)
+    for desc in descriptions:
+        unique_id = f"{format_mac(mac)}_{desc.key}"
+        if entity_id := registry.async_get_entity_id("switch", DOMAIN, unique_id):
+            registry.async_remove(entity_id)
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -61,10 +80,15 @@ async def async_setup_entry(
     coordinator = entry.runtime_data.coordinator
     name = entry.data.get("name", "Beurer Lamp")
 
-    entities: list[SwitchEntity] = [
-        BeurerAdaptiveLightingSwitch(coordinator, name, entry.entry_id, desc)
-        for desc in SWITCH_DESCRIPTIONS
-    ]
+    entities: list[SwitchEntity] = []
+    if hass.config_entries.async_entries(AL_DOMAIN):
+        entities.extend(
+            BeurerAdaptiveLightingSwitch(coordinator, name, entry.entry_id, desc)
+            for desc in SWITCH_DESCRIPTIONS
+        )
+    else:
+        # Without Adaptive Lighting the switch has nothing to control
+        _remove_stale_switches(hass, coordinator.instance.mac, SWITCH_DESCRIPTIONS)
     # Add device hardware switches (feedback sound, fade)
     # Note: WL75 does not support the fade hardware setting
     instance = entry.runtime_data.instance
@@ -86,16 +110,12 @@ async def async_setup_entry(
 class BeurerAdaptiveLightingSwitch(
     CoordinatorEntity[BeurerDataUpdateCoordinator], SwitchEntity, RestoreEntity
 ):
-    """Switch to control Adaptive Lighting integration for Beurer lamps.
+    """Let the Adaptive Lighting integration (HACS) adjust this lamp, or not.
 
-    When enabled, allows the Adaptive Lighting integration (HACS) to control
-    the lamp's color temperature throughout the day. When disabled, the lamp
-    ignores Adaptive Lighting updates.
-
-    This is useful because:
-    - Daylight therapy may need consistent 5300K during sessions
-    - Users may want manual control sometimes
-    - Effects/moods should not be overridden by Adaptive Lighting
+    Adaptive Lighting must leave the lamp alone while this switch is off, an
+    effect plays or a therapy session runs. The switch tells it so with
+    ``adaptive_lighting.set_manual_control`` and hands the lamp back when
+    none of that applies any more.
     """
 
     _attr_has_entity_name: bool = True
@@ -115,6 +135,8 @@ class BeurerAdaptiveLightingSwitch(
         self.entity_description = description
         self._attr_unique_id = f"{format_mac(self._instance.mac)}_{description.key}"
         self._is_on: bool = True  # Default: Adaptive Lighting enabled
+        # Adaptive Lighting starts without manual control for the lamp
+        self._manual_control_sent = False
 
     async def async_added_to_hass(self) -> None:
         """Run when entity about to be added to hass."""
@@ -134,15 +156,7 @@ class BeurerAdaptiveLightingSwitch(
                     CONF_ADAPTIVE_LIGHTING_DEFAULT, DEFAULT_ADAPTIVE_LIGHTING
                 )
             )
-
-        # Store the switch reference in instance for light entity access
-        self._instance.adaptive_lighting_switch = self
-
-    async def async_will_remove_from_hass(self) -> None:
-        """Run when entity will be removed from hass."""
-        await super().async_will_remove_from_hass()
-        if hasattr(self._instance, "adaptive_lighting_switch"):
-            delattr(self._instance, "adaptive_lighting_switch")
+        await self._async_sync_manual_control()
 
     @property
     def available(self) -> bool:
@@ -171,10 +185,7 @@ class BeurerAdaptiveLightingSwitch(
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return extra state attributes."""
         return {
-            "description": "Controls whether Adaptive Lighting can adjust this lamp",
-            "therapy_mode_active": self._instance._therapy_active
-            if hasattr(self._instance, "_therapy_active")
-            else False,
+            "therapy_mode_active": self._instance.therapy_tracker.has_active_session,
             "current_effect": self._instance.effect
             if self._instance.effect != "Off"
             else None,
@@ -182,36 +193,67 @@ class BeurerAdaptiveLightingSwitch(
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Enable Adaptive Lighting for this lamp."""
-        LOGGER.info("Enabling Adaptive Lighting for %s", self._device_name)
         self._is_on = True
         self.async_write_ha_state()
+        await self._async_sync_manual_control()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Disable Adaptive Lighting for this lamp."""
-        LOGGER.info("Disabling Adaptive Lighting for %s", self._device_name)
         self._is_on = False
         self.async_write_ha_state()
+        await self._async_sync_manual_control()
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Follow effect and therapy changes of the lamp."""
+        super()._handle_coordinator_update()
+        if self.should_block_adaptive_lighting() != self._manual_control_sent:
+            self.hass.async_create_task(self._async_sync_manual_control())
 
     def should_block_adaptive_lighting(self) -> bool:
-        """Check if Adaptive Lighting should be blocked.
+        """Return True if Adaptive Lighting must not adjust the lamp now.
 
-        Returns True if:
-        - The switch is off (user disabled AL)
-        - An effect is active (effects should not be overridden)
-        - Therapy mode is active (therapy needs consistent light)
+        That is when the switch is off, an effect plays (effects should not
+        be overridden) or a therapy session runs (it needs steady daylight).
         """
-        # Switch is off - user explicitly disabled AL
-        if not self._is_on:
-            return True
-
-        # Effect is playing (not "Off") - don't override
-        if self._instance.effect and self._instance.effect != "Off":
-            return True
-
-        # Therapy mode active - don't override
+        # The effect only plays in RGB mode; white mode keeps the last one
+        effect_playing = (
+            self._instance.color_mode != ColorMode.WHITE
+            and (self._instance.effect or "Off") != "Off"
+        )
         return (
-            hasattr(self._instance, "_therapy_active")
-            and self._instance._therapy_active
+            not self._is_on
+            or effect_playing
+            or self._instance.therapy_tracker.has_active_session
+        )
+
+    async def _async_sync_manual_control(self) -> None:
+        """Mark the lamp as manually controlled in Adaptive Lighting, or release it."""
+        block = self.should_block_adaptive_lighting()
+        if block == self._manual_control_sent:
+            return
+        if not self.hass.services.has_service(AL_DOMAIN, AL_SERVICE_SET_MANUAL_CONTROL):
+            return  # Adaptive Lighting not loaded (yet)
+        light_entity_id = er.async_get(self.hass).async_get_entity_id(
+            "light", DOMAIN, format_mac(self._instance.mac)
+        )
+        if light_entity_id is None:
+            return
+        try:
+            await self.hass.services.async_call(
+                AL_DOMAIN,
+                AL_SERVICE_SET_MANUAL_CONTROL,
+                {"lights": [light_entity_id], "manual_control": block},
+                blocking=True,
+            )
+        except ServiceValidationError as err:
+            # The lamp is not part of any Adaptive Lighting switch
+            LOGGER.debug(
+                "Adaptive Lighting does not manage %s: %s", light_entity_id, err
+            )
+        self._manual_control_sent = block
+        LOGGER.debug(
+            "Adaptive Lighting manual control for %s: %s", light_entity_id, block
         )
 
 

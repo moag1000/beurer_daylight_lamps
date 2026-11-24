@@ -15,6 +15,11 @@ Thanks to @n-st for reporting #18 and to @rickkdotnet for reporting #17 with a p
 - **Therapy minutes stayed at 0 with native white light** (#17): daylight on the native white LEDs (e.g. TL100, WL75 white light, the *Start light therapy* button) now counts. Before, only white from the RGB channel was tracked, and the RGB channel's "off" status even ended a running white session.
 - **Therapy minutes were lost or overcounted**: dimming below 80 % or changing the color during a session no longer discards the minutes already collected; the session ends and keeps them. The session now also ends when the lamp's timer turns it off, when it is turned off from Home Assistant and when the Bluetooth connection drops, so minutes no longer keep counting while the lamp is off or unreachable. RGB effects no longer count as therapy light.
 - **WL75 white brightness**: the mood light status no longer overwrites the white light brightness.
+- **Per-person therapy minutes used the UTC day**: *today* and *this week* of the per-person sensors now start at local midnight / Monday, like the lamp's own counters since 1.38.0.
+
+### Changed
+
+- **The *Adaptive Lighting* switch now does something**: it only appears when the [Adaptive Lighting](https://github.com/basnijholt/adaptive-lighting) integration is installed (an existing switch is removed otherwise). While it is off, while a therapy session runs or while an effect plays, the lamp is marked as manually controlled in Adaptive Lighting (`adaptive_lighting.set_manual_control`), so it does not change the daylight; afterwards Adaptive Lighting takes the lamp back. Before, the switch had no effect at all.
 
 ## [1.39.1] - 2026-11-17
 

@@ -87,7 +87,7 @@ Alternativ: **Einstellungen** → **Geräte & Dienste** → **Integration hinzuf
 | Sensor | Fortschritt Sonnenauf-/-untergang | Fortschritt einer laufenden Simulation (0–100 %), Attribut `simulation`: Sonnenaufgang, Sonnenuntergang oder keine |
 | Binärsensor | Verbunden, Bluetooth erreichbar, Tagesziel erreicht | |
 | Ereignis | Lampen-Ereignis | Timer abgelaufen/abgebrochen, Einschlaf-Timer abgelaufen, Sonnenauf-/-untergang beendet, Lichttherapie beendet |
-| Schalter | Signalton, Überblenden, Adaptive Lighting | |
+| Schalter | Signalton, Überblenden, Adaptive Lighting | Adaptive Lighting nur, wenn die Integration installiert ist: Aus, während einer Therapiesitzung und während eines Effekts lässt Adaptive Lighting die Lampe in Ruhe. |
 
 **Zusätzlich bei WL75/WL90:** Mediaplayer UKW-Radio (WL90 auch Bluetooth-Lautsprecher), Lautstärke-Regler, Schalter „Wecker 1–3“ und Uhrzeit-Entitäten „Wecker 1–3 Uhrzeit“ (WL75: 2 Wecker, WL90: 3 Wecker).
 

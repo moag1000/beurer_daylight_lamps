@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, cast
 
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
+from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN, LOGGER, THERAPY_HUB_IDENTIFIER
+from .therapy import start_of_local_week
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -102,40 +103,16 @@ def _iter_trackers(hass: HomeAssistant) -> Iterator[TherapyTracker]:
             yield tracker
 
 
-def _sum_minutes_for(hass: HomeAssistant, person_id: str, since: datetime) -> float:
-    total = 0.0
-    for tracker in _iter_trackers(hass):
-        for session in tracker.sessions:
-            if (
-                session.person_id == person_id
-                and session.is_therapy_light
-                and session.start_time >= since
-            ):
-                total += session.duration_minutes
-        cur = tracker._current_session
-        if (
-            cur is not None
-            and cur.person_id == person_id
-            and cur.is_therapy_light
-            and cur.start_time >= since
-        ):
-            total += cur.duration_minutes
-    return total
-
-
 def today_minutes_for(hass: HomeAssistant, person_id: str) -> float:
-    """Return total therapy minutes for person_id today (UTC midnight cutoff)."""
-    midnight = datetime.now(tz=UTC).replace(hour=0, minute=0, second=0, microsecond=0)
-    return _sum_minutes_for(hass, person_id, midnight)
+    """Return total therapy minutes for person_id today (local calendar day)."""
+    since = dt_util.start_of_local_day()
+    return sum(t.minutes_since(since, person_id) for t in _iter_trackers(hass))
 
 
 def week_minutes_for(hass: HomeAssistant, person_id: str) -> float:
-    """Return total therapy minutes for person_id this week (Mon 00:00 UTC cutoff)."""
-    now = datetime.now(tz=UTC)
-    week_start = (now - timedelta(days=now.weekday())).replace(
-        hour=0, minute=0, second=0, microsecond=0
-    )
-    return _sum_minutes_for(hass, person_id, week_start)
+    """Return total therapy minutes for person_id this week (Monday, local time)."""
+    since = start_of_local_week()
+    return sum(t.minutes_since(since, person_id) for t in _iter_trackers(hass))
 
 
 def goal_progress_for(hass: HomeAssistant, person_id: str, goal_minutes: int) -> int:
