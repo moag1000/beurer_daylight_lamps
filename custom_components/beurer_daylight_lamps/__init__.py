@@ -494,10 +494,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> bo
         """Try to connect and get initial state."""
         if device_initially_available:
             await asyncio.sleep(2)
-            LOGGER.debug("Attempting initial connection to %s", mac_address)
+            LOGGER.debug("Attempting initial connection to %s", instance.name)
             # connect() logs a failure itself; it is retried on demand
             if await instance.connect():
-                LOGGER.info("Initial connection to %s successful", mac_address)
+                LOGGER.info("Initial connection to %s successful", instance.name)
 
     entry.async_create_background_task(
         hass,
@@ -586,7 +586,7 @@ async def _async_run_on_each(
         try:
             await action(instance)
         except BeurerError as err:
-            LOGGER.warning("Command to %s failed: %s", instance.mac, err)
+            LOGGER.warning("Command to %s failed: %s", instance.name, err)
             failed.append(instance.name)
     if failed:
         raise HomeAssistantError(
