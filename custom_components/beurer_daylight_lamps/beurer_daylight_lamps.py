@@ -750,18 +750,11 @@ class BeurerInstance:
         if self._closing:
             return
         LOGGER.info("Disconnected from %s - will attempt reconnect", self._mac)
-        self._available = False
-        # Keep the last known on/off state: assumed_state already flags it as
-        # stale, and clearing it showed the light as "unknown" until reconnect.
+        # Only here, once the link is really gone: disconnect() can fail and
+        # leave the link up, and it must stay usable then.
         self._write_uuid = None
         self._read_uuid = None
-        self._connection_start_time = None  # Clear connection uptime
-
-        # Stop the connection watchdog
-        self._stop_watchdog()
-
-        # Unavailable: no therapy minutes until the lamp reports its state again
-        self._reconcile_therapy()
+        self._reset_connection_state()
         if self._update_callbacks:
             self._safe_create_task(self._trigger_update(), "beurer_disconnect_update")
 
@@ -774,6 +767,21 @@ class BeurerInstance:
             self._safe_create_task(
                 self._auto_reconnect(), "beurer_disconnect_reconnect"
             )
+
+    def _reset_connection_state(self) -> None:
+        """Forget everything that belonged to the link that just ended.
+
+        Shared by disconnect() and the disconnect callback, so both teardown
+        paths leave the same state. The last on/off and color values stay:
+        is_on reports unknown until the lamp sends its state again, and
+        turn_on restores the colour settings from them.
+        """
+        self._stop_watchdog()
+        self._available = False
+        self._connection_start_time = None
+        # The light state is unknown while disconnected: end the session
+        # instead of counting minutes that may not be real.
+        self._reconcile_therapy()
 
     def _safe_create_task(
         self, coro: Coroutine[Any, Any, None], name: str | None = None
@@ -3244,9 +3252,4 @@ class BeurerInstance:
             except OSError as err:
                 LOGGER.debug("OS error during disconnect: %s", err)
 
-        self._available = False
-        self._light_on = False
-        self._color_on = False
-        # The light state is unknown while disconnected: end the session
-        # instead of counting minutes that may not be real.
-        self._reconcile_therapy()
+        self._reset_connection_state()

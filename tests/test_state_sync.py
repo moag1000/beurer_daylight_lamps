@@ -251,3 +251,30 @@ async def test_effect_off_without_color_does_not_switch_to_rgb(
         await instance.set_effect("Off")
 
     assert instance.sent == []
+
+
+@pytest.mark.parametrize("teardown", ["disconnect", "callback"])
+async def test_both_teardown_paths_leave_the_same_state(
+    instance: lib.BeurerInstance, teardown: str
+) -> None:
+    """A watchdog/write-error disconnect and a link loss end in one state."""
+    instance._available = True
+    instance._light_on = True
+    instance._connection_start_time = 1.0
+    instance._reconcile_therapy = MagicMock()
+    instance._client.disconnect = AsyncMock()
+    instance._client.stop_notify = AsyncMock()
+
+    if teardown == "disconnect":
+        await instance.disconnect()
+    else:
+        instance._client.is_connected = False
+        with patch.object(instance, "_safe_create_task"):
+            instance._on_disconnect(instance._client)
+
+    instance._client.is_connected = False
+    assert instance.is_on is None
+    assert instance._connection_start_time is None
+    instance._reconcile_therapy.assert_called_once()
+    # The last known values stay for turn_on to restore
+    assert instance._light_on is True
