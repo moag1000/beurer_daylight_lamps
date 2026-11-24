@@ -15,6 +15,7 @@ Thanks to @n-st for reporting #18 and to @rickkdotnet for reporting #17 with a p
 - **Therapy minutes stayed at 0 with native white light** (#17): daylight on the native white LEDs (e.g. TL100, WL75 white light, the *Start light therapy* button) now counts. Before, only white from the RGB channel was tracked, and the RGB channel's "off" status even ended a running white session.
 - **Therapy minutes were lost or overcounted**: dimming below 80 % or changing the color during a session no longer discards the minutes already collected; the session ends and keeps them. The session now also ends when the lamp's timer turns it off and when it is turned off from Home Assistant. While the Bluetooth connection is lost, the session pauses: if the lamp is back within 5 minutes and still shines daylight, it simply continues (the gap is not counted); otherwise it ends at the moment the connection was lost. So minutes no longer keep counting while the lamp is off or unreachable, and short dropouts do not split a session. RGB effects no longer count as therapy light.
 - **WL75 white brightness**: the mood light status no longer overwrites the white light brightness.
+- **Wrong integration version in diagnostics and device info**: they showed 1.38.0 since v1.38.0; a test now keeps it in line with the manifest.
 - **Per-person therapy minutes used the UTC day**: *today* and *this week* of the per-person sensors now start at local midnight / Monday, like the lamp's own counters since 1.38.0.
 
 ### Changed
