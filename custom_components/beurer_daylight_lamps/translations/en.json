@@ -1,16 +1,28 @@
 {
     "exceptions": {
-        "device_not_found": {
-            "message": "Could not find Beurer lamp {name} ({mac}). Ensure the lamp is powered on and within Bluetooth range."
-        },
         "connection_failed": {
-            "message": "Failed to connect to {name}. The device may be out of range or already connected to another device."
+            "message": "Failed to connect to {name} ({mac}). The lamp may be out of Bluetooth range, switched off, or connected to another device."
         },
         "command_failed": {
-            "message": "Failed to send command to {name}. Please try again."
+            "message": "The command failed on: {devices}."
         },
         "initialization_failed": {
             "message": "Failed to initialize {name}: {error}"
+        },
+        "write_failed": {
+            "message": "The command did not reach {name}. The Bluetooth connection was lost; please try again."
+        },
+        "no_target_entities": {
+            "message": "No Beurer lamp entities found for the specified target. Ensure you have selected a valid lamp."
+        },
+        "invalid_hex_command": {
+            "message": "Invalid hex command: {error}. Use format like 33 01 1E or 33011E."
+        },
+        "not_supported": {
+            "message": "{name} does not have this function."
+        },
+        "settings_unknown": {
+            "message": "{name} did not report its current settings, so they were not changed. Please try again."
         }
     },
     "config": {
@@ -21,6 +33,10 @@
                 "data": {
                     "mac": "Device",
                     "name": "Name"
+                },
+                "data_description": {
+                    "mac": "Select a discovered Beurer lamp from the list.",
+                    "name": "A friendly name for the lamp in Home Assistant."
                 }
             },
             "bluetooth_confirm": {
@@ -28,6 +44,9 @@
                 "description": "Found Beurer lamp: **{name}**\n\nThe lamp will blink to confirm the connection.",
                 "data": {
                     "name": "Name (optional)"
+                },
+                "data_description": {
+                    "name": "Override the default device name if desired."
                 }
             },
             "validate": {
@@ -44,6 +63,10 @@
                 "data": {
                     "mac": "MAC address",
                     "name": "Name"
+                },
+                "data_description": {
+                    "mac": "Bluetooth MAC address in format AA:BB:CC:DD:EE:FF.",
+                    "name": "A friendly name for the lamp in Home Assistant."
                 }
             },
             "reauth_confirm": {
@@ -55,13 +78,17 @@
                 "description": "Change the settings for **{mac}**.",
                 "data": {
                     "name": "Name"
+                },
+                "data_description": {
+                    "name": "Update the friendly name for this lamp."
                 }
             }
         },
         "error": {
             "cannot_connect": "Failed to connect to lamp",
             "no_gatt_adapter": "No Bluetooth adapter with GATT support found. The lamp is visible but cannot be connected. Please add an ESPHome Bluetooth Proxy or use a local Bluetooth adapter.",
-            "invalid_mac": "Invalid MAC address format"
+            "invalid_mac": "Invalid MAC address format",
+            "unknown": "An unexpected error occurred. Check the Home Assistant logs for details."
         },
         "abort": {
             "already_configured": "Device is already configured",
@@ -69,6 +96,24 @@
             "cannot_connect": "Failed to connect to lamp",
             "reauth_successful": "Reconnection successful",
             "reconfigure_successful": "Reconfiguration successful"
+        }
+    },
+    "options": {
+        "step": {
+            "init": {
+                "title": "Configure Beurer lamp",
+                "description": "Adjust settings for the Beurer lamp.",
+                "data": {
+                    "therapy_goal": "Daily light therapy goal (minutes)",
+                    "adaptive_lighting_default": "Enable Adaptive Lighting by default",
+                    "default_therapy_user": "Default therapy user"
+                },
+                "data_description": {
+                    "therapy_goal": "The daily therapy goal in minutes (5-120). Used for tracking progress.",
+                    "adaptive_lighting_default": "If enabled, Adaptive Lighting can control this lamp's color temperature.",
+                    "default_therapy_user": "The HA person entity to attribute therapy sessions to by default when no person is selected on the lamp."
+                }
+            }
         }
     },
     "issues": {
@@ -91,6 +136,13 @@
                         "title": "Initialization failed",
                         "description": "The Beurer lamp **{name}** ({mac}) was found but failed to initialize.\n\nError: {error}\n\nClick submit to retry."
                     }
+                },
+                "error": {
+                    "still_not_found": "Device is still not reachable. Please check the lamp is powered on and within Bluetooth range.",
+                    "reload_failed": "Reload failed. Please try again or restart Home Assistant."
+                },
+                "abort": {
+                    "entry_not_found": "Configuration entry not found."
                 }
             }
         },
@@ -112,24 +164,6 @@
         "frequent_reconnects": {
             "title": "{name} keeps losing its Bluetooth connection",
             "description": "**{name}** reconnected {reconnects} times within the last hour (last signal {rssi} dBm). Commands, sunrise simulations and therapy sessions may be interrupted.\n\nWhat helps:\n- Move the lamp closer to the Bluetooth adapter, or\n- Add an ESPHome or Shelly Bluetooth proxy near the lamp, or\n- Make sure the Beurer LightUp app is not connected at the same time.\n\nThis notice disappears on its own once the connection is stable again."
-        }
-    },
-    "options": {
-        "step": {
-            "init": {
-                "title": "Configure Beurer lamp",
-                "description": "Adjust settings for the Beurer lamp.",
-                "data": {
-                    "therapy_goal": "Daily light therapy goal (minutes)",
-                    "adaptive_lighting_default": "Enable Adaptive Lighting by default",
-                    "default_therapy_user": "Default therapy user"
-                },
-                "data_description": {
-                    "therapy_goal": "The daily therapy goal in minutes (5-120). Used for tracking progress.",
-                    "adaptive_lighting_default": "If enabled, Adaptive Lighting can control this lamp's color temperature.",
-                    "default_therapy_user": "The HA person entity to attribute therapy sessions to by default when no person is selected on the lamp."
-                }
-            }
         }
     },
     "entity": {
@@ -186,11 +220,25 @@
             "therapy_goal": {
                 "name": "Daily light goal"
             },
+            "radio_volume": {
+                "name": "Radio volume"
+            },
+            "music_volume": {
+                "name": "Speaker volume"
+            },
             "sunrise_duration": {
                 "name": "Sunrise duration"
             },
             "sunset_duration": {
                 "name": "Sunset duration"
+            }
+        },
+        "media_player": {
+            "fm_radio": {
+                "name": "FM Radio"
+            },
+            "bt_speaker": {
+                "name": "Bluetooth Speaker"
             }
         },
         "sensor": {
@@ -208,6 +256,15 @@
             },
             "therapy_progress": {
                 "name": "Daily goal progress"
+            },
+            "reconnect_count": {
+                "name": "Reconnection count"
+            },
+            "command_success_rate": {
+                "name": "Command success rate"
+            },
+            "connection_uptime": {
+                "name": "Connection uptime"
             },
             "last_time_sync": {
                 "name": "Last time sync"
@@ -245,7 +302,7 @@
                 "name": "Feedback sound"
             },
             "fade": {
-                "name": "Fade"
+                "name": "Fade transitions"
             },
             "alarm_1": {
                 "name": "Alarm 1"
@@ -297,6 +354,123 @@
         }
     },
     "services": {
+        "apply_preset": {
+            "name": "Apply preset",
+            "description": "Apply a predefined lighting preset to the lamp",
+            "fields": {
+                "preset": {
+                    "name": "Preset",
+                    "description": "The preset to apply (daylight_therapy, relax, focus, reading, warm_cozy, cool_bright, sunset, night_light, energize)"
+                }
+            }
+        },
+        "send_raw_command": {
+            "name": "Send raw command (Expert)",
+            "description": "Send a raw BLE command to the lamp for reverse engineering and testing",
+            "fields": {
+                "command": {
+                    "name": "Command bytes",
+                    "description": "Hex bytes to send (e.g., '33 01 1E'). Known: 30=status, 31=brightness, 32=color, 34=effect, 35=off, 36=cancel_timer, 37=mode, 38=timer. Unknown: 33, 39"
+                }
+            }
+        },
+        "set_timer": {
+            "name": "Set Timer",
+            "description": "Set an auto-off timer on the lamp. Works in both White and RGB mode. Note: Timer is automatically cancelled when switching modes.",
+            "fields": {
+                "minutes": {
+                    "name": "Minutes",
+                    "description": "Timer duration in minutes (1-120)"
+                }
+            }
+        },
+        "start_sunrise": {
+            "name": "Start Sunrise Simulation",
+            "description": "Gradually increase brightness and color temperature to simulate a natural sunrise. This is a lifestyle/wellness feature for personal use, NOT a medical device.",
+            "fields": {
+                "duration": {
+                    "name": "Duration",
+                    "description": "Duration of the sunrise simulation in minutes (1-60)"
+                },
+                "profile": {
+                    "name": "Profile",
+                    "description": "Sunrise profile: natural, gentle, energizing, or quick"
+                }
+            }
+        },
+        "start_sunset": {
+            "name": "Start Sunset Simulation",
+            "description": "Gradually decrease brightness and color temperature to simulate a natural sunset. This is a lifestyle/wellness feature for personal use, NOT a medical device.",
+            "fields": {
+                "duration": {
+                    "name": "Duration",
+                    "description": "Duration of the sunset simulation in minutes (1-60)"
+                },
+                "end_brightness": {
+                    "name": "End brightness",
+                    "description": "Final brightness percentage (0 = turn off completely)"
+                }
+            }
+        },
+        "stop_simulation": {
+            "name": "Stop Simulation",
+            "description": "Stop any running sunrise or sunset simulation on the lamp.",
+            "fields": {}
+        },
+        "set_alarm": {
+            "name": "Set Alarm",
+            "description": "Configure an alarm on a WL75 or WL90 Wake-up Light. Supports sunrise simulation, weekday selection, tone, and snooze.",
+            "fields": {
+                "slot": {
+                    "name": "Alarm slot",
+                    "description": "Alarm slot number: 0 or 1 on WL75; 0, 1, or 2 on WL90"
+                },
+                "enabled": {
+                    "name": "Enabled",
+                    "description": "Enable or disable this alarm"
+                },
+                "hour": {
+                    "name": "Hour",
+                    "description": "Alarm hour (0-23)"
+                },
+                "minute": {
+                    "name": "Minute",
+                    "description": "Alarm minute (0-59)"
+                },
+                "days": {
+                    "name": "Days",
+                    "description": "Comma-separated day names (Mon,Tue,Wed,Thu,Fri,Sat,Sun)"
+                },
+                "tone": {
+                    "name": "Tone",
+                    "description": "Alarm tone index (0-10)"
+                },
+                "volume": {
+                    "name": "Volume",
+                    "description": "Alarm volume (0-10)"
+                },
+                "snooze": {
+                    "name": "Snooze",
+                    "description": "Snooze duration in minutes (0-30)"
+                },
+                "sunrise_enabled": {
+                    "name": "Sunrise simulation",
+                    "description": "Enable sunrise light simulation before alarm"
+                },
+                "sunrise_time": {
+                    "name": "Sunrise start",
+                    "description": "Minutes before alarm to start sunrise (5-60)"
+                },
+                "sunrise_brightness": {
+                    "name": "Sunrise brightness",
+                    "description": "Maximum sunrise brightness percentage (0-100)"
+                }
+            }
+        },
+        "sync_time": {
+            "name": "Sync time",
+            "description": "Synchronize current Home Assistant local time and date to the lamp's internal clock."
+        },
         "set_therapy_user": {
             "name": "Set therapy user",
             "description": "Set the active therapy user for a Beurer lamp.",

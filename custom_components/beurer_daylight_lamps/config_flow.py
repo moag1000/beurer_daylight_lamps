@@ -35,6 +35,7 @@ from homeassistant.helpers.selector import (
 
 from .beurer_daylight_lamps import BeurerInstance
 from .const import CONF_DEFAULT_THERAPY_USER, DEVICE_NAME_PREFIXES, DOMAIN, LOGGER
+from .exceptions import BeurerError
 
 if TYPE_CHECKING:
     from bleak.backends.device import BLEDevice
@@ -528,6 +529,12 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
                 self._handle_connection_timeout()
                 return False
 
+            if not self._instance.is_connected:
+                # update() treats an unreachable lamp as normal; the toggle
+                # below would only wait for a second connect attempt
+                LOGGER.warning("Could not connect to %s", self._mac)
+                return False
+
             await asyncio.sleep(0.5)
 
             # Toggle lamp to confirm it works
@@ -546,7 +553,7 @@ class BeurerConfigFlow(ConfigFlow, domain=DOMAIN):
                 await self._instance.turn_off()
 
             LOGGER.info("Connection test successful for %s", self._mac)
-        except (BleakError, TimeoutError, OSError, ValueError, RuntimeError) as err:
+        except BeurerError as err:
             LOGGER.error("Error during connection test for %s: %s", self._mac, err)
             return False
         else:

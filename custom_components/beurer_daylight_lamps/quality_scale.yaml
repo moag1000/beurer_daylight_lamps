@@ -61,7 +61,9 @@ rules:
   # === Silver ===
   action-exceptions:
     status: done
-    comment: Services raise ServiceValidationError with translation keys.
+    comment: >-
+      Invalid input raises ServiceValidationError; a command that does not
+      reach the lamp raises a translated HomeAssistantError (BeurerError).
   config-entry-unloading:
     status: done
   docs-configuration-parameters:
@@ -71,6 +73,7 @@ rules:
     status: done
   entity-unavailable:
     status: done
+    comment: Unavailable while neither connected nor seen advertising.
   integration-owner:
     status: done
   log-when-unavailable:
@@ -82,7 +85,7 @@ rules:
     status: done
   test-coverage:
     status: done
-    comment: 97 % line coverage (1008 tests).
+    comment: Line coverage is reported by CI.
 
   # === Gold ===
   devices:

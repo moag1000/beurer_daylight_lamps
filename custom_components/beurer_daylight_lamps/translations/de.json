@@ -1,31 +1,28 @@
 {
     "exceptions": {
-        "device_not_found": {
-            "message": "Beurer Lampe {name} ({mac}) konnte nicht gefunden werden. Stellen Sie sicher, dass die Lampe eingeschaltet ist und sich in Bluetooth-Reichweite befindet."
-        },
         "connection_failed": {
-            "message": "Verbindung zu {name} fehlgeschlagen. Das Gerät ist möglicherweise außer Reichweite oder bereits mit einem anderen Gerät verbunden."
+            "message": "Keine Verbindung zu {name} ({mac}). Die Lampe ist eventuell außer Bluetooth-Reichweite, ausgeschaltet oder mit einem anderen Gerät verbunden."
         },
         "command_failed": {
-            "message": "Befehl an {name} konnte nicht gesendet werden. Bitte versuchen Sie es erneut."
+            "message": "Der Befehl ist fehlgeschlagen bei: {devices}."
         },
         "initialization_failed": {
             "message": "Initialisierung von {name} fehlgeschlagen: {error}"
         },
-        "timer_failed": {
-            "message": "Timer konnte nicht auf {name} gesetzt werden. Timer funktioniert nur im RGB/Farbmodus."
-        },
-        "timer_invalid_range": {
-            "message": "Timer muss zwischen 1 und 120 Minuten sein, erhalten: {minutes}."
-        },
-        "device_unavailable": {
-            "message": "Gerät {name} ist nicht verfügbar. Es ist möglicherweise außer Bluetooth-Reichweite oder ausgeschaltet."
-        },
         "write_failed": {
-            "message": "Schreiben an {name} fehlgeschlagen. Die Bluetooth-Verbindung wurde möglicherweise unterbrochen."
+            "message": "Der Befehl hat {name} nicht erreicht. Die Bluetooth-Verbindung ist abgerissen, bitte erneut versuchen."
         },
-        "reconnect_failed": {
-            "message": "Wiederverbindung zu {name} nach mehreren Versuchen fehlgeschlagen. Versuchen Sie das Gerät näher zu bringen oder prüfen Sie ob es eingeschaltet ist."
+        "no_target_entities": {
+            "message": "Für das angegebene Ziel wurde keine Beurer-Lampe gefunden. Bitte eine gültige Lampe auswählen."
+        },
+        "invalid_hex_command": {
+            "message": "Ungültiger Hex-Befehl: {error}. Format z. B. 33 01 1E oder 33011E."
+        },
+        "not_supported": {
+            "message": "{name} hat diese Funktion nicht."
+        },
+        "settings_unknown": {
+            "message": "{name} hat seine aktuellen Einstellungen nicht gemeldet, daher wurde nichts geändert. Bitte erneut versuchen."
         }
     },
     "config": {
@@ -36,6 +33,10 @@
                 "data": {
                     "mac": "Gerät",
                     "name": "Name"
+                },
+                "data_description": {
+                    "mac": "Wähle eine gefundene Beurer-Lampe aus der Liste.",
+                    "name": "Ein Anzeigename für die Lampe in Home Assistant."
                 }
             },
             "bluetooth_confirm": {
@@ -43,6 +44,9 @@
                 "description": "Beurer Lampe gefunden: **{name}**\n\nDie Lampe wird blinken um die Verbindung zu bestätigen.",
                 "data": {
                     "name": "Name (optional)"
+                },
+                "data_description": {
+                    "name": "Überschreibe bei Bedarf den Standardnamen des Geräts."
                 }
             },
             "validate": {
@@ -59,6 +63,10 @@
                 "data": {
                     "mac": "MAC-Adresse",
                     "name": "Name"
+                },
+                "data_description": {
+                    "mac": "Bluetooth-MAC-Adresse im Format AA:BB:CC:DD:EE:FF.",
+                    "name": "Ein Anzeigename für die Lampe in Home Assistant."
                 }
             },
             "reauth_confirm": {
@@ -70,12 +78,17 @@
                 "description": "Ändern Sie die Einstellungen für **{mac}**.",
                 "data": {
                     "name": "Name"
+                },
+                "data_description": {
+                    "name": "Ändere den Anzeigenamen dieser Lampe."
                 }
             }
         },
         "error": {
             "cannot_connect": "Verbindung zur Lampe fehlgeschlagen",
-            "invalid_mac": "Ungültiges MAC-Adressformat"
+            "no_gatt_adapter": "Kein Bluetooth-Adapter mit GATT-Unterstützung gefunden. Die Lampe ist sichtbar, aber eine Verbindung ist nicht möglich. Füge einen ESPHome Bluetooth Proxy hinzu oder nutze einen lokalen Bluetooth-Adapter.",
+            "invalid_mac": "Ungültiges MAC-Adressformat",
+            "unknown": "Ein unerwarteter Fehler ist aufgetreten. Details stehen im Home-Assistant-Log."
         },
         "abort": {
             "already_configured": "Gerät bereits konfiguriert",
@@ -207,11 +220,25 @@
             "therapy_goal": {
                 "name": "Taegliches Lichtziel"
             },
+            "radio_volume": {
+                "name": "Radiolautstärke"
+            },
+            "music_volume": {
+                "name": "Lautsprecherlautstärke"
+            },
             "sunrise_duration": {
                 "name": "Dauer Sonnenaufgang"
             },
             "sunset_duration": {
                 "name": "Dauer Sonnenuntergang"
+            }
+        },
+        "media_player": {
+            "fm_radio": {
+                "name": "UKW-Radio"
+            },
+            "bt_speaker": {
+                "name": "Bluetooth-Lautsprecher"
             }
         },
         "sensor": {
@@ -229,6 +256,15 @@
             },
             "therapy_progress": {
                 "name": "Tagesfortschritt"
+            },
+            "reconnect_count": {
+                "name": "Anzahl Wiederverbindungen"
+            },
+            "command_success_rate": {
+                "name": "Befehlserfolgsquote"
+            },
+            "connection_uptime": {
+                "name": "Verbindungsdauer"
             },
             "last_time_sync": {
                 "name": "Letzte Zeitsynchronisierung"
@@ -378,7 +414,58 @@
         },
         "stop_simulation": {
             "name": "Simulation stoppen",
-            "description": "Stoppt jede laufende Sonnenaufgang- oder Sonnenuntergang-Simulation auf der Lampe."
+            "description": "Stoppt jede laufende Sonnenaufgang- oder Sonnenuntergang-Simulation auf der Lampe.",
+            "fields": {}
+        },
+        "set_alarm": {
+            "name": "Wecker stellen",
+            "description": "Stellt einen Wecker am WL75 oder WL90 Wake-up Light. Unterstützt Sonnenaufgangssimulation, Wochentage, Weckton und Schlummern.",
+            "fields": {
+                "slot": {
+                    "name": "Weckerplatz",
+                    "description": "Nummer des Weckers: 0 oder 1 beim WL75; 0, 1 oder 2 beim WL90"
+                },
+                "enabled": {
+                    "name": "Aktiviert",
+                    "description": "Wecker ein- oder ausschalten"
+                },
+                "hour": {
+                    "name": "Stunde",
+                    "description": "Weckzeit, Stunde (0-23)"
+                },
+                "minute": {
+                    "name": "Minute",
+                    "description": "Weckzeit, Minute (0-59)"
+                },
+                "days": {
+                    "name": "Tage",
+                    "description": "Kommagetrennte englische Tageskürzel (Mon,Tue,Wed,Thu,Fri,Sat,Sun)"
+                },
+                "tone": {
+                    "name": "Weckton",
+                    "description": "Nummer des Wecktons (0-10)"
+                },
+                "volume": {
+                    "name": "Lautstärke",
+                    "description": "Wecklautstärke (0-10)"
+                },
+                "snooze": {
+                    "name": "Schlummern",
+                    "description": "Schlummerdauer in Minuten (0-30)"
+                },
+                "sunrise_enabled": {
+                    "name": "Sonnenaufgangssimulation",
+                    "description": "Sonnenaufgangslicht vor dem Wecken einschalten"
+                },
+                "sunrise_time": {
+                    "name": "Sonnenaufgang beginnt",
+                    "description": "Minuten vor der Weckzeit, zu denen der Sonnenaufgang beginnt (5-60)"
+                },
+                "sunrise_brightness": {
+                    "name": "Sonnenaufgangshelligkeit",
+                    "description": "Maximale Helligkeit des Sonnenaufgangs in Prozent (0-100)"
+                }
+            }
         },
         "sync_time": {
             "name": "Uhrzeit synchronisieren",

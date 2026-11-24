@@ -12,7 +12,6 @@ from homeassistant.components.number import (
     RestoreNumber,
 )
 from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfTime
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.device_registry import (
     CONNECTION_BLUETOOTH,
     DeviceInfo,
@@ -236,11 +235,8 @@ class BeurerTimerNumber(CoordinatorEntity[BeurerDataUpdateCoordinator], NumberEn
         # 0 = cancel timer
         if minutes == 0:
             LOGGER.debug("Cancelling timer")
-            success = await self._instance.cancel_timer()
-            if success:
-                LOGGER.info("Timer cancelled")
-            else:
-                raise HomeAssistantError("Failed to cancel timer")
+            await self._instance.cancel_timer()
+            LOGGER.info("Timer cancelled")
             return
 
         was_inactive = not self._instance.timer_active
@@ -249,19 +245,15 @@ class BeurerTimerNumber(CoordinatorEntity[BeurerDataUpdateCoordinator], NumberEn
             "Setting timer to %d minutes (was_inactive=%s)", minutes, was_inactive
         )
 
-        success = await self._instance.set_timer(minutes)
+        await self._instance.set_timer(minutes)
 
         # If timer was inactive, send the command a second time
         # to ensure the value is properly set
-        if success and was_inactive:
+        if was_inactive:
             LOGGER.debug("Timer was inactive, sending value again")
             await asyncio.sleep(0.3)
-            success = await self._instance.set_timer(minutes)
-
-        if success:
-            LOGGER.info("Timer set to %d minutes", minutes)
-        else:
-            raise HomeAssistantError(f"Failed to set timer to {minutes} minutes")
+            await self._instance.set_timer(minutes)
+        LOGGER.info("Timer set to %d minutes", minutes)
 
 
 class BeurerTherapyGoalNumber(

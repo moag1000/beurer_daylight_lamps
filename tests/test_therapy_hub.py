@@ -17,6 +17,7 @@ from custom_components.beurer_daylight_lamps.therapy import (
     TherapyTracker,
     start_of_local_week,
 )
+from tests.tl_frames import as_tl_frame
 
 
 def _make_beurer_instance(
@@ -168,7 +169,7 @@ class TestEventFiredOnSessionEnd:
         off = bytearray(10)
         off[6] = 0x08  # status payload, not a heartbeat
         off[8] = 255  # version 255: device off
-        await instance._handle_notification(MagicMock(), off)
+        await instance._handle_notification(MagicMock(), as_tl_frame(off))
 
         mock_hass.bus.async_fire.assert_called_once()
         event_name, payload = mock_hass.bus.async_fire.call_args[0]

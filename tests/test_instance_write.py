@@ -26,6 +26,10 @@ from custom_components.beurer_daylight_lamps.const import (
     MODE_RGB,
     MODE_WHITE,
 )
+from custom_components.beurer_daylight_lamps.exceptions import (
+    BeurerConnectionError,
+    BeurerWriteError,
+)
 
 M = "custom_components.beurer_daylight_lamps.beurer_daylight_lamps"
 
@@ -53,81 +57,76 @@ def client(connected: bool = True) -> MagicMock:
 class TestWrite:
     """_write."""
 
-    async def test_reconnect_fails(self) -> None:
-        inst = make()
-        inst.connect = AsyncMock(return_value=False)
-        assert not await inst._write(bytearray(b"\x01"))
-        assert inst.command_success_rate == 0
-
-    async def test_no_client_after_connect(self) -> None:
-        inst = make()
-        inst.connect = AsyncMock(return_value=True)
-        assert not await inst._write(bytearray(b"\x01"))
-
     async def test_no_write_uuid(self) -> None:
         inst = make()
         inst._client = client()
-        assert not await inst._write(bytearray(b"\x01"))
+        with pytest.raises(BeurerWriteError):
+            await inst._write(bytearray(b"\x01"))
 
     async def test_success_marks_seen(self) -> None:
         inst = make()
         inst._client = client()
         inst._write_uuid = "w"
         inst._last_seen = 0
-        assert await inst._write(bytearray(b"\x01"))
+        await inst._write(bytearray(b"\x01"))
         assert inst._last_seen > 0
         assert inst.command_success_rate == 100
 
     @pytest.mark.parametrize("error", [TimeoutError(), BleakError("x"), OSError()])
-    async def test_link_errors(self, error: Exception) -> None:
+    async def test_link_error_tears_link_down(self, error: Exception) -> None:
         inst = make()
         inst._client = client()
         inst._client.write_gatt_char = AsyncMock(side_effect=error)
         inst._write_uuid = "w"
         inst.disconnect = AsyncMock()
-        assert not await inst._write(bytearray(b"\x01"))
-        assert inst._last_write_link_error
+        with pytest.raises(BeurerWriteError):
+            await inst._write(bytearray(b"\x01"))
         inst.disconnect.assert_awaited_once()
 
 
 class TestSendPacket:
-    """_send_packet framing and retry."""
+    """_send_packet: lock, connect and retry."""
+
+    async def test_requires_command_lock(self) -> None:
+        """A packet outside a command could land inside a mode switch."""
+        inst = make()
+        inst._client = client()
+        with pytest.raises(RuntimeError):
+            await inst._send_packet([0x30])
 
     async def test_not_connected(self) -> None:
         inst = make()
         inst.connect = AsyncMock(return_value=False)
-        assert not await inst._send_packet([0x30])
+        with pytest.raises(BeurerConnectionError):
+            await inst.send_command([0x30])
 
-    async def test_retry_after_link_error(self) -> None:
+    async def test_lost_packet_is_sent_once_more(self) -> None:
         inst = make()
         inst._client = client()
+        inst._write = AsyncMock(side_effect=[BeurerWriteError("Lamp"), None])
+        await inst.send_command([0x30])
+        assert inst._write.await_count == 2
 
-        async def write(_packet: bytearray) -> bool:
-            if inst._write.await_count == 1:
-                inst._last_write_link_error = True
-                return False
-            return True
-
-        inst._write = AsyncMock(side_effect=write)
-        assert await inst._send_packet([0x30])
+    async def test_second_loss_is_reported(self) -> None:
+        inst = make()
+        inst._client = client()
+        inst._write = AsyncMock(side_effect=BeurerWriteError("Lamp"))
+        with pytest.raises(BeurerWriteError):
+            await inst.send_command([0x30])
         assert inst._write.await_count == 2
 
     async def test_no_retry_while_closing(self) -> None:
         inst = make()
         inst._client = client()
         inst._closing = True
-
-        async def write(_packet: bytearray) -> bool:
-            inst._last_write_link_error = True
-            return False
-
-        inst._write = AsyncMock(side_effect=write)
-        assert not await inst._send_packet([0x30])
+        inst._write = AsyncMock(side_effect=BeurerWriteError("Lamp"))
+        with pytest.raises(BeurerWriteError):
+            await inst.send_command([0x30])
         assert inst._write.await_count == 1
 
 
 def recorder(inst: BeurerInstance) -> None:
-    inst._send_packet = AsyncMock(return_value=True)
+    inst._send_packet = AsyncMock()
     inst._request_status = AsyncMock()
     inst._trigger_update = AsyncMock()
 

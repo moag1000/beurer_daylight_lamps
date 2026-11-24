@@ -10,6 +10,10 @@ from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.beurer_daylight_lamps.const import DOMAIN
+from custom_components.beurer_daylight_lamps.exceptions import (
+    BeurerError,
+    BeurerWriteError,
+)
 from custom_components.beurer_daylight_lamps.sensor import (
     CONNECTION_HEALTH_SENSOR_DESCRIPTIONS,
     SENSOR_DESCRIPTIONS,
@@ -27,7 +31,7 @@ from custom_components.beurer_daylight_lamps.switch import (
     BeurerAlarmSwitch,
     BeurerDeviceSwitch,
 )
-from custom_components.beurer_daylight_lamps.wl90 import AlarmItem
+from custom_components.beurer_daylight_lamps.wl90 import AlarmItem, WL90Controller
 
 
 def _desc(descriptions, key):
@@ -45,7 +49,7 @@ def coordinator() -> MagicMock:
     inst.set_fade = AsyncMock()
     inst.wl90 = MagicMock()
     inst.wl90.alarms = [AlarmItem(slot=0, hour=6, minute=5), AlarmItem(slot=1)]
-    inst.wl90.sync_alarm = AsyncMock(return_value=True)
+    inst.wl90.sync_alarm = AsyncMock()
     return coord
 
 
@@ -93,6 +97,11 @@ class TestAlarmSwitch:
     """Alarm slot switches."""
 
     async def test_toggle(self, coordinator: MagicMock) -> None:
+        inst = coordinator.instance
+        inst.is_wl75 = False
+        inst.send_command = AsyncMock()
+        inst.wl90 = WL90Controller(inst)
+        inst.wl90.alarms[0] = AlarmItem(slot=0, hour=6, minute=5)
         sw = BeurerAlarmSwitch(coordinator, "WL90", 0)
         sw.async_write_ha_state = MagicMock()
         assert sw.unique_id == "aa:bb:cc:dd:ee:ff_alarm_1"
@@ -100,9 +109,6 @@ class TestAlarmSwitch:
         assert not sw.is_on
         await sw.async_turn_on()
         assert sw.is_on
-        coordinator.instance.wl90.sync_alarm.assert_awaited_with(
-            0, coordinator.instance.wl90.alarms[0]
-        )
         await sw.async_turn_off()
         assert not sw.is_on
         assert sw.async_write_ha_state.call_count == 2
@@ -111,6 +117,19 @@ class TestAlarmSwitch:
         assert attrs["slot"] == 0
         assert attrs["days"] == ["Mon", "Tue", "Wed", "Thu", "Fri"]
         assert sw.device_info["name"] == "WL90"
+
+    async def test_lost_command_keeps_alarm_state(self, coordinator: MagicMock) -> None:
+        """The switch must not show an alarm the lamp never received."""
+        inst = coordinator.instance
+        inst.is_wl75 = False
+        inst.send_command = AsyncMock(side_effect=BeurerWriteError("WL90"))
+        inst.wl90 = WL90Controller(inst)
+        sw = BeurerAlarmSwitch(coordinator, "WL90", 0)
+        sw.async_write_ha_state = MagicMock()
+        with pytest.raises(BeurerError):
+            await sw.async_turn_on()
+        assert not sw.is_on
+        assert not inst.wl90.alarms[0].enabled
 
     async def test_missing_slot(self, coordinator: MagicMock) -> None:
         sw = BeurerAlarmSwitch(coordinator, "WL75", 2)

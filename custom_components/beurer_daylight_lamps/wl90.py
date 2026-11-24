@@ -10,7 +10,6 @@ Protocol details discovered from APK reverse engineering of Beurer LightUp 2.1.
 
 from __future__ import annotations
 
-import asyncio
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -31,7 +30,6 @@ from .const import (
     CMD_RADIO_TIMER_VALUE,
     CMD_RADIO_TUNE,
     CMD_RADIO_VOLUME,
-    COMMAND_DELAY,
     EVENT_TYPE_SLEEP_TIMER_FINISHED,
     LOGGER,
     RESP_ALARM,
@@ -160,42 +158,36 @@ class WL90Controller:
         ]
 
     # --- Radio Controls ---
+    # Every command raises BeurerError if it could not be delivered; the
+    # local state is only changed after the lamp received the command.
 
-    async def radio_on(self) -> bool:
+    async def radio_on(self) -> None:
         """Turn FM radio on."""
         LOGGER.info("Turning radio ON on %s", self._instance.mac)
-        result = await self._instance._send_packet([CMD_RADIO_POWER, 1])
-        if result:
-            self.radio.is_on = True
-        return result
+        await self._instance.send_command([CMD_RADIO_POWER, 1])
+        self.radio.is_on = True
 
-    async def radio_off(self) -> bool:
+    async def radio_off(self) -> None:
         """Turn FM radio off."""
         LOGGER.info("Turning radio OFF on %s", self._instance.mac)
-        result = await self._instance._send_packet([CMD_RADIO_POWER, 0])
-        if result:
-            self.radio.is_on = False
-        return result
+        await self._instance.send_command([CMD_RADIO_POWER, 0])
+        self.radio.is_on = False
 
-    async def set_radio_volume(self, volume: int) -> bool:
+    async def set_radio_volume(self, volume: int) -> None:
         """Set radio volume (0-10)."""
         volume = max(0, min(10, volume))
         LOGGER.debug("Setting radio volume to %d on %s", volume, self._instance.mac)
-        result = await self._instance._send_packet([CMD_RADIO_VOLUME, volume])
-        if result:
-            self.radio.volume = volume
-        return result
+        await self._instance.send_command([CMD_RADIO_VOLUME, volume])
+        self.radio.volume = volume
 
-    async def select_radio_preset(self, channel: int) -> bool:
+    async def select_radio_preset(self, channel: int) -> None:
         """Select a radio preset channel (1-indexed, 1-10)."""
         channel = max(1, min(10, channel))
         LOGGER.debug("Selecting radio preset %d on %s", channel, self._instance.mac)
-        result = await self._instance._send_packet([CMD_RADIO_PRESET, channel])
-        if result:
-            self.radio.channel = channel
-        return result
+        await self._instance.send_command([CMD_RADIO_PRESET, channel])
+        self.radio.channel = channel
 
-    async def radio_seek(self, direction: int = 1, auto_seek: bool = True) -> bool:
+    async def radio_seek(self, direction: int = 1, auto_seek: bool = True) -> None:
         """Seek next radio station.
 
         Args:
@@ -209,89 +201,73 @@ class WL90Controller:
             direction,
             self._instance.mac,
         )
-        return await self._instance._send_packet([CMD_RADIO_TUNE, tune_type, direction])
+        await self._instance.send_command([CMD_RADIO_TUNE, tune_type, direction])
 
-    async def set_radio_sleep_timer(self, minutes: int) -> bool:
+    async def set_radio_sleep_timer(self, minutes: int) -> None:
         """Set radio sleep timer.
 
         Args:
             minutes: Timer duration (0 = disable, 1-120 = enable with duration).
         """
         if minutes == 0:
-            result = await self._instance._send_packet([CMD_RADIO_TIMER_TOGGLE, 0])
-            if result:
-                self.radio.sleep_timer_on = False
-            return result
+            await self._instance.send_command([CMD_RADIO_TIMER_TOGGLE, 0])
+            self.radio.sleep_timer_on = False
+            return
+        await self._instance.send_command(
+            [CMD_RADIO_TIMER_TOGGLE, 1], [CMD_RADIO_TIMER_VALUE, minutes]
+        )
+        self.radio.sleep_timer_on = True
+        self.radio.sleep_timer_minutes = minutes
 
-        result = await self._instance._send_packet([CMD_RADIO_TIMER_TOGGLE, 1])
-        if result:
-            await asyncio.sleep(COMMAND_DELAY)
-            result = await self._instance._send_packet([CMD_RADIO_TIMER_VALUE, minutes])
-            if result:
-                self.radio.sleep_timer_on = True
-                self.radio.sleep_timer_minutes = minutes
-        return result
-
-    async def save_radio_frequency(self, preset: int) -> bool:
+    async def save_radio_frequency(self, preset: int) -> None:
         """Save current frequency to a preset slot."""
         LOGGER.debug("Saving frequency to preset %d on %s", preset, self._instance.mac)
-        return await self._instance._send_packet([CMD_RADIO_SAVE_FREQ, preset])
+        await self._instance.send_command([CMD_RADIO_SAVE_FREQ, preset])
 
-    async def query_radio_status(self) -> bool:
+    async def query_radio_status(self) -> None:
         """Query current radio status."""
-        return await self._instance._send_packet([CMD_RADIO_SYNC_STATUS])
+        await self._instance.send_command([CMD_RADIO_SYNC_STATUS])
 
     # --- Music/BT Speaker Controls ---
 
-    async def music_on(self) -> bool:
+    async def music_on(self) -> None:
         """Turn Bluetooth speaker on."""
         LOGGER.info("Turning BT speaker ON on %s", self._instance.mac)
-        result = await self._instance._send_packet([CMD_MUSIC_TOGGLE, 1])
-        if result:
-            self.music.is_on = True
-        return result
+        await self._instance.send_command([CMD_MUSIC_TOGGLE, 1])
+        self.music.is_on = True
 
-    async def music_off(self) -> bool:
+    async def music_off(self) -> None:
         """Turn Bluetooth speaker off."""
         LOGGER.info("Turning BT speaker OFF on %s", self._instance.mac)
-        result = await self._instance._send_packet([CMD_MUSIC_CLOSE])
-        if result:
-            self.music.is_on = False
-        return result
+        await self._instance.send_command([CMD_MUSIC_CLOSE])
+        self.music.is_on = False
 
-    async def set_music_volume(self, volume: int) -> bool:
+    async def set_music_volume(self, volume: int) -> None:
         """Set music/speaker volume (0-10)."""
         volume = max(0, min(10, volume))
         LOGGER.debug("Setting music volume to %d on %s", volume, self._instance.mac)
-        result = await self._instance._send_packet([CMD_MUSIC_VOLUME, volume])
-        if result:
-            self.music.volume = volume
-        return result
+        await self._instance.send_command([CMD_MUSIC_VOLUME, volume])
+        self.music.volume = volume
 
-    async def set_music_sleep_timer(self, minutes: int) -> bool:
-        """Set music sleep timer."""
+    async def set_music_sleep_timer(self, minutes: int) -> None:
+        """Set music sleep timer (0 = disable)."""
         if minutes == 0:
-            result = await self._instance._send_packet([CMD_MUSIC_TIMER_TOGGLE, 0])
-            if result:
-                self.music.sleep_timer_on = False
-            return result
+            await self._instance.send_command([CMD_MUSIC_TIMER_TOGGLE, 0])
+            self.music.sleep_timer_on = False
+            return
+        await self._instance.send_command(
+            [CMD_MUSIC_TIMER_TOGGLE, 1], [CMD_MUSIC_TIMER_VALUE, minutes]
+        )
+        self.music.sleep_timer_on = True
+        self.music.sleep_timer_minutes = minutes
 
-        result = await self._instance._send_packet([CMD_MUSIC_TIMER_TOGGLE, 1])
-        if result:
-            await asyncio.sleep(COMMAND_DELAY)
-            result = await self._instance._send_packet([CMD_MUSIC_TIMER_VALUE, minutes])
-            if result:
-                self.music.sleep_timer_on = True
-                self.music.sleep_timer_minutes = minutes
-        return result
-
-    async def query_music_status(self) -> bool:
+    async def query_music_status(self) -> None:
         """Query current music/speaker status."""
-        return await self._instance._send_packet([CMD_MUSIC_QUERY])
+        await self._instance.send_command([CMD_MUSIC_QUERY])
 
     # --- Alarm Controls ---
 
-    async def sync_alarm(self, slot: int, alarm: AlarmItem | None = None) -> bool:
+    async def sync_alarm(self, slot: int, alarm: AlarmItem | None = None) -> None:
         """Sync an alarm to the device.
 
         Args:
@@ -299,8 +275,7 @@ class WL90Controller:
             alarm: AlarmItem to sync. If None, uses the stored alarm for this slot.
         """
         if slot not in ALARM_SLOT_MAP:
-            LOGGER.error("Invalid alarm slot %d (must be 0, 1, or 2)", slot)
-            return False
+            raise ValueError(f"Invalid alarm slot {slot} (must be 0, 1, or 2)")
 
         if alarm is None:
             alarm = self.alarms[slot]
@@ -317,7 +292,7 @@ class WL90Controller:
             alarm.days_list,
         )
 
-        result = await self._instance._send_packet(
+        await self._instance.send_command(
             [
                 CMD_ALARM_SYNC,
                 direction_byte,
@@ -334,10 +309,7 @@ class WL90Controller:
             ]
         )
 
-        if result:
-            self.alarms[slot] = alarm
-
-        return result
+        self.alarms[slot] = alarm
 
     # --- Notification Handling ---
 

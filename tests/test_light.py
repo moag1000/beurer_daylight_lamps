@@ -195,12 +195,13 @@ async def test_turn_off(mock_coordinator: MagicMock) -> None:
 
 
 @pytest.mark.asyncio
-async def test_async_added_to_hass(mock_coordinator: MagicMock) -> None:
-    """Test callback is registered when added to hass."""
+async def test_added_to_hass_does_not_connect(mock_coordinator: MagicMock) -> None:
+    """Adding the entity must not wait for a BLE connect (slow HA startup)."""
     light = BeurerLight(mock_coordinator, "Test", "entry_id")
     await light.async_added_to_hass()
 
-    mock_coordinator.instance.update.assert_called_once()
+    mock_coordinator.instance.update.assert_not_called()
+    mock_coordinator.instance.connect.assert_not_called()
 
 
 def test_should_poll_false(mock_coordinator: MagicMock) -> None:

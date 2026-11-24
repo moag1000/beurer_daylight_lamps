@@ -22,12 +22,18 @@ from custom_components.beurer_daylight_lamps.const import (
     RESP_WL75_MOODLIGHT_STATUS,
     RESP_WL75_TIMER_END,
 )
+from tests.tl_frames import (
+    RGB_STATUS_PLEN,
+    WHITE_STATUS_PLEN,
+    as_tl_frame,
+    tl_frame,
+)
 
 
 def _tl_status(version: int, on: bool = True, brightness_pct: int = 100) -> bytearray:
     """Build a TL status notification (1 = white, 2 = RGB, 255 = off)."""
     data = bytearray(17)
-    data[6] = 0x0B  # payload length: a status, not a heartbeat
+    data[6] = RGB_STATUS_PLEN if version == 2 else WHITE_STATUS_PLEN
     data[7] = RESP_STATUS
     data[8] = version
     data[9] = 1 if on else 0
@@ -45,10 +51,7 @@ def _tl_rgb(
 
 
 def _tl_timer_end() -> bytearray:
-    data = bytearray(10)
-    data[7] = RESP_LIGHT_TIMER_END
-    data[8] = 1  # 1 = lamp turned off
-    return data
+    return tl_frame([RESP_LIGHT_TIMER_END, 1])  # 1 = lamp turned off
 
 
 def _wl75_frame(payload: list[int]) -> bytearray:
@@ -79,6 +82,8 @@ def wl75() -> BeurerInstance:
 
 
 async def _notify(instance: BeurerInstance, data: bytearray) -> None:
+    if not instance.is_wl75 and data[4:6] != b"\xab\xbb":
+        data = as_tl_frame(data)
     await instance._handle_notification(MagicMock(), data)
 
 
