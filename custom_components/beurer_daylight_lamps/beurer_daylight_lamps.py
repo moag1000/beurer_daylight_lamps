@@ -154,6 +154,7 @@ from .const import (
     STATUS_DELAY,
     SUPPORTED_EFFECTS,
     THERAPY_MIN_BRIGHTNESS,
+    THERAPY_RESUME_WINDOW,
     THERAPY_SESSION_CHECK_SECONDS,
     THERAPY_USER_UNKNOWN,
     TURN_OFF_DELAY,
@@ -733,7 +734,7 @@ class BeurerInstance:
         # Stop the connection watchdog
         self._stop_watchdog()
 
-        # Unavailable: no therapy minutes until the lamp reports its state again
+        # Unavailable: pause therapy minutes until the lamp reports again
         self._reconcile_therapy()
         if self._update_callbacks:
             self._safe_create_task(self._trigger_update(), "beurer_disconnect_update")
@@ -2195,11 +2196,8 @@ class BeurerInstance:
 
         Therapy light is the native white (daylight) channel, or bright,
         balanced white from the RGB channel without an effect, both at
-        THERAPY_MIN_BRIGHTNESS or more. Anything else returns None, also
-        while the lamp is unavailable: its last known state may be stale.
+        THERAPY_MIN_BRIGHTNESS or more. Anything else returns None.
         """
-        if not self._available:
-            return None
         if (
             self._light_on
             and self._brightness is not None
@@ -2218,18 +2216,30 @@ class BeurerInstance:
         return None
 
     def _reconcile_therapy(self) -> None:
-        """Start, update or end the therapy session to match the light state.
+        """Start, update, pause or end the therapy session to match the light.
 
         A session ends as soon as the light no longer qualifies, before the
         new values are taken over, so the minutes collected so far are kept.
+        While the lamp is unavailable its state is unknown: the session is
+        paused and continues if the lamp still shines therapy light after
+        reconnecting within THERAPY_RESUME_WINDOW; otherwise it ends when
+        the connection was lost.
         """
-        light = self._therapy_light()
         tracker = self._therapy_tracker
-        if light is None:
+        if not self._available:
+            tracker.pause_session()
+            return
+        light = self._therapy_light()
+        paused_for = tracker.paused_for
+        if light is None or (
+            paused_for is not None and paused_for > THERAPY_RESUME_WINDOW
+        ):
             self._end_therapy_and_emit()
+        if light is None:
             return
         kelvin, brightness_pct = light
         if tracker.has_active_session:
+            tracker.resume_session()
             tracker.update_session(kelvin, brightness_pct)
             return
         ended = tracker.start_session(
@@ -3312,6 +3322,6 @@ class BeurerInstance:
         self._available = False
         self._light_on = False
         self._color_on = False
-        # The light state is unknown while disconnected: end the session
+        # The light state is unknown while disconnected: pause the session
         # instead of counting minutes that may not be real.
         self._reconcile_therapy()

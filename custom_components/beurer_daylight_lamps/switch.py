@@ -136,6 +136,9 @@ class BeurerAdaptiveLightingSwitch(
         self._is_on: bool = True  # Default: Adaptive Lighting enabled
         # Adaptive Lighting starts without manual control for the lamp
         self._manual_control_sent = False
+        # False when Adaptive Lighting already had the lamp on manual control
+        # (e.g. the user changed it) before this switch blocked it
+        self._release_on_unblock = True
 
     async def async_added_to_hass(self) -> None:
         """Run when entity about to be added to hass."""
@@ -209,6 +212,20 @@ class BeurerAdaptiveLightingSwitch(
         if self.should_block_adaptive_lighting() != self._manual_control_sent:
             self.hass.async_create_task(self._async_sync_manual_control())
 
+    def _al_has_manual_control(
+        self, registry: er.EntityRegistry, light_entity_id: str
+    ) -> bool:
+        """Return True if an Adaptive Lighting switch has the lamp on manual."""
+        for entry in registry.entities.values():
+            if entry.platform != AL_DOMAIN or entry.domain != "switch":
+                continue
+            state = self.hass.states.get(entry.entity_id)
+            if state is not None and light_entity_id in (
+                state.attributes.get("manual_control") or []
+            ):
+                return True
+        return False
+
     def should_block_adaptive_lighting(self) -> bool:
         """Return True if Adaptive Lighting must not adjust the lamp now.
 
@@ -233,10 +250,19 @@ class BeurerAdaptiveLightingSwitch(
             return
         if not self.hass.services.has_service(AL_DOMAIN, AL_SERVICE_SET_MANUAL_CONTROL):
             return  # Adaptive Lighting not loaded (yet)
-        light_entity_id = er.async_get(self.hass).async_get_entity_id(
+        registry = er.async_get(self.hass)
+        light_entity_id = registry.async_get_entity_id(
             "light", DOMAIN, format_mac(self._instance.mac)
         )
         if light_entity_id is None:
+            return
+        if block:
+            self._release_on_unblock = not self._al_has_manual_control(
+                registry, light_entity_id
+            )
+        elif not self._release_on_unblock:
+            # Adaptive Lighting's own manual control stays as it was
+            self._manual_control_sent = False
             return
         try:
             await self.hass.services.async_call(
