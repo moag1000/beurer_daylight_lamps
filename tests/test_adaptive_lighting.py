@@ -138,3 +138,21 @@ async def test_no_switch_without_adaptive_lighting(hass: HomeAssistant) -> None:
         isinstance(e, switch_platform.BeurerAdaptiveLightingSwitch) for e in added
     )
     assert registry.async_get(old.entity_id) is None
+
+
+async def test_users_manual_control_is_kept(
+    hass: HomeAssistant, al_switch, al_calls: list[dict]
+) -> None:
+    """If Adaptive Lighting already had the lamp on manual, it stays so after."""
+    _switch, instance = al_switch
+    al_entity = er.async_get(hass).async_get_or_create(
+        "switch", "adaptive_lighting", "living_room", suggested_object_id="al"
+    )
+    hass.states.async_set(al_entity.entity_id, "on", {"manual_control": ["light.lamp"]})
+
+    await instance._handle_notification(MagicMock(), _status(1))
+    await hass.async_block_till_done()
+    await instance._handle_notification(MagicMock(), _status(255))
+    await hass.async_block_till_done()
+
+    assert al_calls == [{"lights": ["light.lamp"], "manual_control": True}]

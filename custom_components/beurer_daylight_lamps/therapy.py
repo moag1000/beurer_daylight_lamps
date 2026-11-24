@@ -108,12 +108,15 @@ class TherapySession:
     color_temp_kelvin: int = 5300
     brightness_pct: int = 100
     person_id: str | None = None
+    # Time the lamp's state was unknown (connection lost) during the session
+    paused_seconds: float = 0.0
+    paused_at: datetime | None = None
 
     @property
     def duration_minutes(self) -> float:
-        """Calculate session duration in minutes."""
-        end = self.end_time or datetime.now(tz=UTC)
-        return (end - self.start_time).total_seconds() / 60
+        """Calculate session duration in minutes, without paused time."""
+        end = self.end_time or self.paused_at or datetime.now(tz=UTC)
+        return ((end - self.start_time).total_seconds() - self.paused_seconds) / 60
 
     @property
     def is_therapy_light(self) -> bool:
@@ -148,10 +151,11 @@ class TherapyTracker:
             sessions.append(
                 TherapySession(
                     start_time=current.start_time,
-                    end_time=datetime.now(tz=UTC),
+                    end_time=current.paused_at or datetime.now(tz=UTC),
                     color_temp_kelvin=current.color_temp_kelvin,
                     brightness_pct=current.brightness_pct,
                     person_id=current.person_id,
+                    paused_seconds=current.paused_seconds,
                 )
             )
         cutoff = datetime.now(tz=UTC) - timedelta(days=7)
@@ -164,6 +168,7 @@ class TherapyTracker:
                     "kelvin": s.color_temp_kelvin,
                     "brightness": s.brightness_pct,
                     "person": s.person_id,
+                    "paused": s.paused_seconds,
                 }
                 for s in sessions
                 if s.start_time > cutoff
@@ -185,6 +190,7 @@ class TherapyTracker:
                         color_temp_kelvin=int(item.get("kelvin", 5300)),
                         brightness_pct=int(item.get("brightness", 100)),
                         person_id=item.get("person"),
+                        paused_seconds=float(item.get("paused", 0.0)),
                     )
                 )
             except KeyError, TypeError, ValueError:
@@ -240,13 +246,39 @@ class TherapyTracker:
         if brightness_pct is not None:
             self._current_session.brightness_pct = brightness_pct
 
+    @property
+    def paused_for(self) -> timedelta | None:
+        """Return how long the running session has been paused, or None."""
+        session = self._current_session
+        if session is None or session.paused_at is None:
+            return None
+        return datetime.now(tz=UTC) - session.paused_at
+
+    def pause_session(self) -> None:
+        """Stop counting while the lamp's state is unknown (connection lost)."""
+        session = self._current_session
+        if session is not None and session.paused_at is None:
+            session.paused_at = datetime.now(tz=UTC)
+
+    def resume_session(self) -> None:
+        """Count again after a pause; the paused time is left out."""
+        session = self._current_session
+        if session is not None and session.paused_at is not None:
+            now = datetime.now(tz=UTC)
+            session.paused_seconds += (now - session.paused_at).total_seconds()
+            session.paused_at = None
+
     def end_session(self) -> TherapySession | None:
-        """End current session and add to history."""
+        """End current session and add to history.
+
+        A paused session ends when the pause began.
+        """
         if self._current_session is None:
             return None
 
-        self._current_session.end_time = datetime.now(tz=UTC)
         session = self._current_session
+        session.end_time = session.paused_at or datetime.now(tz=UTC)
+        session.paused_at = None
 
         # Only track sessions that qualify as therapy
         if session.is_therapy_light and session.duration_minutes >= 1:

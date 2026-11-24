@@ -203,19 +203,60 @@ class TestWL75:
 
 
 class TestConnectionLoss:
-    """Minutes are not counted while the lamp state is unknown."""
+    """A lost connection pauses the session instead of counting or splitting it."""
 
-    async def test_unexpected_disconnect_ends_session(self, tl: BeurerInstance) -> None:
+    async def test_short_drop_continues_session(
+        self, tl: BeurerInstance, freezer
+    ) -> None:
         await _notify(tl, _tl_status(1))
-        _run_for(tl, 4)
+        _run_for(tl, 10)
         tl._ble_available = False  # no reconnect attempt in this test
         tl._on_disconnect(tl._client)
-        assert not tl.therapy_tracker.has_active_session
-        assert tl.therapy_today_minutes == pytest.approx(4, abs=0.1)
+        freezer.tick(timedelta(minutes=2))
+        assert tl.therapy_today_minutes == pytest.approx(10, abs=0.1)
 
-    async def test_disconnect_ends_session(self, tl: BeurerInstance) -> None:
+        await _notify(tl, _tl_status(1))  # back, still full daylight
+        freezer.tick(timedelta(minutes=5))
+        assert tl.therapy_today_minutes == pytest.approx(15, abs=0.1)
+        assert tl.therapy_tracker.sessions == []  # still one running session
+
+    async def test_long_drop_ends_session_at_loss(
+        self, tl: BeurerInstance, freezer
+    ) -> None:
+        await _notify(tl, _tl_status(1))
+        _run_for(tl, 10)
+        tl._ble_available = False
+        tl._on_disconnect(tl._client)
+        freezer.tick(timedelta(minutes=30))
+
+        await _notify(tl, _tl_status(1))
+        assert len(tl.therapy_tracker.sessions) == 1
+        assert tl.therapy_tracker.sessions[0].duration_minutes == pytest.approx(
+            10, abs=0.1
+        )
+        assert tl.therapy_tracker.has_active_session  # a new session started
+
+    async def test_back_but_off_ends_session_at_loss(
+        self, tl: BeurerInstance, freezer
+    ) -> None:
+        await _notify(tl, _tl_status(1))
+        _run_for(tl, 10)
+        tl._ble_available = False
+        tl._on_disconnect(tl._client)
+        freezer.tick(timedelta(minutes=2))
+        await _notify(tl, _tl_status(255))
+        assert not tl.therapy_tracker.has_active_session
+        assert tl.therapy_today_minutes == pytest.approx(10, abs=0.1)
+
+    async def test_shutdown_keeps_minutes_until_disconnect(
+        self, tl: BeurerInstance, freezer
+    ) -> None:
         await _notify(tl, _tl_status(1))
         _run_for(tl, 6)
         await tl.disconnect()
-        assert not tl.therapy_tracker.has_active_session
-        assert tl.therapy_today_minutes == pytest.approx(6, abs=0.1)
+        freezer.tick(timedelta(minutes=3))  # saving happens later
+        saved = tl.therapy_tracker.as_storage_dict()["sessions"]
+        assert len(saved) == 1
+        restored = type(tl.therapy_tracker)()
+        restored.load_storage_dict({"sessions": saved})
+        assert restored.today_minutes == pytest.approx(6, abs=0.1)

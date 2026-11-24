@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import timedelta
 from typing import Final
 
 DOMAIN: Final = "beurer_daylight_lamps"
@@ -382,6 +383,9 @@ LAMP_EVENT_TYPES: Final[list[str]] = [
 # One-click therapy session (button "Start light therapy")
 THERAPY_SESSION_CHECK_SECONDS: Final = 30
 THERAPY_MIN_BRIGHTNESS: Final = 204  # 80 %: below this it is no therapy light
+# A session paused by a lost connection continues if the lamp is back within
+# this time and still shines therapy light; otherwise it ends at the loss.
+THERAPY_RESUME_WINDOW: Final = timedelta(minutes=5)
 # Colour temperature of the native white (daylight) LEDs, e.g. TL100 5300 K
 NATIVE_WHITE_KELVIN: Final = 5300
 
