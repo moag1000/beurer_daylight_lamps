@@ -32,8 +32,10 @@ from custom_components.beurer_daylight_lamps.exceptions import (
     BeurerConnectionError,
     BeurerError,
     BeurerNotSupportedError,
+    BeurerSettingsUnknownError,
     BeurerWriteError,
 )
+from tests.tl_frames import as_tl_frame
 
 M = "custom_components.beurer_daylight_lamps.beurer_daylight_lamps"
 
@@ -99,6 +101,7 @@ class TestTimeAndSettings:
     async def test_feedback_tl_keeps_fade(self) -> None:
         inst = make()
         inst._fade_enabled = False
+        inst._settings_read.set()
         await inst.set_feedback(True)
         assert sent(inst) == [[CMD_SETTINGS_WRITE, 0, 0, 0, 0, 1]]
         assert inst.feedback_enabled is True
@@ -107,6 +110,7 @@ class TestTimeAndSettings:
     async def test_feedback_wl75(self) -> None:
         inst = make("WL75_1")
         inst._display_setting = 2
+        inst._settings_read.set()
         await inst.set_feedback(False)
         assert sent(inst) == [[CMD_WL75_SETTINGS_WRITE, 2, 0, 0, 1]]
         assert inst.feedback_enabled is False
@@ -121,9 +125,35 @@ class TestTimeAndSettings:
     async def test_fade(self) -> None:
         inst = make()
         inst._feedback_enabled = False
+        inst._settings_read.set()
         await inst.set_fade(True)
         assert sent(inst) == [[CMD_SETTINGS_WRITE, 0, 0, 0, 1, 0]]
         assert inst.fade_enabled is True
+
+    async def test_unread_settings_are_read_before_writing(self) -> None:
+        """Writing placeholders would reset display, date and time format."""
+        inst = make()
+
+        async def lamp(message: list[int]) -> None:
+            if message == [CMD_SETTINGS_READ]:  # the lamp answers the read
+                inst._handle_settings_notification(
+                    as_tl_frame(bytearray([0] * 6 + [0x08, 0xE2, 2, 1, 1, 0, 1]))
+                )
+
+        inst._send_packet = AsyncMock(side_effect=lamp)
+        inst._safe_create_task = MagicMock(side_effect=lambda c, _n: c.close())
+        await inst.set_fade(True)
+        assert sent(inst) == [[CMD_SETTINGS_READ], [CMD_SETTINGS_WRITE, 2, 1, 1, 0, 0]]
+
+    async def test_no_write_without_settings(self) -> None:
+        inst = make()
+        with (
+            patch(f"{M}.COMMAND_TIMEOUT", 0),
+            pytest.raises(BeurerSettingsUnknownError),
+        ):
+            await inst.set_feedback(True)
+        assert sent(inst) == [[CMD_SETTINGS_READ]]
+        assert inst.feedback_enabled is None
 
     async def test_fade_not_supported_on_wl75(self) -> None:
         inst = make("WL75_1")

@@ -20,6 +20,9 @@
         },
         "not_supported": {
             "message": "{name} hat diese Funktion nicht."
+        },
+        "settings_unknown": {
+            "message": "{name} hat seine aktuellen Einstellungen nicht gemeldet, daher wurde nichts geändert. Bitte erneut versuchen."
         }
     },
     "config": {

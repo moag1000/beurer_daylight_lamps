@@ -63,3 +63,14 @@ class BeurerNotSupportedError(BeurerError):
             translation_key="not_supported",
             translation_placeholders={"name": name},
         )
+
+
+class BeurerSettingsUnknownError(BeurerError):
+    """The lamp did not report its settings, so none can be changed safely."""
+
+    def __init__(self, name: str) -> None:
+        """Initialize settings-unknown error."""
+        super().__init__(
+            translation_key="settings_unknown",
+            translation_placeholders={"name": name},
+        )

@@ -17,6 +17,7 @@ from custom_components.beurer_daylight_lamps.exceptions import (
     BeurerConnectionError,
     BeurerError,
     BeurerNotSupportedError,
+    BeurerSettingsUnknownError,
     BeurerWriteError,
 )
 
@@ -30,6 +31,7 @@ ERRORS: list[BeurerError] = [
     BeurerConnectionError("Lamp", "AA:BB:CC:DD:EE:FF"),
     BeurerWriteError("Lamp"),
     BeurerNotSupportedError("Lamp"),
+    BeurerSettingsUnknownError("Lamp"),
 ]
 # Raised as HomeAssistantError/ServiceValidationError in __init__.py
 SERVICE_ERRORS = {

@@ -52,6 +52,7 @@ from .exceptions import (
     BeurerConnectionError,
     BeurerError,
     BeurerNotSupportedError,
+    BeurerSettingsUnknownError,
     BeurerWriteError,
 )
 from .signal_health import PROBLEM_WEAK_SIGNAL, SignalHealthMonitor
@@ -349,6 +350,9 @@ class BeurerInstance:
         self._display_setting: int = 0
         self._date_format: int = 0
         self._time_format: int = 0
+        # Set once the lamp reported its settings; until then the values
+        # above are placeholders that must never be written back
+        self._settings_read = asyncio.Event()
         self._last_time_sync: float | None = None
 
         # Connection health and reconnection
@@ -1662,6 +1666,22 @@ class BeurerInstance:
         await self._send_packet([cmd])
         await asyncio.sleep(COMMAND_DELAY)
 
+    async def _ensure_settings_read(self) -> None:
+        """Read the settings first if the lamp has not reported them yet.
+
+        The settings write carries display, date and time format too: with
+        the placeholders it would reset them on the lamp.
+        """
+        if self._settings_read.is_set():
+            return
+        cmd = CMD_WL75_SETTINGS_READ if self._is_wl75 else CMD_SETTINGS_READ
+        await self._send_packet([cmd])
+        try:
+            async with asyncio.timeout(COMMAND_TIMEOUT):
+                await self._settings_read.wait()
+        except TimeoutError as err:
+            raise BeurerSettingsUnknownError(self._device_name) from err
+
     @_serialized
     async def set_feedback(self, enabled: bool) -> None:
         """Set device feedback sound (beep on button press).
@@ -1670,15 +1690,16 @@ class BeurerInstance:
             enabled: True to enable feedback sound, False to disable.
         """
         LOGGER.info("Setting feedback sound to %s on %s", enabled, self._mac)
+        await self._ensure_settings_read()
         # APK inverts the value: 0 = enabled, 1 = disabled
         feedback_value = 0 if enabled else 1
         if self._is_wl75:
             await self._send_packet(
                 [
                     CMD_WL75_SETTINGS_WRITE,
-                    self._display_setting or 0,
-                    self._date_format or 0,
-                    self._time_format or 0,
+                    self._display_setting,
+                    self._date_format,
+                    self._time_format,
                     feedback_value,
                 ]
             )
@@ -1690,7 +1711,7 @@ class BeurerInstance:
                     self._date_format,
                     self._time_format,
                     feedback_value,
-                    0 if (self._fade_enabled or self._fade_enabled is None) else 1,
+                    0 if self._fade_enabled else 1,
                 ]
             )
         self._feedback_enabled = enabled
@@ -1708,6 +1729,7 @@ class BeurerInstance:
             raise BeurerNotSupportedError(self._device_name)
 
         LOGGER.info("Setting fade to %s on %s", enabled, self._mac)
+        await self._ensure_settings_read()
         # APK inverts the value: 0 = enabled, 1 = disabled
         fade_value = 0 if enabled else 1
         await self._send_packet(
@@ -1716,7 +1738,7 @@ class BeurerInstance:
                 self._display_setting,
                 self._date_format,
                 self._time_format,
-                0 if (self._feedback_enabled or self._feedback_enabled is None) else 1,
+                0 if self._feedback_enabled else 1,
                 fade_value,
             ]
         )
@@ -2475,6 +2497,7 @@ class BeurerInstance:
                 self._date_format = payload[2]
                 self._time_format = payload[3]
                 self._feedback_enabled = payload[4] == 0
+                self._settings_read.set()
                 await self._trigger_update()
             return
 
@@ -2615,6 +2638,7 @@ class BeurerInstance:
         # APK inverts feedback/fade: 0 means ON, 1 means OFF
         self._feedback_enabled = data[11] == 0
         self._fade_enabled = data[12] == 0
+        self._settings_read.set()
 
         LOGGER.info(
             "Settings from %s: display=%d, date_fmt=%d, time_fmt=%d, "
