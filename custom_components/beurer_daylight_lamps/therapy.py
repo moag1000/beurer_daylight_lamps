@@ -28,6 +28,12 @@ if TYPE_CHECKING:
 from .const import EVENT_TYPE_SUNRISE_FINISHED, EVENT_TYPE_SUNSET_FINISHED, LOGGER
 
 
+def start_of_local_week() -> datetime:
+    """Return Monday 00:00 of the current week in Home Assistant's time zone."""
+    today_start = dt_util.start_of_local_day()
+    return today_start - timedelta(days=today_start.weekday())
+
+
 @dataclass
 class SimulationSettings:
     """Settings used by the sunrise/sunset buttons (set via select/number)."""
@@ -256,48 +262,31 @@ class TherapyTracker:
         cutoff = datetime.now(tz=UTC) - timedelta(days=7)
         self.sessions = [s for s in self.sessions if s.start_time > cutoff]
 
+    def minutes_since(self, since: datetime, person_id: str | None = None) -> float:
+        """Return therapy minutes since ``since``, for one person or (None) all.
+
+        Includes the running session if it qualifies.
+        """
+        sessions = list(self.sessions)
+        if self._current_session is not None:
+            sessions.append(self._current_session)
+        return sum(
+            session.duration_minutes
+            for session in sessions
+            if session.start_time >= since
+            and session.is_therapy_light
+            and (person_id is None or session.person_id == person_id)
+        )
+
     @property
     def today_minutes(self) -> float:
-        """Calculate total therapy minutes today."""
-        # "Today" is the local calendar day, not the UTC one
-        day_start = dt_util.start_of_local_day()
-        total = 0.0
-
-        for session in self.sessions:
-            if session.start_time >= day_start and session.is_therapy_light:
-                total += session.duration_minutes
-
-        # Add current session if active and qualifies
-        if (
-            self._current_session
-            and self._current_session.start_time >= day_start
-            and self._current_session.is_therapy_light
-        ):
-            total += self._current_session.duration_minutes
-
-        return total
+        """Calculate total therapy minutes today (local calendar day)."""
+        return self.minutes_since(dt_util.start_of_local_day())
 
     @property
     def week_minutes(self) -> float:
-        """Calculate total therapy minutes this week."""
-        # The week starts on Monday, local time
-        today_start = dt_util.start_of_local_day()
-        week_start = today_start - timedelta(days=today_start.weekday())
-
-        total = 0.0
-        for session in self.sessions:
-            if session.start_time >= week_start and session.is_therapy_light:
-                total += session.duration_minutes
-
-        # Add current session
-        if (
-            self._current_session
-            and self._current_session.start_time >= week_start
-            and self._current_session.is_therapy_light
-        ):
-            total += self._current_session.duration_minutes
-
-        return total
+        """Calculate total therapy minutes this week (from Monday, local time)."""
+        return self.minutes_since(start_of_local_week())
 
     @property
     def goal_reached(self) -> bool:

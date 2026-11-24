@@ -88,7 +88,7 @@ I heavily used claude as I did in other projects but focused on keeping it tight
 | **Event** | Lamp event | Timer finished/cancelled, sleep timer finished, sunrise/sunset finished |
 | **Switch** | Feedback sound | Enable/disable device beep on button press |
 | **Switch** | Fade | Enable/disable smooth brightness transitions |
-| **Switch** | Adaptive Lighting | Allow/block Adaptive Lighting (HACS) control |
+| **Switch** | Adaptive Lighting | Only if [Adaptive Lighting](https://github.com/basnijholt/adaptive-lighting) is installed. Off, during a therapy session and while an effect plays, Adaptive Lighting leaves the lamp alone (`set_manual_control`); afterwards it takes over again. |
 | **Sensor** | Reconnect count | Total BLE reconnections since startup (diagnostic, disabled) |
 | **Sensor** | Command success rate | Percentage of successful BLE commands (diagnostic, disabled) |
 | **Sensor** | Connection uptime | Seconds since current connection established (diagnostic, disabled) |

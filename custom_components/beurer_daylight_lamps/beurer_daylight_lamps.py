@@ -301,7 +301,6 @@ class BeurerInstance:
         self._therapy_tracker: TherapyTracker = TherapyTracker()
         self.simulation_settings = SimulationSettings()
         self._therapy_session_task: asyncio.Task[None] | None = None
-        self.adaptive_lighting_switch: Any = None
         dev_name = getattr(device, "name", None)
         self._is_wl: bool = is_wl_model(dev_name)
         self._is_wl75: bool = is_wl75_model(dev_name)
