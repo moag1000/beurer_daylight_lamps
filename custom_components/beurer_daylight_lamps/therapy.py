@@ -28,6 +28,12 @@ if TYPE_CHECKING:
 from .const import EVENT_TYPE_SUNRISE_FINISHED, EVENT_TYPE_SUNSET_FINISHED, LOGGER
 
 
+def start_of_local_week() -> datetime:
+    """Return Monday 00:00 of the current week in Home Assistant's time zone."""
+    today_start = dt_util.start_of_local_day()
+    return today_start - timedelta(days=today_start.weekday())
+
+
 @dataclass
 class SimulationSettings:
     """Settings used by the sunrise/sunset buttons (set via select/number)."""
@@ -99,12 +105,15 @@ class TherapySession:
     color_temp_kelvin: int = 5300
     brightness_pct: int = 100
     person_id: str | None = None
+    # Time the lamp's state was unknown (connection lost) during the session
+    paused_seconds: float = 0.0
+    paused_at: datetime | None = None
 
     @property
     def duration_minutes(self) -> float:
-        """Calculate session duration in minutes."""
-        end = self.end_time or datetime.now(tz=UTC)
-        return (end - self.start_time).total_seconds() / 60
+        """Calculate session duration in minutes, without paused time."""
+        end = self.end_time or self.paused_at or datetime.now(tz=UTC)
+        return ((end - self.start_time).total_seconds() - self.paused_seconds) / 60
 
     @property
     def is_therapy_light(self) -> bool:
@@ -139,10 +148,11 @@ class TherapyTracker:
             sessions.append(
                 TherapySession(
                     start_time=current.start_time,
-                    end_time=datetime.now(tz=UTC),
+                    end_time=current.paused_at or datetime.now(tz=UTC),
                     color_temp_kelvin=current.color_temp_kelvin,
                     brightness_pct=current.brightness_pct,
                     person_id=current.person_id,
+                    paused_seconds=current.paused_seconds,
                 )
             )
         cutoff = datetime.now(tz=UTC) - timedelta(days=7)
@@ -155,6 +165,7 @@ class TherapyTracker:
                     "kelvin": s.color_temp_kelvin,
                     "brightness": s.brightness_pct,
                     "person": s.person_id,
+                    "paused": s.paused_seconds,
                 }
                 for s in sessions
                 if s.start_time > cutoff
@@ -176,6 +187,7 @@ class TherapyTracker:
                         color_temp_kelvin=int(item.get("kelvin", 5300)),
                         brightness_pct=int(item.get("brightness", 100)),
                         person_id=item.get("person"),
+                        paused_seconds=float(item.get("paused", 0.0)),
                     )
                 )
             except KeyError, TypeError, ValueError:
@@ -231,13 +243,39 @@ class TherapyTracker:
         if brightness_pct is not None:
             self._current_session.brightness_pct = brightness_pct
 
+    @property
+    def paused_for(self) -> timedelta | None:
+        """Return how long the running session has been paused, or None."""
+        session = self._current_session
+        if session is None or session.paused_at is None:
+            return None
+        return datetime.now(tz=UTC) - session.paused_at
+
+    def pause_session(self) -> None:
+        """Stop counting while the lamp's state is unknown (connection lost)."""
+        session = self._current_session
+        if session is not None and session.paused_at is None:
+            session.paused_at = datetime.now(tz=UTC)
+
+    def resume_session(self) -> None:
+        """Count again after a pause; the paused time is left out."""
+        session = self._current_session
+        if session is not None and session.paused_at is not None:
+            now = datetime.now(tz=UTC)
+            session.paused_seconds += (now - session.paused_at).total_seconds()
+            session.paused_at = None
+
     def end_session(self) -> TherapySession | None:
-        """End current session and add to history."""
+        """End current session and add to history.
+
+        A paused session ends when the pause began.
+        """
         if self._current_session is None:
             return None
 
-        self._current_session.end_time = datetime.now(tz=UTC)
         session = self._current_session
+        session.end_time = session.paused_at or datetime.now(tz=UTC)
+        session.paused_at = None
 
         # Only track sessions that qualify as therapy
         if session.is_therapy_light and session.duration_minutes >= 1:
@@ -256,48 +294,31 @@ class TherapyTracker:
         cutoff = datetime.now(tz=UTC) - timedelta(days=7)
         self.sessions = [s for s in self.sessions if s.start_time > cutoff]
 
+    def minutes_since(self, since: datetime, person_id: str | None = None) -> float:
+        """Return therapy minutes since ``since``, for one person or (None) all.
+
+        Includes the running session if it qualifies.
+        """
+        sessions = list(self.sessions)
+        if self._current_session is not None:
+            sessions.append(self._current_session)
+        return sum(
+            session.duration_minutes
+            for session in sessions
+            if session.start_time >= since
+            and session.is_therapy_light
+            and (person_id is None or session.person_id == person_id)
+        )
+
     @property
     def today_minutes(self) -> float:
-        """Calculate total therapy minutes today."""
-        # "Today" is the local calendar day, not the UTC one
-        day_start = dt_util.start_of_local_day()
-        total = 0.0
-
-        for session in self.sessions:
-            if session.start_time >= day_start and session.is_therapy_light:
-                total += session.duration_minutes
-
-        # Add current session if active and qualifies
-        if (
-            self._current_session
-            and self._current_session.start_time >= day_start
-            and self._current_session.is_therapy_light
-        ):
-            total += self._current_session.duration_minutes
-
-        return total
+        """Calculate total therapy minutes today (local calendar day)."""
+        return self.minutes_since(dt_util.start_of_local_day())
 
     @property
     def week_minutes(self) -> float:
-        """Calculate total therapy minutes this week."""
-        # The week starts on Monday, local time
-        today_start = dt_util.start_of_local_day()
-        week_start = today_start - timedelta(days=today_start.weekday())
-
-        total = 0.0
-        for session in self.sessions:
-            if session.start_time >= week_start and session.is_therapy_light:
-                total += session.duration_minutes
-
-        # Add current session
-        if (
-            self._current_session
-            and self._current_session.start_time >= week_start
-            and self._current_session.is_therapy_light
-        ):
-            total += self._current_session.duration_minutes
-
-        return total
+        """Calculate total therapy minutes this week (from Monday, local time)."""
+        return self.minutes_since(start_of_local_week())
 
     @property
     def goal_reached(self) -> bool:

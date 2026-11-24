@@ -88,7 +88,7 @@ I heavily used claude as I did in other projects but focused on keeping it tight
 | **Event** | Lamp event | Timer finished/cancelled, sleep timer finished, sunrise/sunset finished |
 | **Switch** | Feedback sound | Enable/disable device beep on button press |
 | **Switch** | Fade | Enable/disable smooth brightness transitions |
-| **Switch** | Adaptive Lighting | Allow/block Adaptive Lighting (HACS) control |
+| **Switch** | Adaptive Lighting | Only if [Adaptive Lighting](https://github.com/basnijholt/adaptive-lighting) is installed. Off, during a therapy session and while an effect plays, Adaptive Lighting leaves the lamp alone (`set_manual_control`); afterwards it takes over again. |
 | **Sensor** | Reconnect count | Total BLE reconnections since startup (diagnostic, disabled) |
 | **Sensor** | Command success rate | Percentage of successful BLE commands (diagnostic, disabled) |
 | **Sensor** | Connection uptime | Seconds since current connection established (diagnostic, disabled) |
@@ -745,6 +745,10 @@ Based on work by:
 Thanks to everyone who contributed fixes and features:
 - [@mike-vention](https://github.com/mike-vention): light state sync, native white handling, low brightness rounding, command serialization and BLE reconnect lifecycle fixes (v1.37.0, #6, #7, #8)
 - [@BigDi](https://github.com/BigDi): WL75 Wake-up Light support with its own BLE protocol, alarm switches and time sync (v1.37.0, #9)
+
+Thanks to everyone who reported bugs with a clear analysis:
+- [@rickkdotnet](https://github.com/rickkdotnet): therapy minutes with native white light (#17)
+- [@n-st](https://github.com/n-st): actions with a target (#18)
 
 ## License
 

@@ -12,6 +12,11 @@ from custom_components.beurer_daylight_lamps.const import (
     EVENT_THERAPY_SESSION,
     THERAPY_HUB_IDENTIFIER,
 )
+from custom_components.beurer_daylight_lamps.therapy import (
+    TherapySession,
+    TherapyTracker,
+    start_of_local_week,
+)
 
 
 def _make_beurer_instance(
@@ -111,8 +116,8 @@ class TestEventFiredOnSessionEnd:
         datetime.fromisoformat(payload["start_time"])
         datetime.fromisoformat(payload["end_time"])
 
-    def test_event_fired_via_track_therapy_color_off(self) -> None:
-        """_track_therapy_from_rgb ending a session fires the event when color turns off."""
+    def test_event_fired_via_reconcile_when_light_off(self) -> None:
+        """_reconcile_therapy ending a session fires the event when the light is off."""
         mock_hass = _make_mock_hass()
         instance = _make_beurer_instance(hass=mock_hass)
         mock_entry = MagicMock()
@@ -127,19 +132,21 @@ class TestEventFiredOnSessionEnd:
         session = instance._therapy_tracker._current_session
         session.start_time = datetime.now(UTC) - timedelta(minutes=3)
 
-        # Set lamp state to color-off to trigger end
+        # Lamp is available and off: no therapy light any more
+        instance._available = True
         instance._color_on = False
+        instance._light_on = False
 
         with patch.object(instance, "_resolve_therapy_person", return_value=None):
-            instance._track_therapy_from_rgb()
+            instance._reconcile_therapy()
 
         mock_hass.bus.async_fire.assert_called_once()
         event_name, payload = mock_hass.bus.async_fire.call_args[0]
         assert event_name == EVENT_THERAPY_SESSION
         assert payload["person_id"] == "person.anna"
 
-    def test_event_fired_via_handle_device_off(self) -> None:
-        """_handle_device_off fires EVENT_THERAPY_SESSION when a session is active."""
+    async def test_event_fired_via_device_off_notification(self) -> None:
+        """A device-off notification fires EVENT_THERAPY_SESSION for the session."""
         mock_hass = _make_mock_hass()
         instance = _make_beurer_instance(hass=mock_hass)
         mock_entry = MagicMock()
@@ -154,11 +161,14 @@ class TestEventFiredOnSessionEnd:
         session = instance._therapy_tracker._current_session
         session.start_time = datetime.now(UTC) - timedelta(minutes=2)
 
-        # Make device appear as on so _handle_device_off ends the session
+        instance._available = True
         instance._light_on = True
         instance._color_on = True
 
-        instance._handle_device_off()
+        off = bytearray(10)
+        off[6] = 0x08  # status payload, not a heartbeat
+        off[8] = 255  # version 255: device off
+        await instance._handle_notification(MagicMock(), off)
 
         mock_hass.bus.async_fire.assert_called_once()
         event_name, payload = mock_hass.bus.async_fire.call_args[0]
@@ -376,24 +386,29 @@ def _make_session(
     person_id: str | None,
     is_therapy: bool,
     start_offset_minutes: float,
-    duration_minutes: float = 10.0,
-) -> MagicMock:
-    """Build a mock TherapySession."""
-    session = MagicMock()
-    session.person_id = person_id
-    session.is_therapy_light = is_therapy
-    session.start_time = datetime.now(UTC) - timedelta(minutes=start_offset_minutes)
-    session.duration_minutes = duration_minutes
-    return session
+    duration_minutes: float | None = 10.0,
+) -> TherapySession:
+    """Build a session that started start_offset_minutes ago.
+
+    duration_minutes=None leaves it running (no end time).
+    """
+    start = datetime.now(UTC) - timedelta(minutes=start_offset_minutes)
+    return TherapySession(
+        start_time=start,
+        end_time=None
+        if duration_minutes is None
+        else start + timedelta(minutes=duration_minutes),
+        color_temp_kelvin=5300 if is_therapy else 3000,
+        person_id=person_id,
+    )
 
 
 def _make_tracker(
-    sessions: list,
-    current_session: MagicMock | None = None,
-) -> MagicMock:
-    """Build a mock TherapyTracker."""
-    tracker = MagicMock()
-    tracker.sessions = sessions
+    sessions: list[TherapySession],
+    current_session: TherapySession | None = None,
+) -> TherapyTracker:
+    """Build a real TherapyTracker with the given history and running session."""
+    tracker = TherapyTracker(sessions=sessions)
     tracker._current_session = current_session
     return tracker
 
@@ -533,6 +548,30 @@ class TestAggregationHelpers:
 
         assert result == 5.0
 
+    async def test_today_follows_local_midnight(self, hass, freezer) -> None:
+        """A session after local midnight counts for the new day (Berlin, UTC+1).
+
+        With UTC days, minutes from 00:00-01:00 local time were booked on the
+        previous day, so today's per-person counter missed them.
+        """
+        from custom_components.beurer_daylight_lamps.therapy_hub import (
+            today_minutes_for,
+        )
+
+        await hass.config.async_set_time_zone("Europe/Berlin")
+        freezer.move_to("2026-11-25 11:00:00+00:00")  # 12:00 local
+        early = _make_session(
+            "person.alice",
+            is_therapy=True,
+            start_offset_minutes=690,  # 00:30 local = 23:30 UTC the day before
+            duration_minutes=20.0,
+        )
+        entry = _make_entry_with_tracker(_make_tracker([early]))
+
+        assert (
+            today_minutes_for(_make_hass_with_entries([entry]), "person.alice") == 20.0
+        )
+
     def test_week_minutes_for_includes_whole_week(self) -> None:
         """week_minutes_for sums sessions from the start of the current week."""
         from custom_components.beurer_daylight_lamps.therapy_hub import week_minutes_for
@@ -540,9 +579,7 @@ class TestAggregationHelpers:
         # Offsets must straddle the current week boundary regardless of weekday,
         # otherwise "3 days ago" can fall into last week (e.g., when run Mon-Wed).
         now = datetime.now(UTC)
-        week_start = (now - timedelta(days=now.weekday())).replace(
-            hour=0, minute=0, second=0, microsecond=0
-        )
+        week_start = start_of_local_week()
         in_week_offset = (
             now - (week_start + timedelta(minutes=1))
         ).total_seconds() / 60
@@ -655,9 +692,7 @@ class TestBeurerPersonTherapySensor:
         # Anchor offset to this week's start so the session is always inside
         # the current week regardless of the weekday the test runs on.
         now = datetime.now(UTC)
-        week_start = (now - timedelta(days=now.weekday())).replace(
-            hour=0, minute=0, second=0, microsecond=0
-        )
+        week_start = start_of_local_week()
         in_week_offset = (
             now - (week_start + timedelta(minutes=1))
         ).total_seconds() / 60

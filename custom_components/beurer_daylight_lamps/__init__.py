@@ -110,19 +110,19 @@ PRESETS: dict[str, dict[str, Any]] = {
     },
 }
 
-SERVICE_SCHEMA = vol.Schema(
+SERVICE_SCHEMA = cv.make_entity_service_schema(
     {
         vol.Required(ATTR_PRESET): vol.In(list(PRESETS.keys())),
     }
 )
 
-SERVICE_RAW_SCHEMA = vol.Schema(
+SERVICE_RAW_SCHEMA = cv.make_entity_service_schema(
     {
         vol.Required(ATTR_COMMAND): cv.string,
     }
 )
 
-SERVICE_TIMER_SCHEMA = vol.Schema(
+SERVICE_TIMER_SCHEMA = cv.make_entity_service_schema(
     {
         # Timer range is 1-120 minutes per BLE protocol specification
         vol.Required(ATTR_MINUTES): vol.All(vol.Coerce(int), vol.Range(min=1, max=120)),
@@ -132,7 +132,7 @@ SERVICE_TIMER_SCHEMA = vol.Schema(
 # Sunrise profiles available
 SUNRISE_PROFILES = ["gentle", "natural", "energize", "therapy"]
 
-SERVICE_SUNRISE_SCHEMA = vol.Schema(
+SERVICE_SUNRISE_SCHEMA = cv.make_entity_service_schema(
     {
         vol.Optional(ATTR_DURATION, default=15): vol.All(
             vol.Coerce(int), vol.Range(min=1, max=60)
@@ -141,7 +141,7 @@ SERVICE_SUNRISE_SCHEMA = vol.Schema(
     }
 )
 
-SERVICE_SUNSET_SCHEMA = vol.Schema(
+SERVICE_SUNSET_SCHEMA = cv.make_entity_service_schema(
     {
         vol.Optional(ATTR_DURATION, default=30): vol.All(
             vol.Coerce(int), vol.Range(min=1, max=60)
@@ -152,8 +152,8 @@ SERVICE_SUNSET_SCHEMA = vol.Schema(
     }
 )
 
-SERVICE_STOP_SIMULATION_SCHEMA = vol.Schema({})
-SERVICE_SYNC_TIME_SCHEMA = vol.Schema({})
+SERVICE_STOP_SIMULATION_SCHEMA = cv.make_entity_service_schema({})
+SERVICE_SYNC_TIME_SCHEMA = cv.make_entity_service_schema({})
 
 SERVICE_SET_THERAPY_USER_SCHEMA = vol.Schema(
     {
@@ -176,7 +176,7 @@ ATTR_SUNRISE_ENABLED = "sunrise_enabled"
 ATTR_SUNRISE_TIME = "sunrise_time"
 ATTR_SUNRISE_BRIGHTNESS = "sunrise_brightness"
 
-SERVICE_ALARM_SCHEMA = vol.Schema(
+SERVICE_ALARM_SCHEMA = cv.make_entity_service_schema(
     {
         vol.Required(ATTR_SLOT): vol.All(vol.Coerce(int), vol.Range(min=0, max=2)),
         vol.Required(ATTR_ENABLED): cv.boolean,

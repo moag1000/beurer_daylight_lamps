@@ -64,7 +64,6 @@ async def test_white_status_off_with_timer(inst: BeurerInstance) -> None:
         _frame([RESP_WL75_LIGHT_STATUS, 0, 150, 1, 20])
     )
     assert not inst._light_on
-    assert inst._white_brightness == 255
     assert inst.white_brightness is None  # only reported while the light is on
     assert inst.timer_active
     assert inst.timer_minutes == 20

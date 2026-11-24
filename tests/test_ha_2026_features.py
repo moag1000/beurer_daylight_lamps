@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from homeassistant.helpers.llm import LLM_API_ASSIST, LLMContext, ToolInput
 
+import custom_components.beurer_daylight_lamps as integ
 from custom_components.beurer_daylight_lamps import condition, llm, trigger
 from custom_components.beurer_daylight_lamps import time as time_platform
 from custom_components.beurer_daylight_lamps.beurer_daylight_lamps import (
@@ -319,7 +320,9 @@ async def test_llm_start_sunrise_calls_service(hass) -> None:
     async def record(call):
         calls.append(call)
 
-    hass.services.async_register(DOMAIN, "start_sunrise", record)
+    hass.services.async_register(
+        DOMAIN, "start_sunrise", record, schema=integ.SERVICE_SUNRISE_SCHEMA
+    )
     _enter(_llm_setup(hass))
     try:
         tool = llm.StartSunriseTool()
@@ -354,8 +357,15 @@ async def test_llm_sunset_and_stop(hass) -> None:
     async def record(call):
         calls.append(call)
 
-    hass.services.async_register(DOMAIN, "start_sunset", record)
-    hass.services.async_register(DOMAIN, "stop_simulation", record)
+    hass.services.async_register(
+        DOMAIN, "start_sunset", record, schema=integ.SERVICE_SUNSET_SCHEMA
+    )
+    hass.services.async_register(
+        DOMAIN,
+        "stop_simulation",
+        record,
+        schema=integ.SERVICE_STOP_SIMULATION_SCHEMA,
+    )
     _enter(_llm_setup(hass))
     try:
         await llm.StartSunsetTool().async_call(

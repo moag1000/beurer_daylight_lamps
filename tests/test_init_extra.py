@@ -43,7 +43,13 @@ async def services(hass: HomeAssistant):
 
 
 async def _call(hass: HomeAssistant, service: str, data: dict | None = None) -> None:
-    await hass.services.async_call(DOMAIN, service, data or {}, blocking=True)
+    await hass.services.async_call(
+        DOMAIN,
+        service,
+        data or {},
+        target={"entity_id": "light.beurer_test"},
+        blocking=True,
+    )
 
 
 class TestServicesWithoutTargets:
