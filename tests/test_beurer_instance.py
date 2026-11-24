@@ -434,30 +434,28 @@ class TestBeurerDeviceAvailability:
         instance = BeurerInstance(mock_device)
         assert instance.last_seen > 0
 
-    def test_available_property(self, mock_device):
-        """Test available property combines ble_available and _available."""
+    def test_available_follows_reachability(self, mock_device):
+        """Unavailable only while no adapter sees the lamp and no link is up."""
         from custom_components.beurer_daylight_lamps.beurer_daylight_lamps import (
             BeurerInstance,
         )
 
         instance = BeurerInstance(mock_device)
+        instance._safe_create_task = MagicMock(
+            side_effect=lambda coro, _name: coro.close()
+        )
+        assert instance.available  # advertising: a command connects
 
-        # Initially not available (haven't received status)
-        assert instance.available is False
+        instance._client = MagicMock(is_connected=True)
+        instance.mark_unavailable()  # adverts stop while connected
+        assert instance.available
 
-        # Set both flags
-        instance._ble_available = True
-        instance._available = True
-        assert instance.available is True
+        instance._client.is_connected = False  # link lost, lamp gone
+        instance.mark_unavailable()
+        assert not instance.available
 
-        # Only ble_available
-        instance._available = False
-        assert instance.available is False
-
-        # Only _available
-        instance._ble_available = False
-        instance._available = True
-        assert instance.available is False
+        instance.mark_seen()  # advertising again
+        assert instance.available
 
 
 class TestBeurerDeviceProperties:

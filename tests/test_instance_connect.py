@@ -166,7 +166,6 @@ class TestConnect:
             assert await inst.connect()
         assert inst._client is client
         assert inst.reconnect_count == 1
-        assert inst._ever_connected
         assert "proxy" not in inst._adapter_failures
         watchdog.assert_called_once()
 

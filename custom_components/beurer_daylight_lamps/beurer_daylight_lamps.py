@@ -301,7 +301,6 @@ class BeurerInstance:
         self._last_command_time: float = 0.0
         self._last_seen: float = time.time()
         self._ble_available: bool = True
-        self._ever_connected: bool = False
 
         # Diagnostic state
         self._last_raw_notification: str | None = None
@@ -1076,20 +1075,14 @@ class BeurerInstance:
 
     @property
     def available(self) -> bool:
-        """Return True if device is available for commands.
+        """Return True if a command can reach the lamp.
 
-        Device is available if:
-        - Connected via GATT (active connection), OR
-        - Reachable via BLE AND we've received status, OR
-        - Was previously connected (commands will trigger reconnect)
+        That is while connected, or while Home Assistant's Bluetooth stack
+        sees it advertising: a command then reconnects by itself. A lamp no
+        adapter has seen for minutes cannot be connected either, so it is
+        reported unavailable instead of failing every command.
         """
-        if self.is_connected:
-            return True
-        if self.ble_available and self._available:
-            return True
-        # Keep available after disconnect so HA allows commands through.
-        # _send_packet handles reconnection transparently before sending.
-        return self._ever_connected
+        return self.is_connected or self._ble_available
 
     @property
     def is_connected(self) -> bool:
@@ -3020,7 +3013,6 @@ class BeurerInstance:
                     self._clear_adapter_failure(service_info.source)
 
             self._reconnect_backoff = RECONNECT_INITIAL_BACKOFF
-            self._ever_connected = True
             if self._connection_start_time is not None:
                 self._reconnect_count += 1
                 self._signal_health.record_reconnect(time.time())

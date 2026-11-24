@@ -269,7 +269,9 @@ async def test_both_teardown_paths_leave_the_same_state(
         await instance.disconnect()
     else:
         instance._client.is_connected = False
-        with patch.object(instance, "_safe_create_task"):
+        with patch.object(
+            instance, "_safe_create_task", side_effect=lambda c, _n: c.close()
+        ):
             instance._on_disconnect(instance._client)
 
     instance._client.is_connected = False

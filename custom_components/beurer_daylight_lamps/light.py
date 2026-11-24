@@ -170,11 +170,7 @@ class BeurerLight(
 
     @property
     def available(self) -> bool:
-        """Return True if entity is available.
-
-        Stays available after first successful connection so commands
-        can trigger reconnection transparently via _send_packet.
-        """
+        """Return True while a command can reach the lamp."""
         return self._instance.available
 
     @property
