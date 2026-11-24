@@ -123,6 +123,7 @@ from .const import (
     MODE_RGB,
     MODE_SWITCH_SETTLE_DELAY,
     MODE_WHITE,
+    NATIVE_WHITE_KELVIN,
     POST_CONNECT_SETTLE,
     READ_CHARACTERISTIC_UUID,
     RECONNECT_BACKOFF_MULTIPLIER,
@@ -733,6 +734,8 @@ class BeurerInstance:
         # Stop the connection watchdog
         self._stop_watchdog()
 
+        # Unavailable: no therapy minutes until the lamp reports its state again
+        self._reconcile_therapy()
         if self._update_callbacks:
             self._safe_create_task(self._trigger_update(), "beurer_disconnect_update")
 
@@ -1694,7 +1697,6 @@ class BeurerInstance:
         LOGGER.debug("Setting white intensity to %d for %s", intensity, self._mac)
         self._mode = ColorMode.WHITE
         self._brightness = intensity
-        self._white_brightness = intensity
 
         # Guard wraps entire sequence: mode switch + brightness + status request.
         # This ensures stale RGB notifications from _request_status() don't
@@ -2031,7 +2033,13 @@ class BeurerInstance:
         await self._send_packet([CMD_STATUS, MODE_RGB])
 
     async def _trigger_update(self) -> None:
-        """Trigger Home Assistant state update."""
+        """Publish a state change: update therapy tracking, then Home Assistant.
+
+        Every path that changes the light state ends here (status
+        notifications, timer end, optimistic commands), so therapy tracking
+        always follows the state the entities show.
+        """
+        self._reconcile_therapy()
         if self._update_callbacks:
             LOGGER.debug("Triggering HA update for %s", self._mac)
             for callback in self._update_callbacks:
@@ -2134,9 +2142,6 @@ class BeurerInstance:
             self._timer_minutes,
         )
 
-        # Track therapy exposure based on current RGB state
-        self._track_therapy_from_rgb()
-
         return changed
 
     def _resolve_therapy_person(self) -> str | None:
@@ -2186,34 +2191,52 @@ class BeurerInstance:
         session = self._therapy_tracker.end_session()
         self._emit_session_end(session)
 
-    def _track_therapy_from_rgb(self) -> None:
-        """Track therapy exposure based on current RGB state."""
-        # Therapy-relevant light: cool white (high blue component) at high brightness
-        if self._color_on and self._color_brightness is not None:
-            # Estimate color temperature from RGB (simplified: higher blue = cooler)
+    def _therapy_light(self) -> tuple[int, int] | None:
+        """Return (kelvin, brightness %) if the lamp shines therapy light now.
+
+        Therapy light is the native white (daylight) channel, or bright,
+        balanced white from the RGB channel without an effect, both at
+        THERAPY_MIN_BRIGHTNESS or more. Anything else returns None, also
+        while the lamp is unavailable: its last known state may be stale.
+        """
+        if not self._available:
+            return None
+        if (
+            self._light_on
+            and self._brightness is not None
+            and self._brightness >= THERAPY_MIN_BRIGHTNESS
+        ):
+            return NATIVE_WHITE_KELVIN, round(self._brightness / 255 * 100)
+        if (
+            self._color_on
+            and self._color_brightness is not None
+            and self._color_brightness >= THERAPY_MIN_BRIGHTNESS
+            and self._effect in (None, "Off")
+        ):
             r, g, b = self._rgb_color
-            # Cool light has roughly equal R/G and higher relative values
-            # Therapy-relevant: bright, balanced white (R~=G~=B with high values)
-            is_white_ish = abs(r - g) < 50 and abs(g - b) < 50 and min(r, g, b) > 150
-            brightness_pct = int(self._color_brightness / 255 * 100)
-            # Estimate kelvin (very rough): white-ish light with high brightness
-            estimated_kelvin = 5300 if is_white_ish else 3000
-            self._therapy_tracker.update_session(estimated_kelvin, brightness_pct)
-            if (
-                is_white_ish
-                and brightness_pct >= 80
-                and not self._therapy_tracker.has_active_session
-            ):
-                ended = self._therapy_tracker.start_session(
-                    estimated_kelvin,
-                    brightness_pct,
-                    person_id=self._resolve_therapy_person(),
-                )
-                # Fire event for any session that was implicitly ended by start_session
-                self._emit_session_end(ended)
-        elif not self._color_on:
-            # End session when color mode turns off
+            if abs(r - g) < 50 and abs(g - b) < 50 and min(r, g, b) > 150:
+                return NATIVE_WHITE_KELVIN, round(self._color_brightness / 255 * 100)
+        return None
+
+    def _reconcile_therapy(self) -> None:
+        """Start, update or end the therapy session to match the light state.
+
+        A session ends as soon as the light no longer qualifies, before the
+        new values are taken over, so the minutes collected so far are kept.
+        """
+        light = self._therapy_light()
+        tracker = self._therapy_tracker
+        if light is None:
             self._end_therapy_and_emit()
+            return
+        kelvin, brightness_pct = light
+        if tracker.has_active_session:
+            tracker.update_session(kelvin, brightness_pct)
+            return
+        ended = tracker.start_session(
+            kelvin, brightness_pct, person_id=self._resolve_therapy_person()
+        )
+        self._emit_session_end(ended)
 
     def _handle_device_off(self) -> bool:
         """Handle device-off notification (version 255).
@@ -2221,11 +2244,7 @@ class BeurerInstance:
         Returns:
             True if state changed and UI update is needed.
         """
-        changed = False
-        if self._light_on or self._color_on:
-            changed = True
-            # End therapy session when light turns off
-            self._end_therapy_and_emit()
+        changed = self._light_on or self._color_on
         self._light_on = False
         self._color_on = False
         LOGGER.debug("Device off notification")
@@ -2376,9 +2395,7 @@ class BeurerInstance:
                 timer_enabled = payload[3] == 1
                 timer_min = payload[4]
 
-                self._white_brightness = int(
-                    max(0, min(100, brightness_pct)) / 100 * 255
-                )
+                white_brightness = int(max(0, min(100, brightness_pct)) / 100 * 255)
                 self._timer_active = timer_enabled
                 self._timer_minutes = timer_min if timer_enabled else 0
 
@@ -2386,7 +2403,8 @@ class BeurerInstance:
                     self._light_on = True
                     self._color_on = False
                     self._mode = ColorMode.WHITE
-                    self._brightness = self._white_brightness
+                    # Off keeps the last brightness, like the TL white status
+                    self._brightness = white_brightness
                 else:
                     self._light_on = False
                 if not self._available:
@@ -2422,7 +2440,6 @@ class BeurerInstance:
                     self._color_on = True
                     self._light_on = False
                     self._mode = ColorMode.RGB
-                    self._brightness = self._color_brightness
                 else:
                     self._color_on = False
                 if not self._available:
@@ -3296,3 +3313,6 @@ class BeurerInstance:
         self._available = False
         self._light_on = False
         self._color_on = False
+        # The light state is unknown while disconnected: end the session
+        # instead of counting minutes that may not be real.
+        self._reconcile_therapy()

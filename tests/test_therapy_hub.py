@@ -111,8 +111,8 @@ class TestEventFiredOnSessionEnd:
         datetime.fromisoformat(payload["start_time"])
         datetime.fromisoformat(payload["end_time"])
 
-    def test_event_fired_via_track_therapy_color_off(self) -> None:
-        """_track_therapy_from_rgb ending a session fires the event when color turns off."""
+    def test_event_fired_via_reconcile_when_light_off(self) -> None:
+        """_reconcile_therapy ending a session fires the event when the light is off."""
         mock_hass = _make_mock_hass()
         instance = _make_beurer_instance(hass=mock_hass)
         mock_entry = MagicMock()
@@ -127,19 +127,21 @@ class TestEventFiredOnSessionEnd:
         session = instance._therapy_tracker._current_session
         session.start_time = datetime.now(UTC) - timedelta(minutes=3)
 
-        # Set lamp state to color-off to trigger end
+        # Lamp is available and off: no therapy light any more
+        instance._available = True
         instance._color_on = False
+        instance._light_on = False
 
         with patch.object(instance, "_resolve_therapy_person", return_value=None):
-            instance._track_therapy_from_rgb()
+            instance._reconcile_therapy()
 
         mock_hass.bus.async_fire.assert_called_once()
         event_name, payload = mock_hass.bus.async_fire.call_args[0]
         assert event_name == EVENT_THERAPY_SESSION
         assert payload["person_id"] == "person.anna"
 
-    def test_event_fired_via_handle_device_off(self) -> None:
-        """_handle_device_off fires EVENT_THERAPY_SESSION when a session is active."""
+    async def test_event_fired_via_device_off_notification(self) -> None:
+        """A device-off notification fires EVENT_THERAPY_SESSION for the session."""
         mock_hass = _make_mock_hass()
         instance = _make_beurer_instance(hass=mock_hass)
         mock_entry = MagicMock()
@@ -154,11 +156,14 @@ class TestEventFiredOnSessionEnd:
         session = instance._therapy_tracker._current_session
         session.start_time = datetime.now(UTC) - timedelta(minutes=2)
 
-        # Make device appear as on so _handle_device_off ends the session
+        instance._available = True
         instance._light_on = True
         instance._color_on = True
 
-        instance._handle_device_off()
+        off = bytearray(10)
+        off[6] = 0x08  # status payload, not a heartbeat
+        off[8] = 255  # version 255: device off
+        await instance._handle_notification(MagicMock(), off)
 
         mock_hass.bus.async_fire.assert_called_once()
         event_name, payload = mock_hass.bus.async_fire.call_args[0]

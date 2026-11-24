@@ -382,6 +382,8 @@ LAMP_EVENT_TYPES: Final[list[str]] = [
 # One-click therapy session (button "Start light therapy")
 THERAPY_SESSION_CHECK_SECONDS: Final = 30
 THERAPY_MIN_BRIGHTNESS: Final = 204  # 80 %: below this it is no therapy light
+# Colour temperature of the native white (daylight) LEDs, e.g. TL100 5300 K
+NATIVE_WHITE_KELVIN: Final = 5300
 
 
 # Per-person therapy attribution

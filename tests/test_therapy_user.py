@@ -582,57 +582,48 @@ class TestAutoSessionUsesSelectPerson:
         ):
             yield
 
-    def _drive_track_therapy(
+    def _drive_reconcile(
         self,
         person_id: str | None,
         brightness: int = 230,  # ~90% -> >= 80%
         rgb: tuple[int, int, int] = (200, 200, 200),  # white-ish
     ):
-        """Drive _track_therapy_from_rgb on a fresh instance with mocked dependencies."""
+        """Run _reconcile_therapy for a bright RGB state; return the tracker."""
         instance = _make_beurer_instance()
-
-        # Set up lamp state: color mode ON, bright white-ish
+        instance._available = True
         instance._color_on = True
         instance._color_brightness = brightness
         instance._rgb_color = rgb
 
-        # Mock therapy tracker: no active session so start_session will be triggered
-        mock_tracker = MagicMock()
-        mock_tracker.has_active_session = False
-        instance._therapy_tracker = mock_tracker
-
-        # Mock _resolve_therapy_person to return the desired person_id
         with patch.object(instance, "_resolve_therapy_person", return_value=person_id):
-            instance._track_therapy_from_rgb()
+            instance._reconcile_therapy()
 
-        return mock_tracker
+        return instance.therapy_tracker
 
     def test_auto_session_uses_select_person(self) -> None:
-        """start_session is called with person_id from the therapy_user select."""
-        tracker = self._drive_track_therapy(person_id="person.michael")
-        tracker.start_session.assert_called_once()
-        _args, kwargs = tracker.start_session.call_args
-        assert kwargs.get("person_id") == "person.michael"
+        """The session gets the person_id from the therapy_user select."""
+        tracker = self._drive_reconcile(person_id="person.michael")
+        assert tracker._current_session is not None
+        assert tracker._current_session.person_id == "person.michael"
 
     def test_auto_session_uses_none_when_select_is_unknown(self) -> None:
-        """start_session is called with person_id=None when select returns None."""
-        tracker = self._drive_track_therapy(person_id=None)
-        tracker.start_session.assert_called_once()
-        _args, kwargs = tracker.start_session.call_args
-        assert kwargs.get("person_id") is None
+        """The session has person_id=None when the select returns None."""
+        tracker = self._drive_reconcile(person_id=None)
+        assert tracker._current_session is not None
+        assert tracker._current_session.person_id is None
 
     def test_no_auto_session_when_not_white_ish(self) -> None:
-        """start_session is NOT called when RGB is not white-ish (e.g. saturated red)."""
-        tracker = self._drive_track_therapy(
+        """No session when RGB is not white-ish (e.g. saturated red)."""
+        tracker = self._drive_reconcile(
             person_id="person.michael",
             rgb=(255, 0, 0),  # saturated red — not white-ish
         )
-        tracker.start_session.assert_not_called()
+        assert not tracker.has_active_session
 
     def test_no_auto_session_when_brightness_too_low(self) -> None:
-        """start_session is NOT called when brightness < 80%."""
-        tracker = self._drive_track_therapy(
+        """No session when brightness < 80%."""
+        tracker = self._drive_reconcile(
             person_id="person.michael",
             brightness=150,  # ~59% — below threshold
         )
-        tracker.start_session.assert_not_called()
+        assert not tracker.has_active_session

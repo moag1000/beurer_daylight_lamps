@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Thanks to @n-st for reporting #18 and to @rickkdotnet for reporting #17 with a precise analysis of the cause.
+
+### Fixed
+
+- **Actions failed with "not a valid option at 'entity_id'"** (#18): every action with a target (`set_timer`, `apply_preset`, `start_sunrise`, `start_sunset`, `stop_simulation`, `set_alarm`, `sync_time`, `send_raw_command`) was rejected by Home Assistant since v1.21.0, also the README examples and the Assist tools for sunrise/sunset. The actions now accept a lamp, device or area as target, as in any other integration. A call without a target is rejected with a clear error instead of doing nothing.
+- **Therapy minutes stayed at 0 with native white light** (#17): daylight on the native white LEDs (e.g. TL100, WL75 white light, the *Start light therapy* button) now counts. Before, only white from the RGB channel was tracked, and the RGB channel's "off" status even ended a running white session.
+- **Therapy minutes were lost or overcounted**: dimming below 80 % or changing the color during a session no longer discards the minutes already collected; the session ends and keeps them. The session now also ends when the lamp's timer turns it off, when it is turned off from Home Assistant and when the Bluetooth connection drops, so minutes no longer keep counting while the lamp is off or unreachable. RGB effects no longer count as therapy light.
+- **WL75 white brightness**: the mood light status no longer overwrites the white light brightness.
+
 ## [1.39.1] - 2026-11-17
 
 ### Fixed

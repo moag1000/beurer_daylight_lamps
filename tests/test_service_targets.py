@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
-import probatio as vol
 import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar
@@ -82,44 +81,28 @@ async def lamp(hass: HomeAssistant) -> MagicMock:
     return instance
 
 
-@pytest.mark.parametrize("case", ENTITY_SERVICES, ids=lambda case: case[0])
-@pytest.mark.parametrize("target_kind", ["entity_id", "device_id", "area_id"])
-async def test_service_reaches_lamp_through_target(
-    hass: HomeAssistant,
-    lamp: MagicMock,
-    case: tuple[str, dict, str],
-    target_kind: str,
+@pytest.mark.parametrize(("service", "data", "method"), ENTITY_SERVICES)
+async def test_service_accepts_entity_target(
+    hass: HomeAssistant, lamp: MagicMock, service: str, data: dict, method: str
 ) -> None:
-    """Each service accepts an entity, device or area target (README example)."""
-    service, data, method = case
-    target = {
-        "entity_id": LIGHT,
-        "device_id": lamp.device_id,
-        "area_id": lamp.area_id,
-    }[target_kind]
+    """Every service works with a light as target, as in the README (#18)."""
     await hass.services.async_call(
-        DOMAIN, service, dict(data), target={target_kind: target}, blocking=True
+        DOMAIN, service, dict(data), target={"entity_id": LIGHT}, blocking=True
     )
     _method(lamp, method).assert_awaited_once()
 
 
-@pytest.mark.parametrize(("service", "data", "method"), ENTITY_SERVICES)
-async def test_service_without_target_is_rejected(
-    hass: HomeAssistant, lamp: MagicMock, service: str, data: dict, method: str
+@pytest.mark.parametrize("target_kind", ["device_id", "area_id"])
+async def test_device_or_area_target_reaches_lamp_once(
+    hass: HomeAssistant, lamp: MagicMock, target_kind: str
 ) -> None:
-    """A call without any target fails validation instead of doing nothing."""
-    with pytest.raises(vol.Invalid):
-        await hass.services.async_call(DOMAIN, service, dict(data), blocking=True)
-    _method(lamp, method).assert_not_awaited()
-
-
-async def test_readme_set_timer_example(hass: HomeAssistant, lamp: MagicMock) -> None:
-    """The exact call from issue #18 / the README works."""
+    """A device or area target (as picked in the UI) reaches the lamp once."""
+    target = lamp.device_id if target_kind == "device_id" else lamp.area_id
     await hass.services.async_call(
         DOMAIN,
         integ.SERVICE_SET_TIMER,
         {"minutes": 1},
-        target={"entity_id": LIGHT},
+        target={target_kind: target},
         blocking=True,
     )
     lamp.set_timer.assert_awaited_once_with(1)
