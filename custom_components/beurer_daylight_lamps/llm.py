@@ -96,8 +96,9 @@ class _LampServiceTool(Tool):
         await hass.services.async_call(
             DOMAIN,
             self.service,
-            {**service_data, ATTR_ENTITY_ID: [entity_id for _, entity_id in lamps]},
+            service_data,
             blocking=True,
+            target={ATTR_ENTITY_ID: [entity_id for _, entity_id in lamps]},
             context=llm_context.context,
         )
         return {

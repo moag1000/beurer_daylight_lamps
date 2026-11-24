@@ -37,6 +37,10 @@ from custom_components.beurer_daylight_lamps import (
 from custom_components.beurer_daylight_lamps.const import DOMAIN
 from custom_components.beurer_daylight_lamps.therapy import SunriseProfile
 
+# Every Beurer service except set_therapy_user is an entity service: a call
+# without a target is rejected by the schema, exactly as in Home Assistant.
+TARGET = {"entity_id": "light.beurer_test"}
+
 # =============================================================================
 # SCHEMA VALIDATION TESTS (Pure unit tests - no Home Assistant required)
 # =============================================================================
@@ -54,7 +58,7 @@ class TestServiceSchemas:
         data = {
             ATTR_PRESET: "daylight_therapy",
         }
-        result = SERVICE_SCHEMA(data)
+        result = SERVICE_SCHEMA({**TARGET, **data})
         assert result[ATTR_PRESET] == "daylight_therapy"
 
     def test_preset_schema_all_presets(self) -> None:
@@ -63,7 +67,7 @@ class TestServiceSchemas:
             data = {
                 ATTR_PRESET: preset_name,
             }
-            result = SERVICE_SCHEMA(data)
+            result = SERVICE_SCHEMA({**TARGET, **data})
             assert result[ATTR_PRESET] == preset_name
 
     def test_preset_schema_invalid_preset(self) -> None:
@@ -72,13 +76,13 @@ class TestServiceSchemas:
             ATTR_PRESET: "invalid_preset_name",
         }
         with pytest.raises(vol.Invalid):
-            SERVICE_SCHEMA(data)
+            SERVICE_SCHEMA({**TARGET, **data})
 
     def test_preset_schema_missing_preset(self) -> None:
         """Test preset schema requires preset."""
         data = {}
         with pytest.raises(vol.MultipleInvalid):
-            SERVICE_SCHEMA(data)
+            SERVICE_SCHEMA({**TARGET, **data})
 
     # -------------------------------------------------------------------------
     # RAW COMMAND SCHEMA TESTS
@@ -89,7 +93,7 @@ class TestServiceSchemas:
         data = {
             ATTR_COMMAND: "3E 1E",
         }
-        result = SERVICE_RAW_SCHEMA(data)
+        result = SERVICE_RAW_SCHEMA({**TARGET, **data})
         assert result[ATTR_COMMAND] == "3E 1E"
 
     def test_raw_schema_hex_no_spaces(self) -> None:
@@ -97,14 +101,14 @@ class TestServiceSchemas:
         data = {
             ATTR_COMMAND: "3E1E",
         }
-        result = SERVICE_RAW_SCHEMA(data)
+        result = SERVICE_RAW_SCHEMA({**TARGET, **data})
         assert result[ATTR_COMMAND] == "3E1E"
 
     def test_raw_schema_missing_command(self) -> None:
         """Test raw command schema requires command."""
         data = {}
         with pytest.raises(vol.MultipleInvalid):
-            SERVICE_RAW_SCHEMA(data)
+            SERVICE_RAW_SCHEMA({**TARGET, **data})
 
     # -------------------------------------------------------------------------
     # TIMER SCHEMA TESTS
@@ -115,7 +119,7 @@ class TestServiceSchemas:
         data = {
             ATTR_MINUTES: 30,
         }
-        result = SERVICE_TIMER_SCHEMA(data)
+        result = SERVICE_TIMER_SCHEMA({**TARGET, **data})
         assert result[ATTR_MINUTES] == 30
 
     def test_timer_schema_string_minutes(self) -> None:
@@ -123,7 +127,7 @@ class TestServiceSchemas:
         data = {
             ATTR_MINUTES: "30",
         }
-        result = SERVICE_TIMER_SCHEMA(data)
+        result = SERVICE_TIMER_SCHEMA({**TARGET, **data})
         assert result[ATTR_MINUTES] == 30
 
     def test_timer_schema_min_value(self) -> None:
@@ -131,7 +135,7 @@ class TestServiceSchemas:
         data = {
             ATTR_MINUTES: 1,
         }
-        result = SERVICE_TIMER_SCHEMA(data)
+        result = SERVICE_TIMER_SCHEMA({**TARGET, **data})
         assert result[ATTR_MINUTES] == 1
 
     def test_timer_schema_max_value(self) -> None:
@@ -139,7 +143,7 @@ class TestServiceSchemas:
         data = {
             ATTR_MINUTES: 120,
         }
-        result = SERVICE_TIMER_SCHEMA(data)
+        result = SERVICE_TIMER_SCHEMA({**TARGET, **data})
         assert result[ATTR_MINUTES] == 120
 
     def test_timer_schema_below_min(self) -> None:
@@ -148,7 +152,7 @@ class TestServiceSchemas:
             ATTR_MINUTES: 0,
         }
         with pytest.raises(vol.Invalid):
-            SERVICE_TIMER_SCHEMA(data)
+            SERVICE_TIMER_SCHEMA({**TARGET, **data})
 
     def test_timer_schema_above_max(self) -> None:
         """Test timer schema rejects value above maximum (120 per BLE protocol)."""
@@ -156,7 +160,7 @@ class TestServiceSchemas:
             ATTR_MINUTES: 121,
         }
         with pytest.raises(vol.Invalid):
-            SERVICE_TIMER_SCHEMA(data)
+            SERVICE_TIMER_SCHEMA({**TARGET, **data})
 
     # -------------------------------------------------------------------------
     # SUNRISE SCHEMA TESTS
@@ -165,7 +169,7 @@ class TestServiceSchemas:
     def test_sunrise_schema_valid_minimal(self) -> None:
         """Test sunrise schema with minimal required data (empty is ok)."""
         data = {}
-        result = SERVICE_SUNRISE_SCHEMA(data)
+        result = SERVICE_SUNRISE_SCHEMA({**TARGET, **data})
         assert result[ATTR_DURATION] == 15  # default
         assert result[ATTR_PROFILE] == "natural"  # default
 
@@ -175,7 +179,7 @@ class TestServiceSchemas:
             ATTR_DURATION: 30,
             ATTR_PROFILE: "gentle",
         }
-        result = SERVICE_SUNRISE_SCHEMA(data)
+        result = SERVICE_SUNRISE_SCHEMA({**TARGET, **data})
         assert result[ATTR_DURATION] == 30
         assert result[ATTR_PROFILE] == "gentle"
 
@@ -185,7 +189,7 @@ class TestServiceSchemas:
             data = {
                 ATTR_PROFILE: profile,
             }
-            result = SERVICE_SUNRISE_SCHEMA(data)
+            result = SERVICE_SUNRISE_SCHEMA({**TARGET, **data})
             assert result[ATTR_PROFILE] == profile
 
     def test_sunrise_schema_invalid_profile(self) -> None:
@@ -194,14 +198,14 @@ class TestServiceSchemas:
             ATTR_PROFILE: "invalid_profile",
         }
         with pytest.raises(vol.Invalid):
-            SERVICE_SUNRISE_SCHEMA(data)
+            SERVICE_SUNRISE_SCHEMA({**TARGET, **data})
 
     def test_sunrise_schema_duration_min(self) -> None:
         """Test sunrise schema accepts minimum duration (1)."""
         data = {
             ATTR_DURATION: 1,
         }
-        result = SERVICE_SUNRISE_SCHEMA(data)
+        result = SERVICE_SUNRISE_SCHEMA({**TARGET, **data})
         assert result[ATTR_DURATION] == 1
 
     def test_sunrise_schema_duration_max(self) -> None:
@@ -209,7 +213,7 @@ class TestServiceSchemas:
         data = {
             ATTR_DURATION: 60,
         }
-        result = SERVICE_SUNRISE_SCHEMA(data)
+        result = SERVICE_SUNRISE_SCHEMA({**TARGET, **data})
         assert result[ATTR_DURATION] == 60
 
     def test_sunrise_schema_duration_below_min(self) -> None:
@@ -218,7 +222,7 @@ class TestServiceSchemas:
             ATTR_DURATION: 0,
         }
         with pytest.raises(vol.Invalid):
-            SERVICE_SUNRISE_SCHEMA(data)
+            SERVICE_SUNRISE_SCHEMA({**TARGET, **data})
 
     def test_sunrise_schema_duration_above_max(self) -> None:
         """Test sunrise schema rejects duration above maximum."""
@@ -226,7 +230,7 @@ class TestServiceSchemas:
             ATTR_DURATION: 61,
         }
         with pytest.raises(vol.Invalid):
-            SERVICE_SUNRISE_SCHEMA(data)
+            SERVICE_SUNRISE_SCHEMA({**TARGET, **data})
 
     # -------------------------------------------------------------------------
     # SUNSET SCHEMA TESTS
@@ -235,7 +239,7 @@ class TestServiceSchemas:
     def test_sunset_schema_valid_minimal(self) -> None:
         """Test sunset schema with minimal required data (empty is ok)."""
         data = {}
-        result = SERVICE_SUNSET_SCHEMA(data)
+        result = SERVICE_SUNSET_SCHEMA({**TARGET, **data})
         assert result[ATTR_DURATION] == 30  # default
         assert result[ATTR_END_BRIGHTNESS] == 0  # default
 
@@ -245,7 +249,7 @@ class TestServiceSchemas:
             ATTR_DURATION: 45,
             ATTR_END_BRIGHTNESS: 20,
         }
-        result = SERVICE_SUNSET_SCHEMA(data)
+        result = SERVICE_SUNSET_SCHEMA({**TARGET, **data})
         assert result[ATTR_DURATION] == 45
         assert result[ATTR_END_BRIGHTNESS] == 20
 
@@ -254,7 +258,7 @@ class TestServiceSchemas:
         data = {
             ATTR_END_BRIGHTNESS: 0,
         }
-        result = SERVICE_SUNSET_SCHEMA(data)
+        result = SERVICE_SUNSET_SCHEMA({**TARGET, **data})
         assert result[ATTR_END_BRIGHTNESS] == 0
 
     def test_sunset_schema_end_brightness_max(self) -> None:
@@ -262,7 +266,7 @@ class TestServiceSchemas:
         data = {
             ATTR_END_BRIGHTNESS: 100,
         }
-        result = SERVICE_SUNSET_SCHEMA(data)
+        result = SERVICE_SUNSET_SCHEMA({**TARGET, **data})
         assert result[ATTR_END_BRIGHTNESS] == 100
 
     def test_sunset_schema_end_brightness_above_max(self) -> None:
@@ -271,7 +275,7 @@ class TestServiceSchemas:
             ATTR_END_BRIGHTNESS: 101,
         }
         with pytest.raises(vol.Invalid):
-            SERVICE_SUNSET_SCHEMA(data)
+            SERVICE_SUNSET_SCHEMA({**TARGET, **data})
 
 
 # =============================================================================
@@ -490,6 +494,7 @@ class TestApplyPresetService:
                 DOMAIN,
                 SERVICE_APPLY_PRESET,
                 {ATTR_PRESET: "daylight_therapy"},
+                target=TARGET,
                 blocking=True,
             )
 
@@ -520,6 +525,7 @@ class TestApplyPresetService:
                 DOMAIN,
                 SERVICE_APPLY_PRESET,
                 {ATTR_PRESET: "sunset"},
+                target=TARGET,
                 blocking=True,
             )
 
@@ -544,6 +550,7 @@ class TestApplyPresetService:
                 DOMAIN,
                 SERVICE_APPLY_PRESET,
                 {ATTR_PRESET: "daylight_therapy"},
+                target=TARGET,
                 blocking=True,
             )
 
@@ -574,6 +581,7 @@ class TestApplyPresetService:
                 DOMAIN,
                 SERVICE_APPLY_PRESET,
                 {ATTR_PRESET: "relax"},
+                target=TARGET,
                 blocking=True,
             )
 
@@ -606,6 +614,7 @@ class TestSendRawCommandService:
                 DOMAIN,
                 SERVICE_SEND_RAW,
                 {ATTR_COMMAND: "3E 1E"},
+                target=TARGET,
                 blocking=True,
             )
 
@@ -631,6 +640,7 @@ class TestSendRawCommandService:
                 DOMAIN,
                 SERVICE_SEND_RAW,
                 {ATTR_COMMAND: "3E1E"},
+                target=TARGET,
                 blocking=True,
             )
 
@@ -655,6 +665,7 @@ class TestSendRawCommandService:
                 DOMAIN,
                 SERVICE_SEND_RAW,
                 {ATTR_COMMAND: "0x3E 0x1E"},
+                target=TARGET,
                 blocking=True,
             )
 
@@ -681,6 +692,7 @@ class TestSendRawCommandService:
                     DOMAIN,
                     SERVICE_SEND_RAW,
                     {ATTR_COMMAND: "GG HH"},  # Invalid
+                    target=TARGET,
                     blocking=True,
                 )
 
@@ -710,6 +722,7 @@ class TestSetTimerService:
                 DOMAIN,
                 SERVICE_SET_TIMER,
                 {ATTR_MINUTES: 30},
+                target=TARGET,
                 blocking=True,
             )
 
@@ -735,6 +748,7 @@ class TestSetTimerService:
                 DOMAIN,
                 SERVICE_SET_TIMER,
                 {ATTR_MINUTES: 30},
+                target=TARGET,
                 blocking=True,
             )
 
@@ -764,6 +778,7 @@ class TestSunriseService:
                 DOMAIN,
                 SERVICE_START_SUNRISE,
                 {},
+                target=TARGET,
                 blocking=True,
             )
 
@@ -796,6 +811,7 @@ class TestSunriseService:
                     ATTR_DURATION: 30,
                     ATTR_PROFILE: "therapy",
                 },
+                target=TARGET,
                 blocking=True,
             )
 
@@ -836,6 +852,7 @@ class TestSunriseService:
                     {
                         ATTR_PROFILE: profile_name,
                     },
+                    target=TARGET,
                     blocking=True,
                 )
 
@@ -867,6 +884,7 @@ class TestSunsetService:
                 DOMAIN,
                 SERVICE_START_SUNSET,
                 {},
+                target=TARGET,
                 blocking=True,
             )
 
@@ -897,6 +915,7 @@ class TestSunsetService:
                     ATTR_DURATION: 45,
                     ATTR_END_BRIGHTNESS: 20,
                 },
+                target=TARGET,
                 blocking=True,
             )
 
@@ -928,6 +947,7 @@ class TestStopSimulationService:
                 DOMAIN,
                 SERVICE_STOP_SIMULATION,
                 {},
+                target=TARGET,
                 blocking=True,
             )
 
