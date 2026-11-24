@@ -1,31 +1,25 @@
 {
     "exceptions": {
-        "device_not_found": {
-            "message": "Beurer Lampe {name} ({mac}) konnte nicht gefunden werden. Stellen Sie sicher, dass die Lampe eingeschaltet ist und sich in Bluetooth-Reichweite befindet."
-        },
         "connection_failed": {
-            "message": "Verbindung zu {name} fehlgeschlagen. Das Gerät ist möglicherweise außer Reichweite oder bereits mit einem anderen Gerät verbunden."
+            "message": "Keine Verbindung zu {name} ({mac}). Die Lampe ist eventuell außer Bluetooth-Reichweite, ausgeschaltet oder mit einem anderen Gerät verbunden."
         },
         "command_failed": {
-            "message": "Befehl an {name} konnte nicht gesendet werden. Bitte versuchen Sie es erneut."
+            "message": "Der Befehl ist fehlgeschlagen bei: {devices}."
         },
         "initialization_failed": {
             "message": "Initialisierung von {name} fehlgeschlagen: {error}"
         },
-        "timer_failed": {
-            "message": "Timer konnte nicht auf {name} gesetzt werden. Timer funktioniert nur im RGB/Farbmodus."
-        },
-        "timer_invalid_range": {
-            "message": "Timer muss zwischen 1 und 120 Minuten sein, erhalten: {minutes}."
-        },
-        "device_unavailable": {
-            "message": "Gerät {name} ist nicht verfügbar. Es ist möglicherweise außer Bluetooth-Reichweite oder ausgeschaltet."
-        },
         "write_failed": {
-            "message": "Schreiben an {name} fehlgeschlagen. Die Bluetooth-Verbindung wurde möglicherweise unterbrochen."
+            "message": "Der Befehl hat {name} nicht erreicht. Die Bluetooth-Verbindung ist abgerissen, bitte erneut versuchen."
         },
-        "reconnect_failed": {
-            "message": "Wiederverbindung zu {name} nach mehreren Versuchen fehlgeschlagen. Versuchen Sie das Gerät näher zu bringen oder prüfen Sie ob es eingeschaltet ist."
+        "not_supported": {
+            "message": "{name} hat diese Funktion nicht."
+        },
+        "no_target_entities": {
+            "message": "Für das angegebene Ziel wurde keine Beurer-Lampe gefunden. Bitte eine gültige Lampe auswählen."
+        },
+        "invalid_hex_command": {
+            "message": "Ungültiger Hex-Befehl: {error}. Format z. B. 33 01 1E oder 33011E."
         }
     },
     "config": {

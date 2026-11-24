@@ -14,7 +14,6 @@ from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 
-from bleak.exc import BleakError
 from homeassistant.util import dt as dt_util
 from homeassistant.util.color import color_temperature_to_rgb
 
@@ -26,6 +25,10 @@ if TYPE_CHECKING:
     from .beurer_daylight_lamps import BeurerInstance
 
 from .const import EVENT_TYPE_SUNRISE_FINISHED, EVENT_TYPE_SUNSET_FINISHED, LOGGER
+from .exceptions import BeurerError
+
+# Seconds between retries of a failed simulation step
+SIMULATION_RETRY_DELAY = 3
 
 
 @dataclass
@@ -465,41 +468,28 @@ class SunriseSimulation:
             True if action succeeded, False otherwise
         """
         for attempt in range(max_retries):
-            try:
-                # Check connection status and reconnect if needed
-                if not self._instance.is_connected:
-                    # Check BLE availability before attempting connect
-                    if not self._instance.ble_available:
-                        LOGGER.warning(
-                            "Device not BLE reachable, skipping connect (attempt %d/%d)",
-                            attempt + 1,
-                            max_retries,
-                        )
-                        await asyncio.sleep(3)
-                        continue
-
-                    LOGGER.debug("Not connected, attempting reconnect...")
-                    connected = await self._instance.connect()
-                    if not connected:
-                        LOGGER.warning(
-                            "Reconnect failed (attempt %d/%d)", attempt + 1, max_retries
-                        )
-                        await asyncio.sleep(3)
-                        continue
-
-                    # Pause after successful reconnect to let BLE stabilize
-                    await asyncio.sleep(1)
-
-                # Execute the action
-                await action()
-            except (BleakError, TimeoutError, OSError) as err:
+            if not self._instance.is_connected and not self._instance.ble_available:
+                # Not advertising: a connect attempt would only block for long
                 LOGGER.warning(
-                    "Action failed (attempt %d/%d): %s", attempt + 1, max_retries, err
+                    "Device not BLE reachable (attempt %d/%d)",
+                    attempt + 1,
+                    max_retries,
                 )
-                if attempt < max_retries - 1:
-                    await asyncio.sleep(3)
             else:
-                return True
+                try:
+                    await action()
+                except BeurerError as err:
+                    # The command reconnects by itself on the next attempt
+                    LOGGER.warning(
+                        "Action failed (attempt %d/%d): %s",
+                        attempt + 1,
+                        max_retries,
+                        err,
+                    )
+                else:
+                    return True
+            if attempt < max_retries - 1:
+                await asyncio.sleep(SIMULATION_RETRY_DELAY)
 
         return False
 
@@ -578,19 +568,19 @@ class SunriseSimulation:
                             "Too many consecutive failures (%d), stopping sunrise",
                             consecutive_failures,
                         )
-                        break
+                        return
 
                 if i < steps:
                     # Wait for next step - interval already accounts for duration
-                    # Add small buffer to prevent overwhelming the device
                     await asyncio.sleep(interval)
 
+            if not self._running:
+                return
             # Request final status to sync state after simulation
-            if self._running:
-                try:
-                    await self._instance._request_status()
-                except BleakError, TimeoutError, OSError:
-                    LOGGER.debug("Non-critical: failed to request status after sunrise")
+            try:
+                await self._instance.request_status()
+            except BeurerError:
+                LOGGER.debug("Non-critical: failed to request status after sunrise")
 
             LOGGER.info("Sunrise simulation completed")
             self._instance.emit_lamp_event(EVENT_TYPE_SUNRISE_FINISHED)
@@ -608,8 +598,12 @@ class SunriseSimulation:
         start_brightness_pct: int,
         brightness_step: float,
         warm_rgb: tuple[int, int, int],
-    ) -> None:
-        """Execute the individual steps of a sunset simulation."""
+    ) -> bool:
+        """Execute the individual steps of a sunset simulation.
+
+        Returns:
+            True if every step ran, False if stopped or aborted on failures.
+        """
         consecutive_failures = 0
         max_consecutive_failures = 5
 
@@ -652,10 +646,12 @@ class SunriseSimulation:
                         "Too many consecutive failures (%d), stopping sunset",
                         consecutive_failures,
                     )
-                    break
+                    return False
 
             if i < steps:
                 await asyncio.sleep(interval)
+
+        return self._running
 
     async def _run_sunset(
         self,
@@ -685,24 +681,27 @@ class SunriseSimulation:
                 int(warm_rgb_float[2]),
             )
 
-            await self._execute_sunset_steps(
+            if not await self._execute_sunset_steps(
                 steps,
                 interval,
                 start_brightness_pct,
                 brightness_step,
                 warm_rgb,
-            )
+            ):
+                return
 
             # Final turn off if end_brightness is 0
-            if end_brightness_pct == 0 and self._running:
-                await self._apply_with_retry(self._instance.turn_off)
+            if end_brightness_pct == 0 and not await self._apply_with_retry(
+                self._instance.turn_off
+            ):
+                LOGGER.error("Sunset could not turn the lamp off")
+                return
 
             # Request final status to sync state after simulation
-            if self._running:
-                try:
-                    await self._instance._request_status()
-                except BleakError, TimeoutError, OSError:
-                    LOGGER.debug("Non-critical: failed to request status after sunset")
+            try:
+                await self._instance.request_status()
+            except BeurerError:
+                LOGGER.debug("Non-critical: failed to request status after sunset")
 
             LOGGER.info("Sunset simulation completed")
             self._instance.emit_lamp_event(EVENT_TYPE_SUNSET_FINISHED)

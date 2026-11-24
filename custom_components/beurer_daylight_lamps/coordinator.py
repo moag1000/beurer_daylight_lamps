@@ -15,7 +15,6 @@ import time
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
-from bleak.exc import BleakError
 from homeassistant.components.light import ColorMode  # type: ignore[attr-defined]
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
@@ -26,6 +25,7 @@ from .const import (
     POLL_INTERVAL_LIGHT_ON,
     POLL_INTERVAL_UNAVAILABLE,
 )
+from .exceptions import BeurerError
 
 if TYPE_CHECKING:
     from .beurer_daylight_lamps import BeurerInstance
@@ -276,7 +276,7 @@ class BeurerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             # Adjust polling interval after each update
             self._adjust_polling_interval()
-        except (BleakError, TimeoutError, OSError) as err:
+        except BeurerError as err:
             LOGGER.debug(
                 "Update failed for %s: %s",
                 self.instance.mac,

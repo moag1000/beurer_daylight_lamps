@@ -600,7 +600,7 @@ class TestSendRawCommandService:
         """Test send raw command with space-separated hex."""
         mock_instance = MagicMock()
         mock_instance.mac = "AA:BB:CC:DD:EE:FF"
-        mock_instance._send_packet = AsyncMock(return_value=True)
+        mock_instance.send_command = AsyncMock()
 
         from custom_components.beurer_daylight_lamps import _async_setup_services
 
@@ -619,14 +619,14 @@ class TestSendRawCommandService:
             )
 
             # 3E = 62, 1E = 30 (30 minute timer)
-            mock_instance._send_packet.assert_called_once_with([0x3E, 0x1E])
+            mock_instance.send_command.assert_awaited_once_with([0x3E, 0x1E])
 
     @pytest.mark.asyncio
     async def test_send_raw_command_without_spaces(self, hass: HomeAssistant) -> None:
         """Test send raw command without spaces."""
         mock_instance = MagicMock()
         mock_instance.mac = "AA:BB:CC:DD:EE:FF"
-        mock_instance._send_packet = AsyncMock(return_value=True)
+        mock_instance.send_command = AsyncMock()
 
         from custom_components.beurer_daylight_lamps import _async_setup_services
 
@@ -644,14 +644,14 @@ class TestSendRawCommandService:
                 blocking=True,
             )
 
-            mock_instance._send_packet.assert_called_once_with([0x3E, 0x1E])
+            mock_instance.send_command.assert_awaited_once_with([0x3E, 0x1E])
 
     @pytest.mark.asyncio
     async def test_send_raw_command_with_0x_prefix(self, hass: HomeAssistant) -> None:
         """Test send raw command with 0x prefix."""
         mock_instance = MagicMock()
         mock_instance.mac = "AA:BB:CC:DD:EE:FF"
-        mock_instance._send_packet = AsyncMock(return_value=True)
+        mock_instance.send_command = AsyncMock()
 
         from custom_components.beurer_daylight_lamps import _async_setup_services
 
@@ -669,14 +669,14 @@ class TestSendRawCommandService:
                 blocking=True,
             )
 
-            mock_instance._send_packet.assert_called_once_with([0x3E, 0x1E])
+            mock_instance.send_command.assert_awaited_once_with([0x3E, 0x1E])
 
     @pytest.mark.asyncio
     async def test_send_raw_command_invalid_hex(self, hass: HomeAssistant) -> None:
         """Test send raw command with invalid hex raises ServiceValidationError."""
         mock_instance = MagicMock()
         mock_instance.mac = "AA:BB:CC:DD:EE:FF"
-        mock_instance._send_packet = AsyncMock(return_value=True)
+        mock_instance.send_command = AsyncMock()
 
         from custom_components.beurer_daylight_lamps import _async_setup_services
 

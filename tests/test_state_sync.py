@@ -175,24 +175,6 @@ def test_push_update_sets_interval_before_scheduling() -> None:
     assert calls == ["interval", "data"]
 
 
-async def test_lost_packet_is_retried_after_link_error(
-    instance: lib.BeurerInstance,
-) -> None:
-    """A packet lost to a dead link is sent once more after reconnecting."""
-    del instance._send_packet  # use the real one, fake only _write
-    calls = []
-
-    async def write(_data: bytearray) -> bool:
-        calls.append(1)
-        instance._last_write_link_error = len(calls) == 1
-        return len(calls) > 1
-
-    with patch.object(instance, "_write", side_effect=write):
-        assert await instance._send_packet([0x35, 1]) is True
-
-    assert len(calls) == 2
-
-
 async def test_watchdog_does_not_cancel_itself(instance: lib.BeurerInstance) -> None:
     """disconnect() called from the watchdog must not cancel the watchdog."""
 

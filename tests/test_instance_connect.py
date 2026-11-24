@@ -329,13 +329,21 @@ class TestUpdateAndDisconnect:
         inst._request_status.assert_not_awaited()
 
     @pytest.mark.parametrize("error", [BleakError("x"), TimeoutError(), OSError()])
-    async def test_update_errors_disconnect(self, error: Exception) -> None:
+    async def test_failed_poll_drops_dead_link(self, error: Exception) -> None:
+        """A dead link found while polling is torn down, the poll does not fail."""
         inst = make_instance()
         inst._client = gatt_client()
-        inst._request_status = AsyncMock(side_effect=error)
-        inst.disconnect = AsyncMock()
+        inst._client.write_gatt_char = AsyncMock(side_effect=error)
+        inst._write_uuid = "w"
+
+        async def drop_link() -> None:
+            inst._client = None
+
+        inst.disconnect = AsyncMock(side_effect=drop_link)
+        inst.connect = AsyncMock(return_value=False)  # lamp stays out of reach
         await inst.update()
         inst.disconnect.assert_awaited_once()
+        inst.connect.assert_awaited_once()  # one reconnect for the lost packet
 
     @pytest.mark.parametrize("error", [BleakError("x"), TimeoutError(), OSError()])
     async def test_disconnect_swallows_errors(self, error: Exception) -> None:

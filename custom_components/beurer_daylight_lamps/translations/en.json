@@ -1,16 +1,25 @@
 {
     "exceptions": {
-        "device_not_found": {
-            "message": "Could not find Beurer lamp {name} ({mac}). Ensure the lamp is powered on and within Bluetooth range."
-        },
         "connection_failed": {
-            "message": "Failed to connect to {name}. The device may be out of range or already connected to another device."
+            "message": "Failed to connect to {name} ({mac}). The lamp may be out of Bluetooth range, switched off, or connected to another device."
         },
         "command_failed": {
-            "message": "Failed to send command to {name}. Please try again."
+            "message": "The command failed on: {devices}."
         },
         "initialization_failed": {
             "message": "Failed to initialize {name}: {error}"
+        },
+        "write_failed": {
+            "message": "The command did not reach {name}. The Bluetooth connection was lost; please try again."
+        },
+        "not_supported": {
+            "message": "{name} does not have this function."
+        },
+        "no_target_entities": {
+            "message": "No Beurer lamp entities found for the specified target. Ensure you have selected a valid lamp."
+        },
+        "invalid_hex_command": {
+            "message": "Invalid hex command: {error}. Use format like 33 01 1E or 33011E."
         }
     },
     "config": {

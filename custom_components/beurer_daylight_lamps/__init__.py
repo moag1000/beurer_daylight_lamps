@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING, Any
 import homeassistant.helpers.config_validation as cv
 import probatio as vol
 from bleak.backends.device import BLEDevice
-from bleak.exc import BleakError
 from homeassistant.components import bluetooth
 from homeassistant.components.bluetooth import (
     BluetoothChange,
@@ -17,7 +16,11 @@ from homeassistant.components.bluetooth import (
 )
 from homeassistant.const import CONF_MAC, CONF_NAME, Platform
 from homeassistant.core import HomeAssistant, ServiceCall, callback
-from homeassistant.exceptions import ConfigEntryNotReady, ServiceValidationError
+from homeassistant.exceptions import (
+    ConfigEntryNotReady,
+    HomeAssistantError,
+    ServiceValidationError,
+)
 from homeassistant.helpers import (
     device_registry as dr,
 )
@@ -36,12 +39,14 @@ from .config_flow import CONF_THERAPY_GOAL
 from .const import DOMAIN, LOGGER, WHITE_MODE_THRESHOLD_KELVIN
 from .coordinator import BeurerDataUpdateCoordinator
 from .data import BeurerConfigEntry, BeurerRuntimeData
-from .exceptions import BeurerInitializationError as BeurerInitializationError
+from .exceptions import BeurerError
 from .therapy import SunriseProfile
 from .therapy_hub import HUB_DATA_KEY, get_or_create_hub
 from .wl90 import AlarmItem
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
     from homeassistant.helpers.typing import ConfigType
 
 # Service constants
@@ -130,7 +135,7 @@ SERVICE_TIMER_SCHEMA = cv.make_entity_service_schema(
 )
 
 # Sunrise profiles available
-SUNRISE_PROFILES = ["gentle", "natural", "energize", "therapy"]
+SUNRISE_PROFILES = [profile.value for profile in SunriseProfile]
 
 SERVICE_SUNRISE_SCHEMA = cv.make_entity_service_schema(
     {
@@ -490,17 +495,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: BeurerConfigEntry) -> bo
         if device_initially_available:
             await asyncio.sleep(2)
             LOGGER.debug("Attempting initial connection to %s", mac_address)
-            try:
-                connected = await instance.connect()
-                if connected:
-                    LOGGER.info("Initial connection to %s successful", mac_address)
-                else:
-                    LOGGER.debug(
-                        "Initial connection to %s failed, will retry on demand",
-                        mac_address,
-                    )
-            except (BleakError, TimeoutError, OSError) as err:
-                LOGGER.debug("Initial connection to %s failed: %s", mac_address, err)
+            # connect() logs a failure itself; it is retried on demand
+            if await instance.connect():
+                LOGGER.info("Initial connection to %s successful", mac_address)
 
     entry.async_create_background_task(
         hass,
@@ -575,6 +572,30 @@ async def _async_get_instances_from_target(
     return instances
 
 
+async def _async_run_on_each(
+    instances: list[BeurerInstance],
+    action: Callable[[BeurerInstance], Awaitable[None]],
+) -> None:
+    """Run a command on every targeted lamp, then report the ones that failed.
+
+    One unreachable lamp must not keep the others from getting the command,
+    but the service call must fail so the automation or the UI notices.
+    """
+    failed: list[str] = []
+    for instance in instances:
+        try:
+            await action(instance)
+        except BeurerError as err:
+            LOGGER.warning("Command to %s failed: %s", instance.mac, err)
+            failed.append(instance.name)
+    if failed:
+        raise HomeAssistantError(
+            translation_domain=DOMAIN,
+            translation_key="command_failed",
+            translation_placeholders={"devices": ", ".join(failed)},
+        )
+
+
 async def _async_setup_services(hass: HomeAssistant) -> None:
     """Set up Beurer services."""
     if hass.services.has_service(DOMAIN, SERVICE_APPLY_PRESET):
@@ -602,7 +623,7 @@ def _register_preset_service(hass: HomeAssistant) -> None:
 
         preset = PRESETS[preset_name]
 
-        for instance in instances:
+        async def _apply(instance: BeurerInstance) -> None:
             LOGGER.debug("Applying preset '%s' to %s", preset_name, instance.mac)
 
             brightness = preset.get("brightness")
@@ -624,6 +645,8 @@ def _register_preset_service(hass: HomeAssistant) -> None:
                 await instance.set_color_brightness(brightness)
 
             LOGGER.info("Applied preset '%s' to %s", preset_name, instance.mac)
+
+        await _async_run_on_each(instances, _apply)
 
     hass.services.async_register(
         DOMAIN,
@@ -660,21 +683,9 @@ def _register_raw_command_service(hass: HomeAssistant) -> None:
 
         LOGGER.debug("RAW_CMD: Parsed payload: %s", [f"0x{b:02X}" for b in payload])
 
-        failed_devices: list[str] = []
-        for instance in instances:
-            success = await instance._send_packet(payload)
-            if success:
-                LOGGER.debug("RAW_CMD: Sent successfully to %s", instance.mac)
-            else:
-                LOGGER.error("RAW_CMD: Failed to send to %s", instance.mac)
-                failed_devices.append(instance.mac)
-
-        if failed_devices:
-            raise ServiceValidationError(
-                translation_domain=DOMAIN,
-                translation_key="command_failed",
-                translation_placeholders={"devices": ", ".join(failed_devices)},
-            )
+        await _async_run_on_each(
+            instances, lambda instance: instance.send_command(payload)
+        )
 
     hass.services.async_register(
         DOMAIN,
@@ -700,13 +711,9 @@ def _register_timer_service(hass: HomeAssistant) -> None:
         if not instances:
             return
 
-        for instance in instances:
-            LOGGER.debug("TIMER: Setting %d minute timer on %s", minutes, instance.mac)
-            success = await instance.set_timer(minutes)
-            if success:
-                LOGGER.debug("TIMER: Set %d minute timer on %s", minutes, instance.mac)
-            else:
-                LOGGER.error("TIMER: Failed to set timer on %s", instance.mac)
+        await _async_run_on_each(
+            instances, lambda instance: instance.set_timer(minutes)
+        )
 
     hass.services.async_register(
         DOMAIN,
@@ -729,11 +736,8 @@ def _register_simulation_services(hass: HomeAssistant) -> None:
         if not instances:
             return
 
-        try:
-            profile = SunriseProfile(profile_name)
-        except ValueError:
-            LOGGER.error("SUNRISE: Unknown profile '%s'", profile_name)
-            return
+        # The schema only accepts known profiles
+        profile = SunriseProfile(profile_name)
 
         for instance in instances:
             LOGGER.info(
@@ -837,6 +841,7 @@ def _register_alarm_service(hass: HomeAssistant) -> None:
             sunrise_brightness=call.data.get(ATTR_SUNRISE_BRIGHTNESS, 50),
         )
 
+        supported: list[BeurerInstance] = []
         for instance in instances:
             if not instance.is_wl or instance.wl90 is None:
                 LOGGER.warning(
@@ -852,6 +857,11 @@ def _register_alarm_service(hass: HomeAssistant) -> None:
                 )
                 continue
 
+            supported.append(instance)
+
+        async def _sync(instance: BeurerInstance) -> None:
+            if (controller := instance.wl90) is None:  # filtered out above
+                return
             LOGGER.info(
                 "ALARM: Setting alarm %d on %s: %02d:%02d %s",
                 slot,
@@ -860,11 +870,9 @@ def _register_alarm_service(hass: HomeAssistant) -> None:
                 alarm.minute,
                 alarm.days_list,
             )
-            success = await instance.wl90.sync_alarm(slot, alarm)
-            if success:
-                LOGGER.info("ALARM: Set successfully on %s", instance.mac)
-            else:
-                LOGGER.error("ALARM: Failed to set on %s", instance.mac)
+            await controller.sync_alarm(slot, alarm)
+
+        await _async_run_on_each(supported, _sync)
 
     hass.services.async_register(
         DOMAIN,
@@ -884,22 +892,7 @@ def _register_time_sync_service(hass: HomeAssistant) -> None:
         if not instances:
             return
 
-        failed_devices: list[str] = []
-        for instance in instances:
-            LOGGER.info("SYNC_TIME: Syncing time to %s", instance.mac)
-            success = await instance.sync_time()
-            if success:
-                LOGGER.info("SYNC_TIME: Synced successfully to %s", instance.mac)
-            else:
-                LOGGER.error("SYNC_TIME: Failed to sync time to %s", instance.mac)
-                failed_devices.append(instance.mac)
-
-        if failed_devices:
-            raise ServiceValidationError(
-                translation_domain=DOMAIN,
-                translation_key="command_failed",
-                translation_placeholders={"devices": ", ".join(failed_devices)},
-            )
+        await _async_run_on_each(instances, lambda instance: instance.sync_time())
 
     hass.services.async_register(
         DOMAIN,

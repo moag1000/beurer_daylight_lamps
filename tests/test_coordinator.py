@@ -424,8 +424,16 @@ class TestPeriodicUpdates:
     async def test_async_update_data_handles_exception(
         self, mock_hass: MagicMock, mock_instance: MagicMock
     ) -> None:
-        """Test periodic update handles exceptions gracefully."""
-        mock_instance.update = AsyncMock(side_effect=OSError("BLE error"))
+        """A lost time sync packet must not fail the periodic refresh."""
+        from custom_components.beurer_daylight_lamps.exceptions import (
+            BeurerWriteError,
+        )
+
+        mock_instance.update = AsyncMock()
+        mock_instance.ble_available = True
+        mock_instance.is_connected = True
+        mock_instance.last_time_sync = None
+        mock_instance.sync_time = AsyncMock(side_effect=BeurerWriteError("Lamp"))
         coordinator = BeurerDataUpdateCoordinator(mock_hass, mock_instance, "Test Lamp")
         coordinator._first_refresh = False  # Simulate past first refresh
 

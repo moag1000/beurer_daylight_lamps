@@ -10,7 +10,6 @@ from custom_components.beurer_daylight_lamps.const import (
     CMD_WL75_LIGHT_BRIGHTNESS,
     CMD_WL75_LIGHT_SWITCH,
     CMD_WL75_MOODLIGHT_SWITCH,
-    CMD_WL75_TIME_SYNC,
     RESP_WL75_ALARM,
     RESP_WL75_LIGHT_STATUS,
     RESP_WL75_MOODLIGHT_STATUS,
@@ -103,14 +102,8 @@ def test_wl90_instance_keeps_three_alarms() -> None:
 async def test_wl75_packet_framing() -> None:
     """WL75 packets use the short FE EF framing with XOR checksum."""
     instance = _make_instance("WL75")
-    instance._write = AsyncMock(return_value=True)
-    instance._client = MagicMock(is_connected=True)
 
-    with patch("asyncio.sleep", new=AsyncMock()):
-        await instance._send_packet([CMD_WL75_LIGHT_SWITCH, 1])
-
-    instance._write.assert_awaited_once()
-    packet = instance._write.call_args.args[0]
+    packet = instance._frame_packet([CMD_WL75_LIGHT_SWITCH, 1])
     assert packet == _frame([CMD_WL75_LIGHT_SWITCH, 1])
     assert packet == bytearray([0xFE, 0xEF, 0x03, 0x12, 0x01, 0x10])
 
@@ -119,13 +112,8 @@ async def test_wl75_packet_framing() -> None:
 async def test_tl100_packet_framing_unchanged() -> None:
     """TL100 framing is untouched by WL75 support."""
     instance = _make_instance("TL100")
-    instance._write = AsyncMock(return_value=True)
-    instance._client = MagicMock(is_connected=True)
 
-    with patch("asyncio.sleep", new=AsyncMock()):
-        await instance._send_packet([0x37, 0x01])
-
-    packet = instance._write.call_args.args[0]
+    packet = instance._frame_packet([0x37, 0x01])
     assert packet[:3] == bytearray([0xFE, 0xEF, 0x0A])
     assert packet[-3:] == bytearray([0x55, 0x0D, 0x0A])
 
@@ -220,13 +208,13 @@ async def test_alarm_response_parsed() -> None:
 async def test_sync_alarm_packet() -> None:
     """Alarm writes use the WL75 opcode and 1-based slot id."""
     instance = _make_instance("WL75")
-    instance._send_packet = AsyncMock(return_value=True)
+    instance._send_packet = AsyncMock()
     alarm = instance.wl90.alarms[0]
     alarm.enabled = True
     alarm.hour = 7
     alarm.minute = 15
 
-    assert await instance.wl90.sync_alarm(0, alarm)
+    await instance.wl90.sync_alarm(0, alarm)
 
     msg = _sent(instance)[0]
     assert msg[:5] == [CMD_WL75_ALARM_WRITE, 1, 15, 7, 0x80 | (alarm.days & 0x7F)]
@@ -236,9 +224,10 @@ async def test_sync_alarm_packet() -> None:
 async def test_sync_alarm_rejects_third_slot() -> None:
     """The WL75 has only two alarm slots."""
     instance = _make_instance("WL75")
-    instance._send_packet = AsyncMock(return_value=True)
+    instance._send_packet = AsyncMock()
 
-    assert not await instance.wl90.sync_alarm(2)
+    with pytest.raises(ValueError, match="Invalid alarm slot"):
+        await instance.wl90.sync_alarm(2)
     instance._send_packet.assert_not_awaited()
 
 
@@ -246,7 +235,7 @@ async def test_sync_alarm_rejects_third_slot() -> None:
 async def test_set_white_uses_wl75_commands() -> None:
     """set_white switches the mood light off and the white light on."""
     instance = _make_instance("WL75")
-    instance._send_packet = AsyncMock(return_value=True)
+    instance._send_packet = AsyncMock()
     instance._color_on = True
 
     with patch("asyncio.sleep", new=AsyncMock()):
@@ -265,7 +254,7 @@ async def test_set_white_uses_wl75_commands() -> None:
 async def test_turn_off_switches_both_lights_off() -> None:
     """turn_off sends off for white and mood light."""
     instance = _make_instance("WL75")
-    instance._send_packet = AsyncMock(return_value=True)
+    instance._send_packet = AsyncMock()
     instance._light_on = True
 
     with patch("asyncio.sleep", new=AsyncMock()):
@@ -276,31 +265,6 @@ async def test_turn_off_switches_both_lights_off() -> None:
     assert [CMD_WL75_MOODLIGHT_SWITCH, 0] in sent
     assert not instance.white_on
     assert not instance.color_on
-
-
-@pytest.mark.asyncio
-async def test_sync_time_wl75_packet() -> None:
-    """WL75 time sync has no weekday byte and records the sync time."""
-    instance = _make_instance("WL75")
-    instance._send_packet = AsyncMock(return_value=True)
-
-    with patch("asyncio.sleep", new=AsyncMock()):
-        assert await instance.sync_time()
-
-    msg = _sent(instance)[0]
-    assert msg[0] == CMD_WL75_TIME_SYNC
-    assert len(msg) == 7
-    assert instance.last_time_sync is not None
-
-
-@pytest.mark.asyncio
-async def test_fade_not_supported_on_wl75() -> None:
-    """The fade hardware setting does not exist on the WL75."""
-    instance = _make_instance("WL75")
-    instance._send_packet = AsyncMock(return_value=True)
-
-    assert not await instance.set_fade(True)
-    instance._send_packet.assert_not_awaited()
 
 
 @pytest.mark.asyncio

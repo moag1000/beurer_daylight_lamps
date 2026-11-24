@@ -1,37 +1,25 @@
 {
     "exceptions": {
-        "device_not_found": {
-            "message": "Could not find Beurer lamp {name} ({mac}). Ensure the lamp is powered on and within Bluetooth range."
-        },
         "connection_failed": {
-            "message": "Failed to connect to {name}. The device may be out of range or already connected to another device."
+            "message": "Failed to connect to {name} ({mac}). The lamp may be out of Bluetooth range, switched off, or connected to another device."
         },
         "command_failed": {
-            "message": "Failed to send command to device(s): {devices}. Please try again."
+            "message": "The command failed on: {devices}."
         },
         "initialization_failed": {
             "message": "Failed to initialize {name}: {error}"
         },
-        "timer_failed": {
-            "message": "Failed to set timer on {name}. Timer only works in RGB/color mode."
-        },
-        "timer_invalid_range": {
-            "message": "Timer must be between 1 and 120 minutes, got {minutes}."
-        },
-        "device_unavailable": {
-            "message": "Device {name} is not available. It may be out of Bluetooth range or powered off."
-        },
         "write_failed": {
-            "message": "Failed to write to {name}. The Bluetooth connection may have been lost."
-        },
-        "reconnect_failed": {
-            "message": "Failed to reconnect to {name} after multiple attempts. Try moving the device closer or check if it's powered on."
+            "message": "The command did not reach {name}. The Bluetooth connection was lost; please try again."
         },
         "no_target_entities": {
             "message": "No Beurer lamp entities found for the specified target. Ensure you have selected a valid lamp."
         },
         "invalid_hex_command": {
             "message": "Invalid hex command: {error}. Use format like 33 01 1E or 33011E."
+        },
+        "not_supported": {
+            "message": "{name} does not have this function."
         }
     },
     "config": {

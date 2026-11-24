@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
@@ -323,8 +324,8 @@ class BeurerAlarmSwitch(CoordinatorEntity[BeurerDataUpdateCoordinator], SwitchEn
         alarm = self._alarm
         if not alarm or not self._instance.wl90:
             return
-        alarm.enabled = True
-        await self._instance.wl90.sync_alarm(self._slot, alarm)
+        # sync_alarm stores the alarm only once the lamp received it
+        await self._instance.wl90.sync_alarm(self._slot, replace(alarm, enabled=True))
         self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
@@ -332,8 +333,7 @@ class BeurerAlarmSwitch(CoordinatorEntity[BeurerDataUpdateCoordinator], SwitchEn
         alarm = self._alarm
         if not alarm or not self._instance.wl90:
             return
-        alarm.enabled = False
-        await self._instance.wl90.sync_alarm(self._slot, alarm)
+        await self._instance.wl90.sync_alarm(self._slot, replace(alarm, enabled=False))
         self.async_write_ha_state()
 
     @property

@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from homeassistant.exceptions import HomeAssistantError
 
+from custom_components.beurer_daylight_lamps.exceptions import BeurerWriteError
 from custom_components.beurer_daylight_lamps.number import (
     WL90_NUMBER_DESCRIPTIONS,
     BeurerSimulationDurationNumber,
@@ -101,7 +102,9 @@ class TestTimerNumber:
         coordinator.instance.cancel_timer.assert_awaited_once()
 
     async def test_cancel_fails(self, coordinator: MagicMock) -> None:
-        coordinator.instance.cancel_timer = AsyncMock(return_value=False)
+        coordinator.instance.cancel_timer = AsyncMock(
+            side_effect=BeurerWriteError("TL100")
+        )
         timer = BeurerTimerNumber(coordinator, "TL100")
         with pytest.raises(HomeAssistantError):
             await timer.async_set_native_value(0)

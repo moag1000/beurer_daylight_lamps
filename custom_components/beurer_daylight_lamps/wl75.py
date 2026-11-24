@@ -8,7 +8,6 @@ This module handles WL75-specific features (Protocol 2):
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING
 
 from .const import (
@@ -24,7 +23,6 @@ from .const import (
     CMD_WL75_RADIO_TIMER_TOGGLE,
     CMD_WL75_RADIO_TIMER_VALUE,
     CMD_WL75_RADIO_VOLUME,
-    COMMAND_DELAY,
     LOGGER,
     RESP_WL75_ALARM,
     RESP_WL75_RADIO_CHANNEL,
@@ -40,6 +38,7 @@ from .const import (
     RESP_WL75_SAVE_RADIO_FREQ,
     RESP_WL75_UPDATE_ALARM,
 )
+from .exceptions import BeurerNotSupportedError
 from .wl90 import AlarmItem, WL90Controller
 
 if TYPE_CHECKING:
@@ -65,48 +64,42 @@ class WL75Controller(WL90Controller):
         ]
 
     # --- Radio Controls ---
+    # Every command raises BeurerError if it could not be delivered; the
+    # local state is only changed after the lamp received the command.
 
-    async def radio_on(self) -> bool:
+    async def radio_on(self) -> None:
         """Turn FM radio on."""
         LOGGER.info("Turning radio ON on WL75 %s", self._instance.mac)
-        result = await self._instance._send_packet([CMD_WL75_RADIO_POWER, 1])
-        if result:
-            self.radio.is_on = True
-        return result
+        await self._instance.send_command([CMD_WL75_RADIO_POWER, 1])
+        self.radio.is_on = True
 
-    async def radio_off(self) -> bool:
+    async def radio_off(self) -> None:
         """Turn FM radio off."""
         LOGGER.info("Turning radio OFF on WL75 %s", self._instance.mac)
-        result = await self._instance._send_packet([CMD_WL75_RADIO_POWER, 0])
-        if result:
-            self.radio.is_on = False
-        return result
+        await self._instance.send_command([CMD_WL75_RADIO_POWER, 0])
+        self.radio.is_on = False
 
-    async def set_radio_volume(self, volume: int) -> bool:
+    async def set_radio_volume(self, volume: int) -> None:
         """Set radio volume (0-10)."""
         volume = max(0, min(10, volume))
         LOGGER.debug(
             "Setting radio volume to %d on WL75 %s", volume, self._instance.mac
         )
-        result = await self._instance._send_packet([CMD_WL75_RADIO_VOLUME, volume])
-        if result:
-            self.radio.volume = volume
-        return result
+        await self._instance.send_command([CMD_WL75_RADIO_VOLUME, volume])
+        self.radio.volume = volume
 
-    async def select_radio_preset(self, channel: int) -> bool:
+    async def select_radio_preset(self, channel: int) -> None:
         """Select a radio preset channel (1-indexed, 1-10)."""
         channel = max(1, min(10, channel))
         LOGGER.debug(
             "Selecting radio preset %d on WL75 %s", channel, self._instance.mac
         )
-        result = await self._instance._send_packet([CMD_WL75_RADIO_CHANNEL, channel])
-        if result:
-            self.radio.channel = channel - 1
-            if len(self.radio.presets) >= channel:
-                self.radio.frequency = self.radio.presets[channel - 1]
-        return result
+        await self._instance.send_command([CMD_WL75_RADIO_CHANNEL, channel])
+        self.radio.channel = channel - 1
+        if len(self.radio.presets) >= channel:
+            self.radio.frequency = self.radio.presets[channel - 1]
 
-    async def radio_seek(self, direction: int = 1, auto_seek: bool = True) -> bool:
+    async def radio_seek(self, direction: int = 1, auto_seek: bool = True) -> None:
         """Seek next radio station.
 
         Args:
@@ -121,74 +114,63 @@ class WL75Controller(WL90Controller):
             direction,
             self._instance.mac,
         )
-        return await self._instance._send_packet([cmd, dir_byte])
+        await self._instance.send_command([cmd, dir_byte])
 
-    async def set_radio_sleep_timer(self, minutes: int) -> bool:
+    async def set_radio_sleep_timer(self, minutes: int) -> None:
         """Set radio sleep timer.
 
         Args:
             minutes: Timer duration (0 = disable, 1-60 = enable with duration).
         """
         if minutes == 0:
-            result = await self._instance._send_packet([CMD_WL75_RADIO_TIMER_TOGGLE, 0])
-            if result:
-                self.radio.sleep_timer_on = False
-                self.radio.sleep_timer_minutes = 0
-            return result
+            await self._instance.send_command([CMD_WL75_RADIO_TIMER_TOGGLE, 0])
+            self.radio.sleep_timer_on = False
+            self.radio.sleep_timer_minutes = 0
+            return
+        await self._instance.send_command(
+            [CMD_WL75_RADIO_TIMER_TOGGLE, 1], [CMD_WL75_RADIO_TIMER_VALUE, minutes]
+        )
+        self.radio.sleep_timer_on = True
+        self.radio.sleep_timer_minutes = minutes
 
-        result = await self._instance._send_packet([CMD_WL75_RADIO_TIMER_TOGGLE, 1])
-        if result:
-            await asyncio.sleep(COMMAND_DELAY)
-            result = await self._instance._send_packet(
-                [CMD_WL75_RADIO_TIMER_VALUE, minutes]
-            )
-            if result:
-                self.radio.sleep_timer_on = True
-                self.radio.sleep_timer_minutes = minutes
-        return result
-
-    async def save_radio_frequency(self, preset: int = 0) -> bool:
+    async def save_radio_frequency(self, preset: int = 0) -> None:
         """Save current frequency to preset."""
         LOGGER.debug("Saving current frequency on WL75 %s", self._instance.mac)
-        return await self._instance._send_packet([CMD_WL75_RADIO_SAVE_FREQ])
+        await self._instance.send_command([CMD_WL75_RADIO_SAVE_FREQ])
 
-    async def query_radio_status(self) -> bool:
+    async def query_radio_status(self) -> None:
         """Query radio status and presets 1-10."""
         LOGGER.debug("Querying radio status on WL75 %s", self._instance.mac)
-        res = await self._instance._send_packet([CMD_WL75_RADIO_STATUS])
-        await asyncio.sleep(COMMAND_DELAY)
-        await self._instance._send_packet([CMD_WL75_RADIO_PRESETS_1])
-        await asyncio.sleep(COMMAND_DELAY)
-        await self._instance._send_packet([CMD_WL75_RADIO_PRESETS_2])
-        return res
+        await self._instance.send_command(
+            [CMD_WL75_RADIO_STATUS],
+            [CMD_WL75_RADIO_PRESETS_1],
+            [CMD_WL75_RADIO_PRESETS_2],
+        )
 
-    # --- Music/BT Speaker Controls (Not available on WL75) ---
+    # --- Music/BT Speaker Controls (the WL75 has no BT speaker) ---
 
-    async def music_on(self) -> bool:
+    async def music_on(self) -> None:
         """BT speaker is not supported on WL75."""
-        LOGGER.debug("Music speaker is not supported on WL75")
-        return False
+        raise BeurerNotSupportedError(self._instance.name)
 
-    async def music_off(self) -> bool:
+    async def music_off(self) -> None:
         """BT speaker is not supported on WL75."""
-        LOGGER.debug("Music speaker is not supported on WL75")
-        return False
+        raise BeurerNotSupportedError(self._instance.name)
 
-    async def set_music_volume(self, volume: int) -> bool:
+    async def set_music_volume(self, volume: int) -> None:
         """BT speaker is not supported on WL75."""
-        return False
+        raise BeurerNotSupportedError(self._instance.name)
 
-    async def set_music_sleep_timer(self, minutes: int) -> bool:
+    async def set_music_sleep_timer(self, minutes: int) -> None:
         """BT speaker is not supported on WL75."""
-        return False
+        raise BeurerNotSupportedError(self._instance.name)
 
-    async def query_music_status(self) -> bool:
-        """BT speaker is not supported on WL75."""
-        return False
+    async def query_music_status(self) -> None:
+        """BT speaker is not supported on WL75 (nothing to query)."""
 
     # --- Alarm Controls ---
 
-    async def sync_alarm(self, slot: int, alarm: AlarmItem | None = None) -> bool:
+    async def sync_alarm(self, slot: int, alarm: AlarmItem | None = None) -> None:
         """Sync an alarm to the device.
 
         Args:
@@ -196,8 +178,7 @@ class WL75Controller(WL90Controller):
             alarm: AlarmItem to sync.
         """
         if slot not in (0, 1):
-            LOGGER.error("Invalid alarm slot %d for WL75 (must be 0 or 1)", slot)
-            return False
+            raise ValueError(f"Invalid alarm slot {slot} for WL75 (must be 0 or 1)")
 
         if alarm is None:
             alarm = self.alarms[slot]
@@ -216,7 +197,7 @@ class WL75Controller(WL90Controller):
             alarm.days_list,
         )
 
-        result = await self._instance._send_packet(
+        await self._instance.send_command(
             [
                 CMD_WL75_ALARM_WRITE,
                 slot_id,
@@ -231,11 +212,7 @@ class WL75Controller(WL90Controller):
                 alarm.sunrise_brightness,
             ]
         )
-
-        if result:
-            self.alarms[slot] = alarm
-
-        return result
+        self.alarms[slot] = alarm
 
     # --- Notification Handling ---
 

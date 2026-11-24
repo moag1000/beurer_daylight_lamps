@@ -28,6 +28,12 @@ from custom_components.beurer_daylight_lamps.const import (
     MODE_RGB,
     MODE_WHITE,
 )
+from custom_components.beurer_daylight_lamps.exceptions import (
+    BeurerConnectionError,
+    BeurerError,
+    BeurerNotSupportedError,
+    BeurerWriteError,
+)
 
 M = "custom_components.beurer_daylight_lamps.beurer_daylight_lamps"
 
@@ -43,7 +49,9 @@ def make(name: str = "TL100", send_ok: bool = True) -> BeurerInstance:
     device.address = "AA:BB:CC:DD:EE:FF"
     device.name = name
     inst = BeurerInstance(device)
-    inst._send_packet = AsyncMock(return_value=send_ok)
+    inst._send_packet = AsyncMock(
+        side_effect=None if send_ok else BeurerWriteError("Lamp")
+    )
     inst._trigger_update = AsyncMock()
     inst._request_status = AsyncMock()
     return inst
@@ -62,39 +70,36 @@ class TestTimeAndSettings:
     async def test_sync_time_tl(self) -> None:
         inst = make()
         with patch(f"{M}.dt_util.now", return_value=NOW):
-            assert await inst.sync_time()
+            await inst.sync_time()
         assert sent(inst) == [[CMD_TIME_SYNC, 15, 30, 7, 4, 12, 11, 26]]
         assert inst.last_time_sync is not None
 
     async def test_sync_time_wl75(self) -> None:
         inst = make("WL75_1")
         with patch(f"{M}.dt_util.now", return_value=NOW):
-            assert await inst.sync_time()
+            await inst.sync_time()
         assert sent(inst) == [[CMD_WL75_TIME_SYNC, 15, 30, 7, 12, 11, 26]]
 
     @pytest.mark.parametrize("name", ["TL100", "WL75_1"])
     async def test_sync_time_failure(self, name: str) -> None:
         inst = make(name, send_ok=False)
-        assert not await inst.sync_time()
+        with pytest.raises(BeurerError):
+            await inst.sync_time()
         assert inst.last_time_sync is None
 
     @pytest.mark.parametrize(
-        ("name", "cmd", "ok"),
-        [
-            ("TL100", CMD_SETTINGS_READ, True),
-            ("WL75_1", CMD_WL75_SETTINGS_READ, True),
-            ("TL100", CMD_SETTINGS_READ, False),
-        ],
+        ("name", "cmd"),
+        [("TL100", CMD_SETTINGS_READ), ("WL75_1", CMD_WL75_SETTINGS_READ)],
     )
-    async def test_query_settings(self, name: str, cmd: int, ok: bool) -> None:
-        inst = make(name, send_ok=ok)
-        assert await inst.query_settings() is ok
+    async def test_query_settings(self, name: str, cmd: int) -> None:
+        inst = make(name)
+        await inst.query_settings()
         assert sent(inst) == [[cmd]]
 
     async def test_feedback_tl_keeps_fade(self) -> None:
         inst = make()
         inst._fade_enabled = False
-        assert await inst.set_feedback(True)
+        await inst.set_feedback(True)
         assert sent(inst) == [[CMD_SETTINGS_WRITE, 0, 0, 0, 0, 1]]
         assert inst.feedback_enabled is True
         inst._trigger_update.assert_awaited_once()
@@ -102,25 +107,29 @@ class TestTimeAndSettings:
     async def test_feedback_wl75(self) -> None:
         inst = make("WL75_1")
         inst._display_setting = 2
-        assert await inst.set_feedback(False)
+        await inst.set_feedback(False)
         assert sent(inst) == [[CMD_WL75_SETTINGS_WRITE, 2, 0, 0, 1]]
         assert inst.feedback_enabled is False
 
     @pytest.mark.parametrize("name", ["TL100", "WL75_1"])
-    async def test_feedback_failure(self, name: str) -> None:
+    async def test_feedback_failure_keeps_state(self, name: str) -> None:
         inst = make(name, send_ok=False)
-        assert not await inst.set_feedback(True)
+        with pytest.raises(BeurerError):
+            await inst.set_feedback(True)
         assert inst.feedback_enabled is None
 
     async def test_fade(self) -> None:
         inst = make()
         inst._feedback_enabled = False
-        assert await inst.set_fade(True)
+        await inst.set_fade(True)
         assert sent(inst) == [[CMD_SETTINGS_WRITE, 0, 0, 0, 1, 0]]
         assert inst.fade_enabled is True
-        failing = make(send_ok=False)
-        assert not await failing.set_fade(False)
-        assert failing.fade_enabled is None
+
+    async def test_fade_not_supported_on_wl75(self) -> None:
+        inst = make("WL75_1")
+        with pytest.raises(BeurerNotSupportedError):
+            await inst.set_fade(True)
+        assert sent(inst) == []
 
 
 class TestTimer:
@@ -129,7 +138,8 @@ class TestTimer:
     @pytest.mark.parametrize("minutes", [0, 121])
     async def test_out_of_range(self, minutes: int) -> None:
         inst = make()
-        assert not await inst.set_timer(minutes)
+        with pytest.raises(ValueError, match="Timer"):
+            await inst.set_timer(minutes)
         inst._send_packet.assert_not_awaited()
 
     @pytest.mark.parametrize(
@@ -138,21 +148,12 @@ class TestTimer:
     async def test_tl(self, mode: ColorMode, byte: int) -> None:
         inst = make()
         inst._mode = mode
-        assert await inst.set_timer(30)
+        await inst.set_timer(30)
         assert sent(inst) == [[CMD_TIMER_TOGGLE, byte], [CMD_TIMER_VALUE, byte, 30]]
         assert inst.timer_active
         assert inst.timer_minutes == 30
-        assert await inst.cancel_timer()
+        await inst.cancel_timer()
         assert sent(inst)[-1] == [CMD_TIMER_CANCEL, byte]
-        assert not inst.timer_active
-
-    async def test_tl_failures(self) -> None:
-        inst = make(send_ok=False)
-        assert not await inst.set_timer(10)
-        assert len(sent(inst)) == 1
-        assert not await inst.cancel_timer()
-        inst._send_packet = AsyncMock(side_effect=[True, False])
-        assert not await inst.set_timer(10)
         assert not inst.timer_active
 
     @pytest.mark.parametrize(
@@ -165,21 +166,20 @@ class TestTimer:
     async def test_wl75(self, color_on: bool, switch: int, value: int) -> None:
         inst = make("WL75_1")
         inst._color_on = color_on
-        assert await inst.set_timer(45)
+        await inst.set_timer(45)
         assert sent(inst) == [[switch, 1], [value, 45]]
         assert inst.timer_minutes == 45
-        assert await inst.cancel_timer()
+        await inst.cancel_timer()
         assert sent(inst)[-1] == [switch, 0]
         assert inst.timer_minutes is None
 
-    @pytest.mark.parametrize("color_on", [False, True])
-    async def test_wl75_failures(self, color_on: bool) -> None:
-        inst = make("WL75_1", send_ok=False)
-        inst._color_on = color_on
-        assert not await inst.set_timer(5)
-        assert not await inst.cancel_timer()
-        inst._send_packet = AsyncMock(side_effect=[True, False])
-        assert not await inst.set_timer(5)
+    @pytest.mark.parametrize("name", ["TL100", "WL75_1"])
+    async def test_half_sent_timer_is_not_reported_active(self, name: str) -> None:
+        """The value packet lost after the toggle must not show a running timer."""
+        inst = make(name)
+        inst._send_packet = AsyncMock(side_effect=[None, BeurerWriteError("Lamp")])
+        with pytest.raises(BeurerError):
+            await inst.set_timer(5)
         assert not inst.timer_active
 
 
@@ -198,7 +198,8 @@ class TestTurnOn:
         inst = make()
         self._prepare(inst, connected=False)
         inst.connect = AsyncMock(return_value=False)
-        await inst.turn_on()
+        with pytest.raises(BeurerConnectionError):
+            await inst.turn_on()
         inst._switch_to_mode.assert_not_awaited()
 
     @pytest.mark.parametrize("name", ["TL100", "WL75_1"])
